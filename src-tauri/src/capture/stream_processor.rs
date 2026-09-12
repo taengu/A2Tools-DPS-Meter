@@ -1044,7 +1044,7 @@ impl StreamProcessor {
     /// record instead).
     ///
     /// ```text
-    /// 41 36 <entity_id varint> <mask u16 LE> <subtree…> ×3 … [mask & 0x0010] <parent_key u32 LE>
+    /// 41 36 <entity_id varint> <mask u32 LE> <subtree…> ×3 … [mask & 0x0010] <parent_key u32 LE>
     /// ```
     ///
     /// The low byte of `mask` doubles as the entity kind: `0x0C`/`0x0D` = NPC,
@@ -1081,27 +1081,56 @@ impl StreamProcessor {
             self.extract_and_register_mob_type(packet, offset, real_actor_id);
             return false;
         }
-        let mask = u16::from_le_bytes([packet[offset], packet[offset + 1]]);
+        // Read the mask as a u32 regardless of which width the server sent. The
+        // two fields we test live in the low half either way — `kind` is the low
+        // byte and `parent_key` is gated by bit 4 — so a wide read is correct for
+        // both formats and only picks up bytes we never look at.
+        let mask = u32::from_le_bytes([
+            packet[offset],
+            packet[offset + 1],
+            *packet.get(offset + 2).unwrap_or(&0),
+            *packet.get(offset + 3).unwrap_or(&0),
+        ]);
         let kind = packet[offset];
-        let sub_mask2 = packet[offset + 2];
 
-        // Optional inline name, gated by bit 0 of the first subtree's mask byte.
-        let mut cursor = offset + 3;
-        let mut spawn_name: Option<String> = None;
-        if sub_mask2 & 0x01 != 0 && cursor < packet.len() {
-            let name_len = packet[cursor] as usize;
-            if (1..=36).contains(&name_len)
-                && cursor + 1 + name_len <= packet.len()
-                && let Ok(raw) = std::str::from_utf8(&packet[cursor + 1..cursor + 1 + name_len])
-                && let Some(sanitized) = sanitize_nickname(raw)
-                // A shorter result means sanitising trimmed something, i.e. this
-                // is not cleanly a name field.
-                && sanitized.len() == name_len
-            {
-                spawn_name = Some(sanitized);
-                cursor += 1 + name_len;
+        // The mask width changed from u16 to u32, which moves the subtree byte
+        // that gates the inline name. Nothing else in this record is sensitive to
+        // it: `find_spawn_parent_key` scans forward rather than indexing, and the
+        // mob-type scan anchors on `offset`. So rather than version-sniffing the
+        // stream, try both positions and keep whichever actually yields a name.
+        //
+        // Getting this wrong is not cosmetic. For a summon the inline name is the
+        // *owner's* character name, and it is the fallback that attributes a pet's
+        // damage to its player when no parent_key is present. A silently
+        // mispositioned gate shows up as summons drifting back into their own rows.
+        const MASK_U16_SUBTREE: usize = 2;
+        const MASK_U32_SUBTREE: usize = 4;
+
+        let read_name_at = |sub_offset: usize| -> Option<(String, usize)> {
+            let gate = *packet.get(offset + sub_offset)?;
+            if gate & 0x01 == 0 {
+                return None;
             }
-        }
+            let cursor = offset + sub_offset + 1;
+            let name_len = *packet.get(cursor)? as usize;
+            if !(1..=36).contains(&name_len) || cursor + 1 + name_len > packet.len() {
+                return None;
+            }
+            let raw = std::str::from_utf8(&packet[cursor + 1..cursor + 1 + name_len]).ok()?;
+            let sanitized = sanitize_nickname(raw)?;
+            // A shorter result means sanitising trimmed something, i.e. this is
+            // not cleanly a name field. This check is what makes trying two
+            // positions safe: a wrong guess almost never decodes cleanly.
+            (sanitized.len() == name_len).then(|| (sanitized, cursor + 1 + name_len))
+        };
+
+        // Current format first, so a live stream never depends on the fallback.
+        let (spawn_name, cursor) = match read_name_at(MASK_U32_SUBTREE)
+            .or_else(|| read_name_at(MASK_U16_SUBTREE))
+        {
+            Some((name, next)) => (Some(name), next),
+            None => (None, offset + MASK_U32_SUBTREE + 1),
+        };
 
         // Mob type / boss flag / HP still come from the existing scan, which
         // anchors on the model field this cursor now sits on.
