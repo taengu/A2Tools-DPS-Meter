@@ -5559,6 +5559,66 @@
     "name": "空中要塞恶棍",
     "isBoss": false
   },
+  "2110679": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110680": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110681": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110682": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110683": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110684": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110685": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110686": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110687": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110688": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110689": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110690": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110691": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110692": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
+  "2110693": {
+    "name": "光荣独石柱",
+    "isBoss": false
+  },
   "2200001": {
     "name": "逃跑的波沙",
     "isBoss": false
@@ -10241,6 +10301,217 @@
   "2301098": {
     "name": "穆斯费尔守护像",
     "isBoss": false
+  },
+  "2301101": {
+    "name": "泰尔拉斯冰冻的心脏",
+    "isBoss": false
+  },
+  "2301102": {
+    "name": "破坏执政官精锐兵",
+    "isBoss": false
+  },
+  "2301103": {
+    "name": "破坏执政官守护星",
+    "isBoss": false
+  },
+  "2301104": {
+    "name": "破坏执政官剑星",
+    "isBoss": false
+  },
+  "2301105": {
+    "name": "破坏执政官士兵",
+    "isBoss": false
+  },
+  "2301106": {
+    "name": "沙暴军团精锐兵",
+    "isBoss": false
+  },
+  "2301107": {
+    "name": "沙暴军团十夫长",
+    "isBoss": false
+  },
+  "2301108": {
+    "name": "沙暴军团军团兵",
+    "isBoss": false
+  },
+  "2301109": {
+    "name": "沙暴军团剑星",
+    "isBoss": false
+  },
+  "2301110": {
+    "name": "沙暴军团守护星",
+    "isBoss": false
+  },
+  "2301111": {
+    "name": "防御砲",
+    "isBoss": false
+  },
+  "2301112": {
+    "name": "回归者特里顿",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "困难",
+    "dungeonId": 620025
+  },
+  "2301113": {
+    "name": "泰尔拉斯",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "困难",
+    "dungeonId": 620025
+  },
+  "2301114": {
+    "name": "幻影炸弹",
+    "isBoss": false
+  },
+  "2301115": {
+    "name": "泰尔拉斯",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "困难",
+    "dungeonId": 620025
+  },
+  "2301119": {
+    "name": "暖意火炉",
+    "isBoss": false
+  },
+  "2301131": {
+    "name": "泰尔拉斯冰冻的心脏",
+    "isBoss": false
+  },
+  "2301132": {
+    "name": "破坏执政官精锐兵",
+    "isBoss": false
+  },
+  "2301133": {
+    "name": "破坏执政官守护星",
+    "isBoss": false
+  },
+  "2301134": {
+    "name": "破坏执政官剑星",
+    "isBoss": false
+  },
+  "2301135": {
+    "name": "破坏执政官士兵",
+    "isBoss": false
+  },
+  "2301136": {
+    "name": "沙暴军团精锐兵",
+    "isBoss": false
+  },
+  "2301137": {
+    "name": "沙暴军团十夫长",
+    "isBoss": false
+  },
+  "2301138": {
+    "name": "沙暴军团军团兵",
+    "isBoss": false
+  },
+  "2301139": {
+    "name": "沙暴军团剑星",
+    "isBoss": false
+  },
+  "2301140": {
+    "name": "沙暴军团守护星",
+    "isBoss": false
+  },
+  "2301141": {
+    "name": "防御砲",
+    "isBoss": false
+  },
+  "2301142": {
+    "name": "回归者特里顿",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "普通",
+    "dungeonId": 620026
+  },
+  "2301143": {
+    "name": "泰尔拉斯",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "普通",
+    "dungeonId": 620026
+  },
+  "2301144": {
+    "name": "幻影炸弹",
+    "isBoss": false
+  },
+  "2301145": {
+    "name": "泰尔拉斯",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "普通",
+    "dungeonId": 620026
+  },
+  "2301151": {
+    "name": "泰尔拉斯冰冻的心脏",
+    "isBoss": false
+  },
+  "2301152": {
+    "name": "破坏执政官精锐兵",
+    "isBoss": false
+  },
+  "2301153": {
+    "name": "破坏执政官守护星",
+    "isBoss": false
+  },
+  "2301154": {
+    "name": "破坏执政官剑星",
+    "isBoss": false
+  },
+  "2301155": {
+    "name": "破坏执政官士兵",
+    "isBoss": false
+  },
+  "2301156": {
+    "name": "沙暴军团精锐兵",
+    "isBoss": false
+  },
+  "2301157": {
+    "name": "沙暴军团十夫长",
+    "isBoss": false
+  },
+  "2301158": {
+    "name": "沙暴军团军团兵",
+    "isBoss": false
+  },
+  "2301159": {
+    "name": "沙暴军团剑星",
+    "isBoss": false
+  },
+  "2301160": {
+    "name": "沙暴军团守护星",
+    "isBoss": false
+  },
+  "2301161": {
+    "name": "防御砲",
+    "isBoss": false
+  },
+  "2301162": {
+    "name": "回归者特里顿",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "简单",
+    "dungeonId": 620027
+  },
+  "2301163": {
+    "name": "泰尔拉斯",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "简单",
+    "dungeonId": 620027
+  },
+  "2301164": {
+    "name": "幻影炸弹",
+    "isBoss": false
+  },
+  "2301165": {
+    "name": "泰尔拉斯",
+    "isBoss": true,
+    "category": "圣域",
+    "tier": "简单",
+    "dungeonId": 620027
   },
   "2301201": {
     "name": "被污染的修罗魔道师",
@@ -15072,21 +15343,21 @@
     "name": "谎言席利亚多尔",
     "isBoss": true,
     "category": "超越",
-    "tier": "第3阶段",
+    "tier": "第2阶段",
     "dungeonId": 600065
   },
   "2350708": {
     "name": "痛苦路堤里斯",
     "isBoss": true,
     "category": "超越",
-    "tier": "第3阶段",
+    "tier": "第2阶段",
     "dungeonId": 600065
   },
   "2350709": {
     "name": "空虚塔里斯拉",
     "isBoss": true,
     "category": "超越",
-    "tier": "第3阶段",
+    "tier": "第2阶段",
     "dungeonId": 600065
   },
   "2350710": {
@@ -15209,21 +15480,21 @@
     "name": "谎言席利亚多尔",
     "isBoss": true,
     "category": "超越",
-    "tier": "第5阶段",
+    "tier": "第3阶段",
     "dungeonId": 600068
   },
   "2353708": {
     "name": "痛苦路堤里斯",
     "isBoss": true,
     "category": "超越",
-    "tier": "第5阶段",
+    "tier": "第3阶段",
     "dungeonId": 600068
   },
   "2353709": {
     "name": "空虚塔里斯拉",
     "isBoss": true,
     "category": "超越",
-    "tier": "第5阶段",
+    "tier": "第3阶段",
     "dungeonId": 600068
   },
   "2353710": {
@@ -15350,22 +15621,22 @@
     "name": "谎言席利亚多尔",
     "isBoss": true,
     "category": "超越",
-    "tier": "第2阶段",
-    "dungeonId": 13
+    "tier": "第4阶段",
+    "dungeonId": 610062
   },
   "2356708": {
     "name": "痛苦路堤里斯",
     "isBoss": true,
     "category": "超越",
-    "tier": "第2阶段",
-    "dungeonId": 13
+    "tier": "第4阶段",
+    "dungeonId": 610062
   },
   "2356709": {
     "name": "空虚塔里斯拉",
     "isBoss": true,
     "category": "超越",
-    "tier": "第2阶段",
-    "dungeonId": 13
+    "tier": "第4阶段",
+    "dungeonId": 610062
   },
   "2356710": {
     "name": "旋转磁场",
@@ -21684,6 +21955,66 @@
   },
   "2407117": {
     "name": "德拉坎上级管理兵",
+    "isBoss": false
+  },
+  "2407118": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407119": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407120": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407121": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407122": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407123": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407124": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407125": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407126": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407127": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407128": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407129": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407130": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407131": {
+    "name": "骄傲独石柱",
+    "isBoss": false
+  },
+  "2407132": {
+    "name": "骄傲独石柱",
     "isBoss": false
   },
   "2500000": {
@@ -32697,8 +33028,64 @@
     "name": "巴克隆尖刺束缚",
     "isBoss": true
   },
+  "2921442": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
+  "2921443": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
+  "2921448": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
+  "2921453": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
+  "2921454": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
+  "2921455": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
+  "2921456": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
+  "2921458": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
   "2921511": {
     "name": "傲慢亚提埃尔",
+    "isBoss": false
+  },
+  "2921576": {
+    "name": "泰尔拉斯",
+    "isBoss": true
+  },
+  "2921579": {
+    "name": "吉凯尔权能",
+    "isBoss": false
+  },
+  "2921580": {
+    "name": "德拉多纳卵",
+    "isBoss": false
+  },
+  "2921581": {
+    "name": "洞穴德拉多纳幼体",
+    "isBoss": false
+  },
+  "2921582": {
+    "name": "德拉多纳卵",
+    "isBoss": false
+  },
+  "2921583": {
+    "name": "德拉多纳大块头",
     "isBoss": false
   },
   "2980000": {

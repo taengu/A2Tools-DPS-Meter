@@ -5260,7 +5260,7 @@
     "isBoss": false
   },
   "2110507": {
-    "name": "Crimson Manduri Trebuchet Worker",
+    "name": "Crimson Manduri Slinger",
     "isBoss": false
   },
   "2110508": {
@@ -5557,6 +5557,66 @@
   },
   "2110675": {
     "name": "Sky Fortress Rogue",
+    "isBoss": false
+  },
+  "2110679": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110680": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110681": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110682": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110683": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110684": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110685": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110686": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110687": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110688": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110689": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110690": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110691": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110692": {
+    "name": "Monolith of Glory",
+    "isBoss": false
+  },
+  "2110693": {
+    "name": "Monolith of Glory",
     "isBoss": false
   },
   "2200001": {
@@ -9868,7 +9928,7 @@
     "isBoss": false
   },
   "2300901": {
-    "name": "Summoned Duduka Trebuchet Worker",
+    "name": "Summoned Duduka Slinger",
     "isBoss": false
   },
   "2300902": {
@@ -10241,6 +10301,217 @@
   "2301098": {
     "name": "Muspel Guardian Statue",
     "isBoss": false
+  },
+  "2301101": {
+    "name": "Deltras's Frozen Heart",
+    "isBoss": false
+  },
+  "2301102": {
+    "name": "Destruction Archon Elite Soldier",
+    "isBoss": false
+  },
+  "2301103": {
+    "name": "Destruction Archon Templar",
+    "isBoss": false
+  },
+  "2301104": {
+    "name": "Destruction Archon Gladiator",
+    "isBoss": false
+  },
+  "2301105": {
+    "name": "Destruction Archon Soldier",
+    "isBoss": false
+  },
+  "2301106": {
+    "name": "Sandstorm Legion Elite",
+    "isBoss": false
+  },
+  "2301107": {
+    "name": "Sandstorm Legion Decanus",
+    "isBoss": false
+  },
+  "2301108": {
+    "name": "Sandstorm Legion Soldier",
+    "isBoss": false
+  },
+  "2301109": {
+    "name": "Sandstorm Legion Gladiator",
+    "isBoss": false
+  },
+  "2301110": {
+    "name": "Sandstorm Legion Templar",
+    "isBoss": false
+  },
+  "2301111": {
+    "name": "Defense Cannon",
+    "isBoss": false
+  },
+  "2301112": {
+    "name": "Triton the Returned",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Hard",
+    "dungeonId": 620025
+  },
+  "2301113": {
+    "name": "Deltras",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Hard",
+    "dungeonId": 620025
+  },
+  "2301114": {
+    "name": "Illusion Bomb",
+    "isBoss": false
+  },
+  "2301115": {
+    "name": "Deltras",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Hard",
+    "dungeonId": 620025
+  },
+  "2301119": {
+    "name": "Warming Brazier",
+    "isBoss": false
+  },
+  "2301131": {
+    "name": "Deltras's Frozen Heart",
+    "isBoss": false
+  },
+  "2301132": {
+    "name": "Destruction Archon Elite Soldier",
+    "isBoss": false
+  },
+  "2301133": {
+    "name": "Destruction Archon Templar",
+    "isBoss": false
+  },
+  "2301134": {
+    "name": "Destruction Archon Gladiator",
+    "isBoss": false
+  },
+  "2301135": {
+    "name": "Destruction Archon Soldier",
+    "isBoss": false
+  },
+  "2301136": {
+    "name": "Sandstorm Legion Elite",
+    "isBoss": false
+  },
+  "2301137": {
+    "name": "Sandstorm Legion Decanus",
+    "isBoss": false
+  },
+  "2301138": {
+    "name": "Sandstorm Legion Soldier",
+    "isBoss": false
+  },
+  "2301139": {
+    "name": "Sandstorm Legion Gladiator",
+    "isBoss": false
+  },
+  "2301140": {
+    "name": "Sandstorm Legion Templar",
+    "isBoss": false
+  },
+  "2301141": {
+    "name": "Defense Cannon",
+    "isBoss": false
+  },
+  "2301142": {
+    "name": "Triton the Returned",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Normal",
+    "dungeonId": 620026
+  },
+  "2301143": {
+    "name": "Deltras",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Normal",
+    "dungeonId": 620026
+  },
+  "2301144": {
+    "name": "Illusion Bomb",
+    "isBoss": false
+  },
+  "2301145": {
+    "name": "Deltras",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Normal",
+    "dungeonId": 620026
+  },
+  "2301151": {
+    "name": "Deltras's Frozen Heart",
+    "isBoss": false
+  },
+  "2301152": {
+    "name": "Destruction Archon Elite Soldier",
+    "isBoss": false
+  },
+  "2301153": {
+    "name": "Destruction Archon Templar",
+    "isBoss": false
+  },
+  "2301154": {
+    "name": "Destruction Archon Gladiator",
+    "isBoss": false
+  },
+  "2301155": {
+    "name": "Destruction Archon Soldier",
+    "isBoss": false
+  },
+  "2301156": {
+    "name": "Sandstorm Legion Elite",
+    "isBoss": false
+  },
+  "2301157": {
+    "name": "Sandstorm Legion Decanus",
+    "isBoss": false
+  },
+  "2301158": {
+    "name": "Sandstorm Legion Soldier",
+    "isBoss": false
+  },
+  "2301159": {
+    "name": "Sandstorm Legion Gladiator",
+    "isBoss": false
+  },
+  "2301160": {
+    "name": "Sandstorm Legion Templar",
+    "isBoss": false
+  },
+  "2301161": {
+    "name": "Defense Cannon",
+    "isBoss": false
+  },
+  "2301162": {
+    "name": "Triton the Returned",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Easy",
+    "dungeonId": 620027
+  },
+  "2301163": {
+    "name": "Deltras",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Easy",
+    "dungeonId": 620027
+  },
+  "2301164": {
+    "name": "Illusion Bomb",
+    "isBoss": false
+  },
+  "2301165": {
+    "name": "Deltras",
+    "isBoss": true,
+    "category": "Raid",
+    "tier": "Easy",
+    "dungeonId": 620027
   },
   "2301201": {
     "name": "Contaminated Sura Battle Mage",
@@ -11487,7 +11758,7 @@
     "isBoss": false
   },
   "2310901": {
-    "name": "Summoned Duduka Trebuchet Worker",
+    "name": "Summoned Duduka Slinger",
     "isBoss": false
   },
   "2310902": {
@@ -12426,7 +12697,7 @@
     "isBoss": false
   },
   "2320901": {
-    "name": "Summoned Duduka Trebuchet Worker",
+    "name": "Summoned Duduka Slinger",
     "isBoss": false
   },
   "2320902": {
@@ -15072,21 +15343,21 @@
     "name": "Siliator of Deceit",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 3",
+    "tier": "Stage 2",
     "dungeonId": 600065
   },
   "2350708": {
     "name": "Ruthilis of Pain",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 3",
+    "tier": "Stage 2",
     "dungeonId": 600065
   },
   "2350709": {
     "name": "Talisra of the Void",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 3",
+    "tier": "Stage 2",
     "dungeonId": 600065
   },
   "2350710": {
@@ -15209,21 +15480,21 @@
     "name": "Siliator of Deceit",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 5",
+    "tier": "Stage 3",
     "dungeonId": 600068
   },
   "2353708": {
     "name": "Ruthilis of Pain",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 5",
+    "tier": "Stage 3",
     "dungeonId": 600068
   },
   "2353709": {
     "name": "Talisra of the Void",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 5",
+    "tier": "Stage 3",
     "dungeonId": 600068
   },
   "2353710": {
@@ -15350,22 +15621,22 @@
     "name": "Siliator of Deceit",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 2",
-    "dungeonId": 13
+    "tier": "Stage 4",
+    "dungeonId": 610062
   },
   "2356708": {
     "name": "Ruthilis of Pain",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 2",
-    "dungeonId": 13
+    "tier": "Stage 4",
+    "dungeonId": 610062
   },
   "2356709": {
     "name": "Talisra of the Void",
     "isBoss": true,
     "category": "Transcendence",
-    "tier": "Stage 2",
-    "dungeonId": 13
+    "tier": "Stage 4",
+    "dungeonId": 610062
   },
   "2356710": {
     "name": "Spinning Magnetic Field",
@@ -19215,7 +19486,7 @@
     "isBoss": false
   },
   "2400613": {
-    "name": "Duduka Trebuchet Worker",
+    "name": "Duduka Slinger",
     "isBoss": false
   },
   "2400614": {
@@ -21684,6 +21955,66 @@
   },
   "2407117": {
     "name": "Drakan Superior Warden",
+    "isBoss": false
+  },
+  "2407118": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407119": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407120": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407121": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407122": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407123": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407124": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407125": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407126": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407127": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407128": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407129": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407130": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407131": {
+    "name": "Monolith of Pride",
+    "isBoss": false
+  },
+  "2407132": {
+    "name": "Monolith of Pride",
     "isBoss": false
   },
   "2500000": {
@@ -26477,7 +26808,7 @@
     "isBoss": false
   },
   "2701009": {
-    "name": "Roah Priest",
+    "name": "Ru Priest",
     "isBoss": false
   },
   "2701010": {
@@ -26833,7 +27164,7 @@
     "isBoss": false
   },
   "2701135": {
-    "name": "Distorted Roah Priest",
+    "name": "Distorted Ru Priest",
     "isBoss": false
   },
   "2701136": {
@@ -27097,7 +27428,7 @@
     "isBoss": false
   },
   "2701215": {
-    "name": "Mad Roah Apostle",
+    "name": "Mad Apostle of Ru",
     "isBoss": false
   },
   "2701217": {
@@ -29918,11 +30249,11 @@
     "isBoss": false
   },
   "2702066": {
-    "name": "Duduka Trebuchet Worker",
+    "name": "Duduka Slinger",
     "isBoss": false
   },
   "2702067": {
-    "name": "Duduka Trebuchet Worker",
+    "name": "Duduka Slinger",
     "isBoss": false
   },
   "2702068": {
@@ -32697,8 +33028,64 @@
     "name": "Vakron's Thorn Root",
     "isBoss": true
   },
+  "2921442": {
+    "name": "Deltras",
+    "isBoss": true
+  },
+  "2921443": {
+    "name": "Deltras",
+    "isBoss": true
+  },
+  "2921448": {
+    "name": "Deltras",
+    "isBoss": true
+  },
+  "2921453": {
+    "name": "Deltras",
+    "isBoss": true
+  },
+  "2921454": {
+    "name": "Deltras",
+    "isBoss": true
+  },
+  "2921455": {
+    "name": "Deltras",
+    "isBoss": true
+  },
+  "2921456": {
+    "name": "Deltras",
+    "isBoss": true
+  },
+  "2921458": {
+    "name": "Deltras",
+    "isBoss": true
+  },
   "2921511": {
     "name": "Prideful Atiel",
+    "isBoss": false
+  },
+  "2921576": {
+    "name": "Deltras",
+    "isBoss": true
+  },
+  "2921579": {
+    "name": "Zikel's Might",
+    "isBoss": false
+  },
+  "2921580": {
+    "name": "Dratona Egg",
+    "isBoss": false
+  },
+  "2921581": {
+    "name": "Cave Dratona Larva",
+    "isBoss": false
+  },
+  "2921582": {
+    "name": "Dratona Egg",
+    "isBoss": false
+  },
+  "2921583": {
+    "name": "Dratona Brute",
     "isBoss": false
   },
   "2980000": {

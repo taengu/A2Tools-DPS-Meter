@@ -5559,6 +5559,66 @@
     "name": "공중요새 불한당",
     "isBoss": false
   },
+  "2110679": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110680": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110681": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110682": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110683": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110684": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110685": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110686": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110687": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110688": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110689": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110690": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110691": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110692": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
+  "2110693": {
+    "name": "영광의 모노리스",
+    "isBoss": false
+  },
   "2200001": {
     "name": "도망간 포사",
     "isBoss": false
@@ -10241,6 +10301,217 @@
   "2301098": {
     "name": "무스펠 수호상",
     "isBoss": false
+  },
+  "2301101": {
+    "name": "델트라스의 얼어붙은 심장",
+    "isBoss": false
+  },
+  "2301102": {
+    "name": "파괴의 아칸 정예병",
+    "isBoss": false
+  },
+  "2301103": {
+    "name": "파괴의 아칸 수호성",
+    "isBoss": false
+  },
+  "2301104": {
+    "name": "파괴의 아칸 검성",
+    "isBoss": false
+  },
+  "2301105": {
+    "name": "파괴의 아칸 병사",
+    "isBoss": false
+  },
+  "2301106": {
+    "name": "모래폭풍 레기온 정예병",
+    "isBoss": false
+  },
+  "2301107": {
+    "name": "모래폭풍 레기온 십부장",
+    "isBoss": false
+  },
+  "2301108": {
+    "name": "모래폭풍 레기온 군단병",
+    "isBoss": false
+  },
+  "2301109": {
+    "name": "모래폭풍 레기온 검성",
+    "isBoss": false
+  },
+  "2301110": {
+    "name": "모래폭풍 레기온 수호성",
+    "isBoss": false
+  },
+  "2301111": {
+    "name": "방어포",
+    "isBoss": false
+  },
+  "2301112": {
+    "name": "귀환자 트리톤",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "어려움",
+    "dungeonId": 620025
+  },
+  "2301113": {
+    "name": "델트라스",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "어려움",
+    "dungeonId": 620025
+  },
+  "2301114": {
+    "name": "환영 폭탄",
+    "isBoss": false
+  },
+  "2301115": {
+    "name": "델트라스",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "어려움",
+    "dungeonId": 620025
+  },
+  "2301119": {
+    "name": "온기의 화로",
+    "isBoss": false
+  },
+  "2301131": {
+    "name": "델트라스의 얼어붙은 심장",
+    "isBoss": false
+  },
+  "2301132": {
+    "name": "파괴의 아칸 정예병",
+    "isBoss": false
+  },
+  "2301133": {
+    "name": "파괴의 아칸 수호성",
+    "isBoss": false
+  },
+  "2301134": {
+    "name": "파괴의 아칸 검성",
+    "isBoss": false
+  },
+  "2301135": {
+    "name": "파괴의 아칸 병사",
+    "isBoss": false
+  },
+  "2301136": {
+    "name": "모래폭풍 레기온 정예병",
+    "isBoss": false
+  },
+  "2301137": {
+    "name": "모래폭풍 레기온 십부장",
+    "isBoss": false
+  },
+  "2301138": {
+    "name": "모래폭풍 레기온 군단병",
+    "isBoss": false
+  },
+  "2301139": {
+    "name": "모래폭풍 레기온 검성",
+    "isBoss": false
+  },
+  "2301140": {
+    "name": "모래폭풍 레기온 수호성",
+    "isBoss": false
+  },
+  "2301141": {
+    "name": "방어포",
+    "isBoss": false
+  },
+  "2301142": {
+    "name": "귀환자 트리톤",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "보통",
+    "dungeonId": 620026
+  },
+  "2301143": {
+    "name": "델트라스",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "보통",
+    "dungeonId": 620026
+  },
+  "2301144": {
+    "name": "환영 폭탄",
+    "isBoss": false
+  },
+  "2301145": {
+    "name": "델트라스",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "보통",
+    "dungeonId": 620026
+  },
+  "2301151": {
+    "name": "델트라스의 얼어붙은 심장",
+    "isBoss": false
+  },
+  "2301152": {
+    "name": "파괴의 아칸 정예병",
+    "isBoss": false
+  },
+  "2301153": {
+    "name": "파괴의 아칸 수호성",
+    "isBoss": false
+  },
+  "2301154": {
+    "name": "파괴의 아칸 검성",
+    "isBoss": false
+  },
+  "2301155": {
+    "name": "파괴의 아칸 병사",
+    "isBoss": false
+  },
+  "2301156": {
+    "name": "모래폭풍 레기온 정예병",
+    "isBoss": false
+  },
+  "2301157": {
+    "name": "모래폭풍 레기온 십부장",
+    "isBoss": false
+  },
+  "2301158": {
+    "name": "모래폭풍 레기온 군단병",
+    "isBoss": false
+  },
+  "2301159": {
+    "name": "모래폭풍 레기온 검성",
+    "isBoss": false
+  },
+  "2301160": {
+    "name": "모래폭풍 레기온 수호성",
+    "isBoss": false
+  },
+  "2301161": {
+    "name": "방어포",
+    "isBoss": false
+  },
+  "2301162": {
+    "name": "귀환자 트리톤",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "쉬움",
+    "dungeonId": 620027
+  },
+  "2301163": {
+    "name": "델트라스",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "쉬움",
+    "dungeonId": 620027
+  },
+  "2301164": {
+    "name": "환영 폭탄",
+    "isBoss": false
+  },
+  "2301165": {
+    "name": "델트라스",
+    "isBoss": true,
+    "category": "성역",
+    "tier": "쉬움",
+    "dungeonId": 620027
   },
   "2301201": {
     "name": "오염된 수라 마도사",
@@ -15072,21 +15343,21 @@
     "name": "거짓의 실리아토르",
     "isBoss": true,
     "category": "초월",
-    "tier": "3단계",
+    "tier": "2단계",
     "dungeonId": 600065
   },
   "2350708": {
     "name": "고통의 루탈리스",
     "isBoss": true,
     "category": "초월",
-    "tier": "3단계",
+    "tier": "2단계",
     "dungeonId": 600065
   },
   "2350709": {
     "name": "공허의 탈리스라",
     "isBoss": true,
     "category": "초월",
-    "tier": "3단계",
+    "tier": "2단계",
     "dungeonId": 600065
   },
   "2350710": {
@@ -15209,21 +15480,21 @@
     "name": "거짓의 실리아토르",
     "isBoss": true,
     "category": "초월",
-    "tier": "5단계",
+    "tier": "3단계",
     "dungeonId": 600068
   },
   "2353708": {
     "name": "고통의 루탈리스",
     "isBoss": true,
     "category": "초월",
-    "tier": "5단계",
+    "tier": "3단계",
     "dungeonId": 600068
   },
   "2353709": {
     "name": "공허의 탈리스라",
     "isBoss": true,
     "category": "초월",
-    "tier": "5단계",
+    "tier": "3단계",
     "dungeonId": 600068
   },
   "2353710": {
@@ -15350,22 +15621,22 @@
     "name": "거짓의 실리아토르",
     "isBoss": true,
     "category": "초월",
-    "tier": "2단계",
-    "dungeonId": 13
+    "tier": "4단계",
+    "dungeonId": 610062
   },
   "2356708": {
     "name": "고통의 루탈리스",
     "isBoss": true,
     "category": "초월",
-    "tier": "2단계",
-    "dungeonId": 13
+    "tier": "4단계",
+    "dungeonId": 610062
   },
   "2356709": {
     "name": "공허의 탈리스라",
     "isBoss": true,
     "category": "초월",
-    "tier": "2단계",
-    "dungeonId": 13
+    "tier": "4단계",
+    "dungeonId": 610062
   },
   "2356710": {
     "name": "회전 자기장",
@@ -21684,6 +21955,66 @@
   },
   "2407117": {
     "name": "드라칸 상급 관리병",
+    "isBoss": false
+  },
+  "2407118": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407119": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407120": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407121": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407122": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407123": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407124": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407125": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407126": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407127": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407128": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407129": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407130": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407131": {
+    "name": "긍지의 모노리스",
+    "isBoss": false
+  },
+  "2407132": {
+    "name": "긍지의 모노리스",
     "isBoss": false
   },
   "2500000": {
@@ -32697,8 +33028,64 @@
     "name": "바크론의 가시속박",
     "isBoss": true
   },
+  "2921442": {
+    "name": "델트라스",
+    "isBoss": true
+  },
+  "2921443": {
+    "name": "델트라스",
+    "isBoss": true
+  },
+  "2921448": {
+    "name": "델트라스",
+    "isBoss": true
+  },
+  "2921453": {
+    "name": "델트라스",
+    "isBoss": true
+  },
+  "2921454": {
+    "name": "델트라스",
+    "isBoss": true
+  },
+  "2921455": {
+    "name": "델트라스",
+    "isBoss": true
+  },
+  "2921456": {
+    "name": "델트라스",
+    "isBoss": true
+  },
+  "2921458": {
+    "name": "델트라스",
+    "isBoss": true
+  },
   "2921511": {
     "name": "오만의 아티엘",
+    "isBoss": false
+  },
+  "2921576": {
+    "name": "델트라스",
+    "isBoss": true
+  },
+  "2921579": {
+    "name": "지켈의 권능",
+    "isBoss": false
+  },
+  "2921580": {
+    "name": "드라토나 알",
+    "isBoss": false
+  },
+  "2921581": {
+    "name": "동굴 드라토나 유체",
+    "isBoss": false
+  },
+  "2921582": {
+    "name": "드라토나 알",
+    "isBoss": false
+  },
+  "2921583": {
+    "name": "드라토나 덩치",
     "isBoss": false
   },
   "2980000": {
