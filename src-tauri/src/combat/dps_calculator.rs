@@ -389,7 +389,7 @@ impl DpsCalculator {
         let rows: Vec<(i32, String, usize, i64)> = dps_data.map.iter()
             .map(|(&id, d)| (id, d.job.clone(), skill_counts.get(&id).copied().unwrap_or(0), d.amount as i64))
             .collect();
-        if let Some(owners) = self.instance_class_owners(&rows) {
+        if let Some(owners) = self.instance_class_owners(self.data_storage.current_dungeon_id(), &rows) {
             let merged: HashSet<i32> = orphan_merges.iter().map(|(o, _)| *o).collect();
             for (id, job, _, _) in &rows {
                 if merged.contains(id) {
@@ -681,10 +681,11 @@ impl DpsCalculator {
     /// unknown, or when more actors run a rotation than the party has members:
     /// then another party is in the fight and a class says nothing.
     ///
+    /// `dungeon_id`: the instance the fight was in.
     /// `actors`: (row id, class name, distinct skills, damage).
-    fn instance_class_owners(&self, actors: &[(i32, String, usize, i64)]) -> Option<HashMap<String, i32>> {
+    fn instance_class_owners(&self, dungeon_id: i32, actors: &[(i32, String, usize, i64)]) -> Option<HashMap<String, i32>> {
         const ROTATION_SKILLS: usize = 5;
-        if self.data_storage.current_dungeon_id() <= 0 {
+        if dungeon_id <= 0 {
             return None;
         }
         let party = self.data_storage.get_party_members();
@@ -785,7 +786,6 @@ impl DpsCalculator {
         // behind a lock, and it does not change between targets here.
         let party_members = self.data_storage.get_party_members();
         let supporters = self.data_storage.supporters();
-        let dungeon_id = self.data_storage.current_dungeon_id();
         let now_ms = crate::clock::now_ms();
 
         let mut records = Vec::new();
@@ -932,7 +932,7 @@ impl DpsCalculator {
                 is_train,
                 app_version: crate::entity::fight_record::APP_VERSION.to_string(),
                 mob_code,
-                dungeon_id,
+                dungeon_id: target_data.dungeon_id,
                 server_id: self.data_storage.fight_server_id(),
             };
 
@@ -1207,7 +1207,7 @@ impl DpsCalculator {
             let rows: Vec<(i32, String, usize, i64)> = rows.into_iter()
                 .map(|(id, (job, skills, damage))| (id, job, skills.len(), damage))
                 .collect();
-            if let Some(owners) = self.instance_class_owners(&rows) {
+            if let Some(owners) = self.instance_class_owners(target_data.dungeon_id, &rows) {
                 for (id, job, _, _) in &rows {
                     if let Some(&owner) = owners.get(job) {
                         if owner != *id {
@@ -1469,6 +1469,7 @@ fn build_nickname_canonical_map_from_aggregates(
 mod tests {
     use super::*;
     use crate::entity::damage_packet::ParsedDamagePacket;
+    use std::sync::Mutex;
 
     fn hit(actor: i32, target: i32, at: i64) -> ParsedDamagePacket {
         let mut p = ParsedDamagePacket::new();
@@ -1591,6 +1592,87 @@ mod tests {
         let rows: HashSet<i32> = meter(&raid).get_target_details(50_000, None)
             .skills.iter().map(|s| s.actor_id).collect();
         assert!(rows.contains(&1490) && rows.contains(&1491), "two Spiritmasters: both kept");
+    }
+
+    const BOSS: i32 = 700;
+
+    /// A meter whose NPC table knows one boss, and `id` spawned as it.
+    fn meter_with_boss(storage: &Arc<DataStorage>, ids: &[i32]) -> DpsCalculator {
+        let npcs = NpcLookup::new();
+        npcs.load_from_json(r#"{"700":{"name":"Boss","isBoss":true}}"#);
+        for &id in ids {
+            storage.append_mob(id, BOSS);
+            storage.register_boss(id);
+        }
+        DpsCalculator::new(storage.clone(), Arc::new(SkillLookup::new()),
+            Arc::new(npcs), Arc::new(PingTracker::new()))
+    }
+
+    /// One hit a second from `actor` on `target`, `from` to `to` inclusive.
+    fn hits(storage: &DataStorage, actor: i32, target: i32, from: i64, to: i64) {
+        let mut at = from;
+        while at <= to {
+            crate::clock::set_override(Some(at));
+            storage.append_damage(hit(actor, target, at));
+            at += 1_000;
+        }
+    }
+
+    fn dungeon_of(records: &[FightRecord], id: &str) -> i32 {
+        records.iter().find(|r| r.id == id).map(|r| r.dungeon_id).expect(id)
+    }
+
+    #[test]
+    fn a_fight_outside_after_leaving_an_instance_has_no_dungeon() {
+        let s = Arc::new(DataStorage::new());
+        s.set_local_player_id(Some(2259));
+        let saved = Arc::new(Mutex::new(Vec::new()));
+        let calc = Arc::new(Mutex::new(meter_with_boss(&s, &[800, 900])));
+        {
+            let (calc, saved) = (calc.clone(), saved.clone());
+            s.set_before_reset(move || saved.lock().unwrap().extend(calc.lock().unwrap().snapshot_boss_fights_force()));
+        }
+        s.set_current_dungeon(600_002);
+        hits(&s, 2259, 800, 1_000, 8_000);
+        crate::clock::set_override(Some(20_000));
+        assert!(s.note_zone_change(), "the load out of the instance");
+        assert_eq!(s.current_dungeon_id(), 0);
+        hits(&s, 2259, 900, 30_000, 40_000);
+        crate::clock::set_override(Some(41_000));
+        let mut saved = saved.lock().unwrap().clone();
+        saved.extend(calc.lock().unwrap().snapshot_boss_fights_force());
+        assert_eq!(dungeon_of(&saved, "auto_800_1000"), 600_002);
+        assert_eq!(dungeon_of(&saved, "auto_900_30000"), 0);
+        crate::clock::set_override(None);
+    }
+
+    #[test]
+    fn a_fight_before_the_first_roster_still_gets_its_dungeon() {
+        let s = Arc::new(DataStorage::new());
+        s.set_local_player_id(Some(2259));
+        let mut calc = meter_with_boss(&s, &[800]);
+        hits(&s, 2259, 800, 1_000, 3_000);
+        s.set_current_dungeon(600_002);
+        hits(&s, 2259, 800, 4_000, 8_000);
+        crate::clock::set_override(Some(9_000));
+        assert_eq!(dungeon_of(&calc.snapshot_boss_fights_force(), "auto_800_1000"), 600_002);
+        crate::clock::set_override(None);
+    }
+
+    #[test]
+    fn a_teleport_during_a_fight_in_an_instance_keeps_the_dungeon() {
+        let s = Arc::new(DataStorage::new());
+        s.set_local_player_id(Some(2259));
+        let mut calc = meter_with_boss(&s, &[800]);
+        s.set_current_dungeon(600_002);
+        hits(&s, 2259, 800, 1_000, 5_000);
+        crate::clock::set_override(Some(5_500));
+        assert!(!s.note_zone_change(), "mid-fight: no combat reset");
+        assert_eq!(s.current_dungeon_id(), 0, "until the roster names it again");
+        hits(&s, 2259, 800, 6_000, 9_000);
+        crate::clock::set_override(Some(10_000));
+        assert_eq!(dungeon_of(&calc.snapshot_boss_fights_force(), "auto_800_1000"), 600_002);
+        crate::clock::set_override(None);
     }
 
     #[test]

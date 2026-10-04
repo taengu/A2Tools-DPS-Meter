@@ -255,6 +255,9 @@ pub struct TargetCombatData {
     pub last_packet_id: i64,
     /// Per raw-actor aggregated combat data
     pub actors: HashMap<i32, ActorCombatData>,
+    /// The instance this fight was in, as the party roster last named it at
+    /// one of its hits; 0 in the open world.
+    pub dungeon_id: i32,
 }
 
 impl TargetCombatData {
@@ -266,6 +269,7 @@ impl TargetCombatData {
             last_damage_time: timestamp,
             last_packet_id: -1,
             actors: HashMap::new(),
+            dungeon_id: 0,
         }
     }
 }
@@ -457,21 +461,17 @@ impl DataStorage {
     /// (debounce), so the meter starts clean on entering a dungeon/instance
     /// without ever wiping an in-progress fight. Returns true if it reset.
     pub fn note_zone_change(&self) -> bool {
-        let now = now_ms();
-        if now.saturating_sub(self.last_damage_ms.load(Ordering::Relaxed)) < ZONE_RESET_LULL_MS {
-            return false; // mid-combat teleport — ignore
+        let reset = self.zone_change_resets();
+        if reset {
+            self.run_before_reset();
         }
-        if now.saturating_sub(self.last_zone_reset_ms.load(Ordering::Relaxed)) < ZONE_RESET_DEBOUNCE_MS {
-            return false; // already reset moments ago
+        // Every load leaves the instance behind, mid-fight or not. The roster
+        // names the new one again within seconds if it is an instance; it never
+        // sends 0 for the open world, so nothing else clears the id.
+        self.inner.write().current_dungeon_id = 0;
+        if !reset {
+            return false;
         }
-        {
-            let inner = self.inner.read();
-            if inner.target_combat.is_empty() {
-                return false; // nothing to clear
-            }
-        }
-        self.last_zone_reset_ms.store(now, Ordering::Relaxed);
-        self.run_before_reset();
         // Preserve identity across the reset: a teleport within the same instance
         // keeps everyone's entity ids, so wiping nicknames/known-players/summons
         // would drop your party (and you) to raw ids until they happen to be
@@ -479,6 +479,23 @@ impl DataStorage {
         self.flush_combat_only();
         self.combat_reset_requested.store(true, Ordering::Relaxed);
         tracing::info!("Zone change detected — combat data reset (identity preserved)");
+        true
+    }
+
+    /// Whether a zone change now clears combat: not mid-fight, not just after
+    /// another reset, and only with something to clear.
+    fn zone_change_resets(&self) -> bool {
+        let now = now_ms();
+        if now.saturating_sub(self.last_damage_ms.load(Ordering::Relaxed)) < ZONE_RESET_LULL_MS {
+            return false; // mid-combat teleport — ignore
+        }
+        if now.saturating_sub(self.last_zone_reset_ms.load(Ordering::Relaxed)) < ZONE_RESET_DEBOUNCE_MS {
+            return false; // already reset moments ago
+        }
+        if self.inner.read().target_combat.is_empty() {
+            return false; // nothing to clear
+        }
+        self.last_zone_reset_ms.store(now, Ordering::Relaxed);
         true
     }
 
@@ -1309,6 +1326,7 @@ impl DataStorage {
                         last_damage_time: td.last_damage_time,
                         last_packet_id: td.last_packet_id,
                         actors,
+                        dungeon_id: td.dungeon_id,
                     },
                 )
             })
@@ -1430,6 +1448,7 @@ fn apply_damage(inner: &mut Inner, pdp: &ParsedDamagePacket) {
     let packet_id = pdp.id();
 
     // Get or create target combat data
+    let dungeon_id = inner.current_dungeon_id;
     let target_data = inner.target_combat.entry(target_id).or_insert_with(|| {
         TargetCombatData::new(target_id, timestamp)
     });
@@ -1441,6 +1460,11 @@ fn apply_damage(inner: &mut Inner, pdp: &ParsedDamagePacket) {
         tracing::info!("Idle reset: target {} — gap {}ms", target_id,
             timestamp - target_data.last_damage_time);
         *target_data = TargetCombatData::new(target_id, timestamp);
+    }
+    // The roster names the instance only once it arrives, so a hit before it
+    // leaves the id for a later hit to fill.
+    if dungeon_id != 0 {
+        target_data.dungeon_id = dungeon_id;
     }
 
     // Update target timing
