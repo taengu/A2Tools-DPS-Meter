@@ -11,8 +11,11 @@
 
 use x11_dl::xlib;
 
-/// Linux compositors can resize both native Wayland and X11 windows.
+/// GNOME uses compositor resizing on both native Wayland and X11.
 pub fn compositor_resize_supported(window: &tauri::WebviewWindow) -> bool {
+    if !super::process::is_gnome() {
+        return false;
+    }
     use gtk::prelude::*;
     let window = window.clone();
     super::dialog::on_gtk_thread(move || {
@@ -166,7 +169,7 @@ pub fn minimize_off_top(window: &tauri::WebviewWindow) {
 /// and max go in one call; set one at a time, the window manager sees a
 /// minimum above the maximum in between and the window flickers.
 pub fn set_size(window: &tauri::WebviewWindow, size: tauri::Size) {
-    if window.label() == "main" {
+    if window.label() == "main" && super::process::is_gnome() {
         let window = window.clone();
         super::dialog::on_gtk_thread(move || {
             use gtk::prelude::*;

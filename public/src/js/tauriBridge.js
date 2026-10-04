@@ -10,9 +10,10 @@
   const { listen } = window.__TAURI__.event;
   const { open: shellOpen } = window.__TAURI__.opener;
 
-  // Linux uses compositor resizing on both X11 and native Wayland.
-  let compositorResize = null;
-  const compositorResizeReady = invoke("compositor_resize_supported")
+  // The backend enables compositor resizing only on GNOME.
+  const isLinux = /Linux/.test(navigator.userAgent);
+  let compositorResize = isLinux ? null : false;
+  const compositorResizeReady = isLinux ? invoke("compositor_resize_supported")
     .then((supported) => {
       compositorResize = supported;
       if (supported) {
@@ -22,7 +23,8 @@
       }
       return supported;
     })
-    .catch(() => { compositorResize = false; return false; });
+    .catch(() => { compositorResize = false; return false; })
+    : Promise.resolve(false);
 
   // Three windows share this bundle: the game overlay (label "main"), the
   // Details view ("details") which the user can park on a second monitor, and

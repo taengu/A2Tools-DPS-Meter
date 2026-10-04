@@ -14,9 +14,16 @@
 const DISABLE: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
 const FORCE_SHM: &str = "WEBKIT_DMABUF_RENDERER_FORCE_SHM";
 
+fn desktop_is_gnome(desktop: &str) -> bool {
+    desktop.split(':').any(|name| name.eq_ignore_ascii_case("gnome"))
+}
+
+pub(crate) fn is_gnome() -> bool {
+    desktop_is_gnome(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
+}
+
 fn prefer_xwayland(backend_set: bool, desktop: &str, wayland: bool, x11_available: bool) -> bool {
-    !backend_set && wayland && x11_available
-        && desktop.split(':').any(|name| name.eq_ignore_ascii_case("gnome"))
+    !backend_set && wayland && x11_available && desktop_is_gnome(desktop)
 }
 
 /// Returns a note for the log when it changed anything.
@@ -43,7 +50,18 @@ pub fn prepare() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::prefer_xwayland;
+    use super::{desktop_is_gnome, prefer_xwayland};
+
+    #[test]
+    fn gnome_detection_matches_desktop_components_only() {
+        for desktop in ["GNOME", "gnome", "ubuntu:GNOME", "GNOME-Classic:GNOME"] {
+            assert!(desktop_is_gnome(desktop), "{desktop}");
+        }
+        for desktop in ["", "KDE", "Hyprland", "sway", "i3", "X-Cinnamon", "not-gnome"] {
+            assert!(!desktop_is_gnome(desktop), "{desktop}");
+            assert!(!prefer_xwayland(false, desktop, true, true), "{desktop}");
+        }
+    }
 
     #[test]
     fn backend_choice_respects_desktop_session_and_overrides() {

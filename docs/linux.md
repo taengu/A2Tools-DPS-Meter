@@ -227,11 +227,19 @@ An explicit `GDK_BACKEND` takes precedence. To select XWayland manually:
 GDK_BACKEND=x11 a2tools-dps-meter
 ```
 
-If XWayland is unavailable, the meter falls back to native Wayland. You can also select it with `GDK_BACKEND=wayland a2tools-dps-meter`. GTK's native Wayland keep-above request has no effect in GNOME: focus the meter, press **Alt+Space**, and select **Always on Top**. Repeat for Details or other meter windows as needed. Close the focused window with **Alt+F4**, or use **Settings > Quit** to exit the meter.
+Depending on GNOME's fractional-scaling configuration, XWayland text may look softer at 125% or 150%. If text looks blurry, try native Wayland:
 
-### Resizing on Linux
+```sh
+GDK_BACKEND=wayland a2tools-dps-meter
+```
 
-Drag the meter's bottom-right resize handle, or the edges of a tool window. On X11, XWayland and native Wayland, the compositor resizes the actual window instead of temporarily expanding a transparent viewport. This avoids the expansion moving the meter back onto the screen. The application detects its actual display backend, including XWayland inside a Wayland session.
+If XWayland is unavailable, the meter also falls back to native Wayland. GTK's native Wayland keep-above request has no effect in GNOME: focus the meter, press **Alt+Space**, and select **Always on Top**. Repeat for Details or other meter windows as needed. Close the focused window with **Alt+F4**, or use **Settings > Quit** to exit the meter.
+
+### Resizing on GNOME
+
+Drag the meter's bottom-right resize handle, or the edges of a tool window. On GNOME with X11, XWayland or native Wayland, the compositor resizes the actual window instead of temporarily expanding a transparent viewport. This avoids the expansion moving the meter back onto the screen. The application detects its actual display backend, including XWayland inside a Wayland session.
+
+KDE Plasma, Hyprland, Sway, i3 and other desktops retain the existing overlay viewport resizing and tool-window edge resizing from 2.0.45. The GNOME path is not enabled on those desktops.
 
 The meter's minimum height is measured from its current content, so shrinking removes empty space without letting the frame overlap the header, rows or footer.
 
