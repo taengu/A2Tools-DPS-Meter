@@ -11,7 +11,7 @@
     }
   },
   "details": {
-    "tooltip": {
+    "hoverTooltip": {
       "loading": "Loading...",
       "empty": "No skill data for this fight",
       "error": "Could not load skills"

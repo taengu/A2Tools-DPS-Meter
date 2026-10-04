@@ -188,3 +188,18 @@ test("overlay reserves the tooltip's actual width and height and shrinks on clos
   assert.equal(sizes[2].width, 1200);
   assert.equal(sizes[2].height, 800);
 });
+
+
+test("hover translations preserve the existing details tooltip text", () => {
+  for (const locale of ["en", "ru"]) {
+    const dictionary = JSON.parse(readFileSync(new URL(`../src/data/i18n/ui/${locale}.json`, import.meta.url), "utf8"));
+    assert.equal(typeof dictionary.details.tooltip, "string");
+    const { app } = setup();
+    app.i18n = { t: (key, fallback) => key.split(".").reduce((value, part) => value?.[part], dictionary) ?? fallback };
+    app.hoverTooltipEl = { style: {}, classList: { add() {} }, offsetWidth: 100, offsetHeight: 100 };
+    for (const state of ["loading", "empty", "error"]) {
+      Object.getPrototypeOf(app).renderHoverTooltip.call(app, { skills: [], state }, { id: 1 }, {});
+      assert.ok(app.hoverTooltipEl.innerHTML.includes(dictionary.details.hoverTooltip[state]));
+    }
+  }
+});
