@@ -11,6 +11,11 @@
     }
   },
   "details": {
+    "tooltip": {
+      "loading": "Loading...",
+      "empty": "No skill data for this fight",
+      "error": "Could not load skills"
+    },
     "header": "Details",
     "title": "{name} Details",
     "tooltip": "Damage over time hits are not included in total crit, double, perfect, back attack, or parry ratios.",

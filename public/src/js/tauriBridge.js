@@ -116,6 +116,7 @@
   let cachedCaptureStatus = null;
   let cachedDetailsContext = null;
   let cachedAppVersion = "";     // populated on startup from Tauri backend
+  let lastSkillDetailsIssue = "";
   let captureSuspended = false;  // the suspend button's state; the backend's is the truth
 
   // A reloaded window picks the suspend state back up from the backend.
@@ -248,19 +249,24 @@
     },
 
     async getBattleDetail(actorId) {
-      try {
-        const dps = cachedDpsJson ? JSON.parse(cachedDpsJson) : null;
-        const targetId = Number(dps?.targetId) || 0;
-        if (targetId <= 0) return null;
-        const aid = Number(actorId);
-        const result = await invoke("get_skill_details", {
-          targetId,
-          actorIds: Number.isFinite(aid) && aid > 0 ? [aid] : null,
-        });
-        return JSON.stringify(result);
-      } catch {
+      const dps = cachedDpsJson ? JSON.parse(cachedDpsJson) : null;
+      const targetId = Number(dps?.targetId) || 0;
+      if (targetId <= 0) {
+        const issue = `no selected target (mode=${dps?.targetMode || "unknown"}, rows=${Object.keys(dps?.map || {}).length})`;
+        if (issue !== lastSkillDetailsIssue) window.javaBridge?.logToDebug?.(`Skill details: ${issue}`);
+        lastSkillDetailsIssue = issue;
         return null;
       }
+      const aid = Number(actorId);
+      const result = await invoke("get_skill_details", {
+        targetId,
+        actorIds: Number.isFinite(aid) && aid > 0 ? [aid] : null,
+      });
+      const issue = Array.isArray(result?.skills) && result.skills.length
+        ? "" : `empty response for target=${targetId}`;
+      if (issue && issue !== lastSkillDetailsIssue) window.javaBridge?.logToDebug?.(`Skill details: ${issue}`);
+      lastSkillDetailsIssue = issue;
+      return JSON.stringify(result);
     },
 
     getVersion() {

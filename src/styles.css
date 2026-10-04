@@ -893,6 +893,8 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   position: static;
   padding: 0;
   margin: 0;
+  min-width: 64px;
+  flex: 1 1 0;
 }
 .battleTime.isVisible { display: flex; margin-right: auto; }
 .battleTime .status {
@@ -917,6 +919,7 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
 .battleTime.state-ended .status { background: var(--indicator-end); }
 .battleTime.state-idle .status { background: var(--indicator-idle); }
 .battleTime .tick {
+  flex: 0 0 auto;
   font-family: var(--hud-tech);
   font-variation-settings: "wght" 600, "wdth" 87.5;
   font-variant-numeric: tabular-nums;
@@ -925,6 +928,8 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   color: rgba(255, 255, 255, 0.8);
 }
 .battleTime .analysisStatus {
+  min-width: 0;
+  flex: 1 1 auto;
   font-family: var(--hud-tech);
   font-variation-settings: "wght" 400, "wdth" 87.5;
   font-size: 12px;
@@ -936,6 +941,9 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
 
 .meterTotalBar {
   display: flex;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
   align-items: baseline;
   gap: 5px;
   padding: 0;
@@ -952,6 +960,7 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
 .footerBtns {
   position: static;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 4px;
   cursor: pointer;

@@ -771,6 +771,13 @@ class DpsApp {
   renderHoverTooltip(details, row, rowEl) {
     if (!this.hoverTooltipEl || !rowEl) return;
     const skills = Array.isArray(details?.skills) ? details.skills.slice(0, 5) : [];
+    const tooltipState = details?.state || "empty";
+    const stateFallback = {
+      loading: "Loading...",
+      empty: "No skill data for this fight",
+      error: "Could not load skills",
+    }[tooltipState] || "No skill data for this fight";
+    const stateText = this.i18n?.t(`details.tooltip.${tooltipState}`, stateFallback) ?? stateFallback;
     let top = 0;
     let left = 372;
     const dps = Number(row?.dps) || 0;
@@ -802,7 +809,7 @@ class DpsApp {
         <span>${this.i18n?.t("header.display.dps", "DPS") ?? "DPS"}: ${dpsText}</span>
         <span>${this.i18n?.t("details.stats.totalDamage", "Total Damage") ?? "Total Damage"}: ${totalDamageText}</span>
       </div>
-      <div class="hoverDetailsTooltipSkills">${skillsHtml || `<div class="hoverDetailsTooltipSkill muted">${this.i18n?.t("details.refresh.loading", "Loading...") ?? "Loading..."}</div>`}</div>
+      <div class="hoverDetailsTooltipSkills">${skillsHtml || `<div class="hoverDetailsTooltipSkill muted">${stateText}</div>`}</div>
     `;
     // Apply cached skill icons to tooltip img elements
     if (window.skillIcons?.applyIconToImage && skills.length) {
@@ -833,7 +840,7 @@ class DpsApp {
       if (!forceRefresh) return;
     }
 
-    this.renderHoverTooltip({ skills: [] }, row, rowEl);
+    this.renderHoverTooltip({ skills: [], state: "loading" }, row, rowEl);
     if (!forceRefresh && this.hoverTooltipPendingRowIds.has(rowId)) {
       return;
     }
@@ -850,11 +857,12 @@ class DpsApp {
         this.hoverTooltipCacheByRowId.set(rowId, lightweightDetails);
         this.renderHoverTooltip(lightweightDetails, row, rowEl);
       })
-      .catch(() => {
+      .catch((error) => {
         this.hoverTooltipPendingRowIds.delete(rowId);
         const currentSeq = this.hoverTooltipRequestSeqByRowId.get(rowId);
         if (currentSeq !== requestSeq || this.hoveredDetailsRowId !== rowId) return;
-        this.renderHoverTooltip({ skills: [] }, row, rowEl);
+        window.javaBridge?.logToDebug?.(`Hover skill details failed: ${error?.message || error}`);
+        this.renderHoverTooltip({ skills: [], state: "error" }, row, rowEl);
       });
   }
 
