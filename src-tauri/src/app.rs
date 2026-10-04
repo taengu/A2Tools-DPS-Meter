@@ -1709,6 +1709,7 @@ async fn replay_file(state: tauri::State<'_, AppState>, file_path: String) -> Re
     // Reset existing data before replay
     state.dps_calculator.lock().restart_target_selection(true);
     state.data_storage.reset_nicknames();
+    state.data_storage.forget_summon_links();
 
     // Feed packets directly to StreamProcessor, bypassing CaptureDispatcher
     // (no AION2 window check, no port detection needed for replay)

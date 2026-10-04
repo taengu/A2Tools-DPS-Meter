@@ -713,6 +713,15 @@ impl DataStorage {
         let actor_id = pdp.actor_id();
         let target_id = pdp.target_id();
 
+        // Not damage: a spirit and its owner naming each other.
+        if let Some((summon, owner)) = owner_link(skill_code, actor_id, target_id) {
+            if link_summon(&mut inner, summon, owner) {
+                tracing::debug!("Summon {} linked to owner {} by skill {}", summon, owner, skill_code);
+                self.damage_generation.fetch_add(1, Ordering::Relaxed);
+            }
+            return;
+        }
+
         // NPC actors using NPC skills: track damage received on the player target, then skip
         let uses_npc_skill = (1_000_000..=9_999_999).contains(&skill_code);
         if inner.mob_storage.contains_key(&actor_id)
@@ -735,17 +744,15 @@ impl DataStorage {
         }
 
         // Track player skill usage. Exclude anything that spawned via a mob/summon
-        // spawn (40/41 36): a real player never does, so such an entity dealing
-        // class-band damage is a summon / spell-effect, not a player.
+        // spawn (40/41 36) or has an owner: a real player never does, so such an
+        // entity dealing class-band damage is a summon / spell-effect, not a player.
         if is_player_skill(skill_code)
             && !inner.confirmed_summon_ids.contains(&actor_id)
             && !inner.summon_spawn_ids.contains(&actor_id)
+            && !inner.summon_storage.contains_key(&actor_id)
+            && inner.known_player_ids.insert(actor_id)
         {
-            let is_new = inner.known_player_ids.insert(actor_id);
-            if is_new {
-                inner.summon_storage.remove(&actor_id);
-                purge_friendly_damage(&mut inner, actor_id);
-            }
+            purge_friendly_damage(&mut inner, actor_id);
         }
 
         // Party healing: player-on-player damage is actually healing/buffs
@@ -891,8 +898,24 @@ impl DataStorage {
     /// Record that `id` appeared in a `40/41 36` mob/summon spawn (never a player
     /// spawn). Used to keep summon / spell-effect entities out of the known-player
     /// set and make them attributable to their same-class player.
+    ///
+    /// The game reuses entity ids, so a spawn is a new entity: whatever owner,
+    /// summon or player mark the id had belongs to the one before. Entity 65746
+    /// was one player's pet and then, 14 minutes later, another Spiritmaster's
+    /// spirit, whose 7,032 damage went to the first owner (2026-10-04).
     pub fn note_summon_spawn(&self, id: i32) {
-        self.inner.write().summon_spawn_ids.insert(id);
+        let mut inner = self.inner.write();
+        forget_entity(&mut inner, id);
+        // A name the game gave this id outranks a spawn read out of a scan.
+        if !inner.authoritative_name_ids.contains(&id) {
+            inner.known_player_ids.remove(&id);
+        }
+        inner.summon_spawn_ids.insert(id);
+    }
+
+    /// A `44/45 36` player spawn for `id`: a player, not anyone's summon.
+    pub fn note_player_spawn(&self, id: i32) {
+        forget_entity(&mut self.inner.write(), id);
     }
 
     pub fn get_summon_spawn_ids(&self) -> HashSet<i32> {
@@ -1023,11 +1046,9 @@ impl DataStorage {
 
     pub fn register_confirmed_summon_by_id(&self, summon_id: i32, owner_id: i32) {
         tracing::trace!("Summon confirmed (5F 00): {} owned by {}", summon_id, owner_id);
-        let mut inner = self.inner.write();
-        inner.confirmed_summon_ids.insert(summon_id);
-        inner.known_player_ids.remove(&summon_id);
-        inner.summon_storage.insert(summon_id, owner_id);
-        purge_friendly_damage(&mut inner, summon_id);
+        if link_summon(&mut self.inner.write(), summon_id, owner_id) {
+            self.damage_generation.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     pub fn append_summon(&self, summoner: i32, summon: i32) {
@@ -1268,16 +1289,17 @@ impl DataStorage {
             .collect()
     }
 
+    /// Clear combat. Who owns which summon is kept: a summon is linked when it
+    /// spawns or sends its owner a link record, and one that did that before the
+    /// reset would otherwise stay unlinked for good. Ids that are reused get
+    /// their links dropped by the new spawn (see `note_summon_spawn`).
     pub fn flush(&self) {
         let mut inner = self.inner.write();
         inner.target_combat.clear();
         inner.held_dot_ticks.clear();
         inner.training_dummy_ids.clear();
         inner.actor_jobs.clear();
-        inner.summon_storage.clear();
         inner.known_player_ids.clear();
-        inner.confirmed_summon_ids.clear();
-        inner.summon_spawn_ids.clear();
         inner.actor_power_scalars.clear();
         inner.hostile_target_ids.clear();
         inner.dead_entity_ids.clear();
@@ -1303,6 +1325,15 @@ impl DataStorage {
         inner.mob_current_hp.clear();
         inner.heal_storage.clear();
         inner.current_target = 0;
+    }
+
+    /// Drop every summon link, for a capture from another session (a replay),
+    /// whose entity ids mean something else.
+    pub fn forget_summon_links(&self) {
+        let mut inner = self.inner.write();
+        inner.summon_storage.clear();
+        inner.confirmed_summon_ids.clear();
+        inner.summon_spawn_ids.clear();
     }
 
     pub fn reset_nicknames(&self) {
@@ -1441,6 +1472,87 @@ fn apply_damage(inner: &mut Inner, pdp: &ParsedDamagePacket) {
     skill_data.hit_timestamps.push(timestamp);
     for (i, &flag) in pdp.spec_flags().iter().enumerate() {
         if flag { skill_data.spec_flags[i] = true; }
+    }
+}
+
+/// Skill codes of the records a Spiritmaster's spirit sends its owner (about
+/// once a second) and the owner sends its spirits. Damage-shaped `04 38`
+/// records, but the amount is no damage, and the pair is the most reliable
+/// owner link there is: across five captures (2026-10-04) 1,251 spirits were
+/// linked this way and none to two owners in one lifetime. Seen: 16990002,
+/// 16990003 and 16770000.
+const SPIRIT_TO_OWNER: std::ops::RangeInclusive<i32> = 16_990_000..=16_999_999;
+const OWNER_TO_SPIRIT: std::ops::RangeInclusive<i32> = 16_770_000..=16_779_999;
+
+/// `(summon, owner)` if this record is a link record.
+fn owner_link(skill_code: i32, actor_id: i32, target_id: i32) -> Option<(i32, i32)> {
+    if SPIRIT_TO_OWNER.contains(&skill_code) {
+        Some((actor_id, target_id))
+    } else if OWNER_TO_SPIRIT.contains(&skill_code) {
+        Some((target_id, actor_id))
+    } else {
+        None
+    }
+}
+
+/// Link `summon` to `owner` as a confirmed summon. Returns whether anything
+/// changed: the link records repeat every second.
+fn link_summon(inner: &mut Inner, summon: i32, owner: i32) -> bool {
+    if summon <= 0 || owner <= 0 || summon == owner {
+        return false;
+    }
+    if inner.summon_storage.get(&summon) == Some(&owner) && inner.confirmed_summon_ids.contains(&summon) {
+        return false;
+    }
+    // A link through the summon back to itself would hide both.
+    if summon_resolver::resolve(owner, &inner.summon_storage) == summon {
+        return false;
+    }
+    // Another owner means another entity under a reused id whose spawn went
+    // unseen: what the old one did stays with its owner.
+    if inner.summon_storage.get(&summon).is_some_and(|&old| old != owner) {
+        forget_entity(inner, summon);
+    }
+    inner.confirmed_summon_ids.insert(summon);
+    inner.known_player_ids.remove(&summon);
+    inner.summon_storage.insert(summon, owner);
+    purge_friendly_damage(inner, summon);
+    true
+}
+
+/// A new entity under `id`: drop the old one's owner link and summon marks.
+/// What a linked summon did moves onto its owner, where it was shown anyway,
+/// so the new entity's owner does not inherit it.
+fn forget_entity(inner: &mut Inner, id: i32) {
+    inner.confirmed_summon_ids.remove(&id);
+    inner.summon_spawn_ids.remove(&id);
+    inner.actor_jobs.remove(&id);
+    inner.hostile_target_ids.remove(&id);
+    let Some(owner) = inner.summon_storage.remove(&id) else { return };
+    let owner = summon_resolver::resolve(owner, &inner.summon_storage);
+    if owner <= 0 || owner == id {
+        return;
+    }
+    for target in inner.target_combat.values_mut() {
+        if let Some(data) = target.actors.remove(&id) {
+            target.actors.entry(owner).or_insert_with(ActorCombatData::new).absorb(data);
+        }
+    }
+    if let Some(heals) = inner.heal_storage.remove(&id) {
+        let mine = inner.heal_storage.entry(owner).or_default();
+        for (key, h) in heals {
+            let e = mine.entry(key).or_default();
+            e.total_heal += h.total_heal;
+            e.tick_count += h.tick_count;
+        }
+    }
+    let held: Vec<(i32, i32)> = inner.held_dot_ticks.keys().filter(|k| k.1 == id).copied().collect();
+    for key in held {
+        let mut ticks = inner.held_dot_ticks.remove(&key).unwrap_or_default();
+        for t in &mut ticks {
+            t.set_actor_id(owner);
+        }
+        inner.held_dot_ticks.entry((key.0, owner)).or_default().extend(ticks);
     }
 }
 
@@ -1963,6 +2075,108 @@ mod tests {
         s.append_damage(hit(1454, 600, 1_000, 100, false));
         s.append_damage(hit(1454, 600, 2_000, 50, true));
         assert_eq!(totals(&s, 600), (150, 1_000));
+    }
+
+    fn with_skill(mut p: ParsedDamagePacket, skill: i32) -> ParsedDamagePacket {
+        p.set_skill_code(skill);
+        p
+    }
+
+    fn dealt(s: &DataStorage, target: i32, actor: i32) -> i64 {
+        s.get_combat_snapshot().get(&target).and_then(|t| t.actors.get(&actor)).map_or(0, |a| a.total_damage)
+    }
+
+    #[test]
+    fn link_records_link_a_spirit_and_are_not_damage() {
+        let s = DataStorage::new();
+        s.append_nickname_authoritative(100, "Owner");
+        // A spirit with no spawn link hits first; its damage waits under its id.
+        s.append_damage(with_skill(hit(500, 900, 1_000, 300, false), 16_010_000));
+        assert!(!s.is_summon(500));
+        // Spirit to owner.
+        s.append_damage(with_skill(hit(500, 100, 1_500, 20, false), 16_990_002));
+        assert_eq!(s.get_summon_data().get(&500), Some(&100));
+        assert!(s.is_confirmed_summon(500));
+        // Owner to spirit.
+        s.append_damage(with_skill(hit(100, 501, 1_600, 197, false), 16_770_000));
+        assert_eq!(s.get_summon_data().get(&501), Some(&100));
+
+        let snap = s.get_combat_snapshot();
+        assert!(!snap.contains_key(&100), "the owner is no target");
+        assert!(!snap.contains_key(&501), "nor is the spirit");
+        assert_eq!(snap[&900].total_damage, 300);
+        assert!(s.get_heal_snapshot().is_empty(), "nor is it healing");
+        assert!(!s.is_known_player(500));
+    }
+
+    #[test]
+    fn a_new_spawn_under_an_id_starts_without_the_old_owner() {
+        let s = DataStorage::new();
+        s.append_damage(with_skill(hit(500, 100, 1_000, 20, false), 16_990_002));
+        s.append_damage(with_skill(hit(500, 900, 1_100, 300, false), 16_010_000));
+        // The id comes back as someone else's spirit.
+        s.note_summon_spawn(500);
+        assert!(!s.is_summon(500));
+        assert!(!s.is_confirmed_summon(500));
+        assert_eq!(dealt(&s, 900, 100), 300, "the old spirit's damage stays its owner's");
+        assert_eq!(dealt(&s, 900, 500), 0);
+        s.append_damage(with_skill(hit(500, 200, 2_000, 20, false), 16_990_002));
+        s.append_damage(with_skill(hit(500, 900, 2_100, 50, false), 16_010_000));
+        assert_eq!(s.get_summon_data().get(&500), Some(&200));
+        assert_eq!(dealt(&s, 900, 500), 50);
+        assert_eq!(dealt(&s, 900, 100), 300);
+
+        // A player spawn under a summon's id ends the summon too.
+        s.note_player_spawn(500);
+        assert!(!s.is_summon(500));
+        assert_eq!(dealt(&s, 900, 200), 50);
+    }
+
+    #[test]
+    fn a_link_to_another_owner_keeps_what_the_old_entity_did() {
+        // The spawn between the two went unseen.
+        let s = DataStorage::new();
+        s.append_damage(with_skill(hit(500, 100, 1_000, 20, false), 16_990_002));
+        s.append_damage(with_skill(hit(500, 900, 1_100, 300, false), 16_010_000));
+        s.append_damage(with_skill(hit(200, 500, 5_000, 197, false), 16_770_000));
+        assert_eq!(s.get_summon_data().get(&500), Some(&200));
+        assert_eq!(dealt(&s, 900, 100), 300);
+        assert_eq!(dealt(&s, 900, 500), 0);
+    }
+
+    #[test]
+    fn a_summon_using_a_class_skill_is_no_player() {
+        let s = DataStorage::new();
+        s.register_confirmed_summon_by_id(500, 100);
+        s.append_damage(with_skill(hit(500, 900, 1_000, 300, false), 16_010_000));
+        assert!(!s.is_known_player(500));
+        assert_eq!(s.get_summon_data().get(&500), Some(&100));
+
+        // Spawned as a summon, owner not known yet.
+        s.note_summon_spawn(501);
+        s.append_damage(with_skill(hit(501, 900, 1_000, 300, false), 16_010_000));
+        assert!(!s.is_known_player(501));
+
+        // A link through the summon back to itself is refused.
+        s.append_damage(with_skill(hit(100, 500, 1_000, 20, false), 16_990_002));
+        assert_eq!(s.get_summon_data().get(&100), None);
+    }
+
+    #[test]
+    fn summon_links_survive_a_reset() {
+        let s = DataStorage::new();
+        s.append_damage(with_skill(hit(500, 100, 1_000, 20, false), 16_990_002));
+        s.register_confirmed_summon_by_id(501, 100);
+        s.note_summon_spawn(502);
+        s.flush();
+        assert_eq!(s.get_summon_data().get(&500), Some(&100));
+        assert_eq!(s.get_summon_data().get(&501), Some(&100));
+        assert!(s.get_summon_spawn_ids().contains(&502));
+        s.append_damage(with_skill(hit(502, 900, 2_000, 300, false), 16_010_000));
+        assert!(!s.is_known_player(502), "still a summon after the reset");
+
+        s.forget_summon_links();
+        assert!(s.get_summon_data().is_empty());
     }
 
     #[test]
