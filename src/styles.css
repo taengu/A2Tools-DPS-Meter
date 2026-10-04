@@ -438,6 +438,10 @@ html:lang(zh-Hant), html:lang(zh-Hant) body {
   animation: detailsFlash 1s ease-out;
 }
 
+body.linuxOverlay .meter {
+  box-shadow: none;
+}
+
 /* ---------- header ---------- */
 
 .header {

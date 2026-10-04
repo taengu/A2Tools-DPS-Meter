@@ -166,6 +166,22 @@ pub fn minimize_off_top(window: &tauri::WebviewWindow) {
 /// and max go in one call; set one at a time, the window manager sees a
 /// minimum above the maximum in between and the window flickers.
 pub fn set_size(window: &tauri::WebviewWindow, size: tauri::Size) {
+    if window.label() == "main" {
+        let window = window.clone();
+        super::dialog::on_gtk_thread(move || {
+            use gtk::prelude::*;
+            let Ok(window) = window.gtk_window() else { return };
+            let context = window.style_context();
+            if context.has_class("a2tools-overlay") { return; }
+            let provider = gtk::CssProvider::new();
+            if provider.load_from_data(b"window.a2tools-overlay decoration { box-shadow: none; margin: 0; border: 0; }").is_ok() {
+                gtk::StyleContext::add_provider_for_screen(
+                    &window.display().default_screen(), &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+                context.add_class("a2tools-overlay");
+            }
+        });
+    }
     let (w, h) = match size {
         tauri::Size::Physical(s) => (
             tauri::PixelUnit::Physical(tauri::PhysicalUnit::new(s.width as i32)),

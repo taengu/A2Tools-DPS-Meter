@@ -13,7 +13,15 @@
   // Linux uses compositor resizing on both X11 and native Wayland.
   let compositorResize = null;
   const compositorResizeReady = invoke("compositor_resize_supported")
-    .then((supported) => { compositorResize = supported; return supported; })
+    .then((supported) => {
+      compositorResize = supported;
+      if (supported) {
+        const apply = () => document.body.classList.add("linuxOverlay");
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
+        else apply();
+      }
+      return supported;
+    })
     .catch(() => { compositorResize = false; return false; });
 
   // Three windows share this bundle: the game overlay (label "main"), the
@@ -761,10 +769,10 @@
       : px("borderLeftWidth") + px("borderRightWidth") + px("paddingLeft") + px("paddingRight");
     const borderH = style.boxSizing === "border-box" ? 0
       : px("borderTopWidth") + px("borderBottomWidth") + px("paddingTop") + px("paddingBottom");
-    meter.style.width = `${Math.max(300, window.innerWidth - padding.w - borderW)}px`;
-    meter.style.height = `${Math.max(30, window.innerHeight - padding.h - borderH)}px`;
+    // Viewport units follow layout immediately, without waiting for resize events.
+    meter.style.width = `max(300px, calc(100vw - ${padding.w + borderW}px))`;
+    meter.style.height = `max(30px, calc(100vh - ${padding.h + borderH}px))`;
   };
-  window.addEventListener("resize", followNativeSize);
 
   const finishNativeResize = (cancel = false) => {
     const operation = nativeResize;
@@ -796,7 +804,9 @@
       if (window.A2_VIEW === "main") {
         const meter = document.querySelector(".meter");
         if (meter?.style.height) {
-          meter.style.minHeight = meter.style.height;
+          const style = getComputedStyle(meter);
+          meter.style.width = style.width;
+          meter.style.minHeight = style.height;
           meter.style.height = "";
         }
       }
@@ -816,7 +826,10 @@
     nativeResize = operation;
     if (window.A2_VIEW === "main") {
       const meter = document.querySelector(".meter");
-      if (meter) meter.style.minHeight = "";
+      if (meter) {
+        followNativeSize();
+        meter.style.minHeight = "";
+      }
     }
     operation.started = invoke("begin_window_resize", {
       minWidth, minHeight, scale: window.devicePixelRatio || 1,
