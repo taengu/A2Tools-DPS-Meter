@@ -11,6 +11,9 @@ pub struct DpsData {
     pub target_name: String,
     pub target_mode: String,
     pub target_id: i32,
+    /// Targets represented by the displayed rows, retained while no new target is selected.
+    #[serde(default)]
+    pub detail_target_ids: Vec<i32>,
     pub battle_time: i64,
     pub local_player_id: Option<i64>,
     /// Max HP of the current single boss target (0 = unknown / multi-target).
@@ -33,6 +36,7 @@ impl DpsData {
             target_name: String::new(),
             target_mode: "bossTargets".to_string(),
             target_id: 0,
+            detail_target_ids: Vec::new(),
             battle_time: 0,
             local_player_id: None,
             target_max_hp: 0,

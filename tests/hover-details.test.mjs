@@ -63,3 +63,59 @@ test("rendered tooltip text distinguishes loading, empty data and errors", () =>
     if (state !== "loading") assert.ok(!app.hoverTooltipEl.innerHTML.includes("Loading..."));
   }
 });
+
+const bridgeSource = readFileSync(new URL("../public/src/js/tauriBridge.js", import.meta.url), "utf8");
+const battleDetailMethod = bridgeSource.slice(bridgeSource.indexOf("    async getBattleDetail(actorId) {"), bridgeSource.indexOf("\n    getVersion()"));
+
+function bridge(snapshot, responses) {
+  const calls = [];
+  const context = vm.createContext({
+    cachedDpsJson: JSON.stringify(snapshot), lastSkillDetailsIssue: "", window: {},
+    invoke: async (command, args) => {
+      assert.equal(command, "get_skill_details");
+      calls.push(args);
+      return responses[args.targetId];
+    },
+  });
+  const api = vm.runInContext(`({${battleDetailMethod}})`, context);
+  return { api, calls };
+}
+
+test("hover queries the retained fight when the active target is zero", async () => {
+  const { api, calls } = bridge({ targetId: 0, detailTargetIds: [42] }, {
+    42: { skills: [{ code: 11010000, actorId: 1, dmg: 500, time: 1 }] },
+  });
+  const { app, rendered } = setup((id) => api.getBattleDetail(id));
+  app.applyHoverTooltip({ id: 1 }, { forceRefresh: true });
+  await tick();
+  assert.equal(calls[0].targetId, 42);
+  assert.equal(calls[0].actorIds[0], 1);
+  assert.equal(rendered.at(-1).skills[0].dmg, 500);
+});
+
+test("multi-target hover combines repeated skills and keeps damage-over-time separate", async () => {
+  const skill = { code: 11010000, actorId: 1, dmg: 500, time: 1, minDmg: 500, maxDmg: 500, hitTimestamps: [0], specs: [true] };
+  const { api, calls } = bridge({ targetId: 0, detailTargetIds: [42, 43, 42], battleTime: 2000 }, {
+    42: { startTime: 1000, totalTargetDamage: 500, skills: [skill] },
+    43: { startTime: 2000, totalTargetDamage: 1000, skills: [{ ...skill, dmg: 700, minDmg: 700, maxDmg: 700 }, { ...skill, dmg: 300, isDot: true }] },
+  });
+  const detail = JSON.parse(await api.getBattleDetail(1));
+  assert.equal(calls.length, 2);
+  assert.equal(detail.skills.length, 2);
+  assert.equal(detail.skills[0].dmg, 1200);
+  assert.equal(detail.skills[0].time, 2);
+  assert.equal(detail.skills[0].minDmg, 500);
+  assert.equal(detail.skills[0].maxDmg, 700);
+  assert.deepEqual(detail.skills[0].hitTimestamps, [0, 1000]);
+  assert.equal(detail.totalTargetDamage, 1500);
+  assert.equal(detail.battleTime, 2000);
+});
+
+test("reset snapshots do not query an old target and legacy snapshots still work", async () => {
+  const reset = bridge({ targetId: 0, detailTargetIds: [] }, {});
+  assert.equal(await reset.api.getBattleDetail(1), null);
+  assert.equal(reset.calls.length, 0);
+  const legacy = bridge({ targetId: 42 }, { 42: { skills: [] } });
+  await legacy.api.getBattleDetail(1);
+  assert.equal(legacy.calls[0].targetId, 42);
+});

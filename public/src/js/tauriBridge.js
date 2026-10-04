@@ -250,20 +250,55 @@
 
     async getBattleDetail(actorId) {
       const dps = cachedDpsJson ? JSON.parse(cachedDpsJson) : null;
-      const targetId = Number(dps?.targetId) || 0;
-      if (targetId <= 0) {
+      const targetIds = [...new Set((Array.isArray(dps?.detailTargetIds)
+        ? dps.detailTargetIds : [dps?.targetId]).map(Number).filter((id) => id > 0))];
+      if (!targetIds.length) {
         const issue = `no selected target (mode=${dps?.targetMode || "unknown"}, rows=${Object.keys(dps?.map || {}).length})`;
         if (issue !== lastSkillDetailsIssue) window.javaBridge?.logToDebug?.(`Skill details: ${issue}`);
         lastSkillDetailsIssue = issue;
         return null;
       }
       const aid = Number(actorId);
-      const result = await invoke("get_skill_details", {
+      const results = await Promise.all(targetIds.map((targetId) => invoke("get_skill_details", {
         targetId,
         actorIds: Number.isFinite(aid) && aid > 0 ? [aid] : null,
-      });
+      })));
+      let result = results[0];
+      if (results.length > 1) {
+        const startTime = Math.min(...results.map((item) => Number(item.startTime) || 0));
+        const mergeSkills = (field) => {
+          const merged = new Map();
+          const sumFields = ["time", "dmg", "multiHitCount", "multiHitDamage", "multiHitHits",
+            "crit", "parry", "back", "frontal", "perfect", "double", "smite", "powershard", "regen"];
+          for (const item of results) {
+            const offset = (Number(item.startTime) || 0) - startTime;
+            for (const skill of item[field] || []) {
+              const key = `${skill.actorId}:${skill.code}:${Boolean(skill.isDot)}`;
+              const timestamps = (skill.hitTimestamps || []).map((ts) => Number(ts) + offset);
+              const entry = merged.get(key);
+              if (!entry) {
+                merged.set(key, { ...skill, hitTimestamps: timestamps, specs: [...(skill.specs || [])] });
+                continue;
+              }
+              for (const name of sumFields) entry[name] = (Number(entry[name]) || 0) + (Number(skill[name]) || 0);
+              const minimums = [entry.minDmg, skill.minDmg].map(Number).filter((n) => n > 0);
+              entry.minDmg = minimums.length ? Math.min(...minimums) : 0;
+              entry.maxDmg = Math.max(Number(entry.maxDmg) || 0, Number(skill.maxDmg) || 0);
+              entry.hitTimestamps.push(...timestamps);
+              entry.specs.push(...(skill.specs || []));
+            }
+          }
+          return [...merged.values()];
+        };
+        result = {
+          targetId: 0, maxHp: 0, startTime,
+          battleTime: Number(dps.battleTime) || 0,
+          totalTargetDamage: results.reduce((sum, item) => sum + (Number(item.totalTargetDamage) || 0), 0),
+          skills: mergeSkills("skills"), healSkills: mergeSkills("healSkills"), pingHistory: [],
+        };
+      }
       const issue = Array.isArray(result?.skills) && result.skills.length
-        ? "" : `empty response for target=${targetId}`;
+        ? "" : `empty response for targets=${targetIds.join(",")}`;
       if (issue && issue !== lastSkillDetailsIssue) window.javaBridge?.logToDebug?.(`Skill details: ${issue}`);
       lastSkillDetailsIssue = issue;
       return JSON.stringify(result);

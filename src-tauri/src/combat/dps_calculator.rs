@@ -167,6 +167,8 @@ impl DpsCalculator {
         dps_data.target_mode = self.target_selection_mode.id().to_string();
         self.current_target = tracking_id;
         dps_data.target_id = self.current_target;
+        dps_data.detail_target_ids = target_ids.iter().copied().collect();
+        dps_data.detail_target_ids.sort_unstable();
         self.data_storage.set_current_target(self.current_target);
 
         // Boss HP bar source: spawn-time max HP of the single boss target. Only
@@ -1361,6 +1363,42 @@ mod tests {
     fn meter(storage: &Arc<DataStorage>) -> DpsCalculator {
         DpsCalculator::new(storage.clone(), Arc::new(SkillLookup::new()),
             Arc::new(NpcLookup::new()), Arc::new(PingTracker::new()))
+    }
+
+    #[test]
+    fn displayed_rows_keep_their_detail_targets_until_reset() {
+        let storage = Arc::new(DataStorage::new());
+        storage.set_local_player_id(Some(2259));
+        storage.append_damage(hit(2259, 50_000, 1_000));
+        let mut calc = meter(&storage);
+        let shown = calc.get_dps();
+        assert_eq!(shown.detail_target_ids, vec![50_000]);
+        assert!(!calc.get_target_details(50_000, Some(&[2259])).skills.is_empty());
+
+        calc.set_target_selection_mode("trainTargets");
+        let retained = calc.get_dps();
+        assert_eq!(retained.target_id, 0);
+        assert!(!retained.map.is_empty());
+        assert_eq!(retained.detail_target_ids, vec![50_000]);
+
+        calc.restart_target_selection(true);
+        let reset = calc.get_dps();
+        assert!(reset.map.is_empty());
+        assert!(reset.detail_target_ids.is_empty());
+    }
+
+    #[test]
+    fn all_targets_exposes_each_target_behind_the_displayed_damage() {
+        let storage = Arc::new(DataStorage::new());
+        storage.set_local_player_id(Some(2259));
+        storage.append_damage(hit(2259, 50_000, 1_000));
+        storage.append_damage(hit(2259, 60_000, 2_000));
+        let mut calc = meter(&storage);
+        calc.set_target_selection_mode("allTargets");
+        let shown = calc.get_dps();
+        assert_eq!(shown.target_id, 0);
+        assert!(!shown.map.is_empty());
+        assert_eq!(shown.detail_target_ids, vec![50_000, 60_000]);
     }
 
     #[test]
