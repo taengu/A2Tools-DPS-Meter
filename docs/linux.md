@@ -233,6 +233,8 @@ If XWayland is unavailable, the meter falls back to native Wayland. You can also
 
 Drag the meter's bottom-right resize handle, or the edges of a tool window. On X11, XWayland and native Wayland, the compositor resizes the actual window instead of temporarily expanding a transparent viewport. This avoids the expansion moving the meter back onto the screen. The application detects its actual display backend, including XWayland inside a Wayland session.
 
+The meter's minimum height is measured from its current content, so shrinking removes empty space without letting the frame overlap the header, rows or footer.
+
 Pausing with the mouse button held does not end the resize. If you release outside the window, move the pointer back over it to resume automatic sizing to the meter's content.
 
 ## Build from source (other distributions)

@@ -757,6 +757,24 @@
     return { w: 16, h: 10 + (ping ? ping.offsetHeight + 8 : 0) };
   };
 
+  const overlayMinimum = (meter) => {
+    const height = meter.style.height;
+    const minHeight = meter.style.minHeight;
+    // Measure normal-flow content without the user's saved empty space.
+    meter.style.height = "auto";
+    meter.style.minHeight = "0";
+    const style = getComputedStyle(meter);
+    const contentHeight = Math.max(30, parseFloat(style.height) || 0);
+    const outerHeight = Math.ceil(meter.getBoundingClientRect().height);
+    const borderWidth = style.boxSizing === "border-box" ? 0
+      : (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0)
+        + (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    meter.style.height = height;
+    meter.style.minHeight = minHeight;
+    const padding = overlayPadding();
+    return { contentHeight, width: 300 + borderWidth + padding.w, height: outerHeight + padding.h };
+  };
+
   // Follow the compositor viewport while automatic content sizing is paused.
   const followNativeSize = () => {
     if (!nativeResize || window.A2_VIEW !== "main") return;
@@ -771,7 +789,7 @@
       : px("borderTopWidth") + px("borderBottomWidth") + px("paddingTop") + px("paddingBottom");
     // Viewport units follow layout immediately, without waiting for resize events.
     meter.style.width = `max(300px, calc(100vw - ${padding.w + borderW}px))`;
-    meter.style.height = `max(30px, calc(100vh - ${padding.h + borderH}px))`;
+    meter.style.height = `max(${nativeResize.contentHeight || 30}px, calc(100vh - ${padding.h + borderH}px))`;
   };
 
   const finishNativeResize = (cancel = false) => {
@@ -827,8 +845,12 @@
     if (window.A2_VIEW === "main") {
       const meter = document.querySelector(".meter");
       if (meter) {
+        const minimum = overlayMinimum(meter);
+        operation.contentHeight = minimum.contentHeight;
+        minWidth = minimum.width;
+        minHeight = minimum.height;
         followNativeSize();
-        meter.style.minHeight = "";
+        meter.style.minHeight = `${minimum.contentHeight}px`;
       }
     }
     operation.started = invoke("begin_window_resize", {
