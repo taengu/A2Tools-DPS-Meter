@@ -168,15 +168,14 @@ impl StreamProcessor {
                 i += 1;
                 continue;
             }
-            // `<varint len> FF FF <size u32> <lz4>`, an outer bundle being one
-            // byte longer than its length says (see `framing`).
+            // `<varint len> FF FF <size u32> <lz4>`, sized as `framing` does.
             let bundle = (1..=3usize).rev().find_map(|n| {
                 let at = i.checked_sub(n)?;
                 let len = read_varint(packet, at);
-                if len.length != n as i32 || len.value <= 4 {
+                if len.length != n as i32 {
                     return None;
                 }
-                let end = at + (len.value as usize - 3) + 1;
+                let end = at + super::framing::frame_size(len.value, len.length)?;
                 let data = super::framing::decompress_bundle(packet.get(i..end)?)?;
                 Some((end, data))
             });

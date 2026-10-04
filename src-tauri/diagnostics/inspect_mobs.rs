@@ -92,7 +92,8 @@ fn walk(buf: &[u8], out: &mut Vec<u8>) {
             offset += 1;
             continue;
         }
-        let total = (li.value - 3) as i64;
+        // The length counts the payload plus 4.
+        let total = li.value as i64 - 4 + li.length as i64;
         if total <= 0 || total > 65535 {
             offset += 1;
             continue;
@@ -104,12 +105,8 @@ fn walk(buf: &[u8], out: &mut Vec<u8>) {
         let ps = li.length as usize;
         let is_bundle = ps + 1 < total && buf[offset + ps] == 0xFF && buf[offset + ps + 1] == 0xFF;
         if is_bundle {
-            let bsize = total + 1;
-            if offset + bsize > buf.len() {
-                break;
-            }
-            decompress_bundle(&buf[offset + ps..offset + bsize], out);
-            offset += bsize;
+            decompress_bundle(&buf[offset + ps..offset + total], out);
+            offset += total;
         } else {
             out.extend_from_slice(&buf[offset..offset + total]);
             offset += total;

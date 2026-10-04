@@ -164,11 +164,10 @@ fn embedded_spawn_end(packet: &[u8], i: usize) -> Option<usize> {
     let framed = (1..=3usize).rev().find_map(|n| {
         let at = i.checked_sub(n)?;
         let len = super::stream_processor::read_varint(packet, at);
-        if len.length != n as i32 || len.value <= 3 {
+        if len.length != n as i32 {
             return None;
         }
-        // Lengths count three more than the frame's bytes (see `framing`).
-        let end = at + (len.value - 3) as usize;
+        let end = at + framing::frame_size(len.value, len.length)?;
         (end >= i + EMBEDDED_SPAWN_MIN && end <= packet.len() && end - i <= EMBEDDED_SPAWN_MAX)
             .then_some(end)
     });
@@ -217,18 +216,11 @@ fn lift_compact_context(packet: &[u8]) -> Option<Vec<u8>> {
     frame_packet(&lifted)
 }
 
-/// Prefix a body with the game's length varint (declared length = physical
-/// size + 3, where the physical size includes the varint itself).
+/// Prefix a body with the game's length varint (see `framing`).
 fn frame_packet(body: &[u8]) -> Option<Vec<u8>> {
-    for prefix_len in 1usize..=4 {
-        let prefix = encode_varint((prefix_len + body.len() + 3) as u32);
-        if prefix.len() == prefix_len {
-            let mut out = prefix;
-            out.extend_from_slice(body);
-            return Some(out);
-        }
-    }
-    None
+    let mut out = encode_varint(framing::length_value(body.len()));
+    out.extend_from_slice(body);
+    Some(out)
 }
 
 /// Opcodes that report what happened rather than who is there. Kept only in
@@ -575,35 +567,13 @@ fn encode_varint(mut value: u32) -> Vec<u8> {
     }
 }
 
-/// Re-wrap a filtered inner stream as an `FF FF` bundle.
-///
-/// The size arithmetic has to match [`framing::walk`] exactly, and it is
-/// circular: the packet length includes the width of the varint that encodes it.
-/// Solved by trying each varint width and keeping the one that agrees with
-/// itself. Layout, for a bundle spanning `total + 1` bytes:
-///
-/// ```text
-/// <varint(total + 3)> FF FF <u32 decompressed_size> <lz4 block>
-/// ```
+/// Re-wrap a filtered inner stream as an `FF FF` bundle:
+/// `<varint len> FF FF <u32 decompressed_size> <lz4 block>`.
 fn rewrap_bundle(inner: &[u8]) -> Option<Vec<u8>> {
-    let compressed = lz4_flex::compress(inner);
-    for prefix_len in 1usize..=5 {
-        // total = prefix + lz4 + 5  (derived from: total + 1 - prefix == 6 + lz4)
-        let total = prefix_len + compressed.len() + 5;
-        let length_value = (total + 3) as u32;
-        let prefix = encode_varint(length_value);
-        if prefix.len() != prefix_len {
-            continue;
-        }
-        let mut out = Vec::with_capacity(total + 1);
-        out.extend_from_slice(&prefix);
-        out.extend_from_slice(&[0xFF, 0xFF]);
-        out.extend_from_slice(&(inner.len() as u32).to_le_bytes());
-        out.extend_from_slice(&compressed);
-        debug_assert_eq!(out.len(), total + 1, "bundle size arithmetic");
-        return Some(out);
-    }
-    None
+    let mut payload = vec![0xFF, 0xFF];
+    payload.extend_from_slice(&(inner.len() as u32).to_le_bytes());
+    payload.extend_from_slice(&lz4_flex::compress(inner));
+    frame_packet(&payload)
 }
 
 /// Filter and blind the packets inside a decompressed bundle, returning the
@@ -810,7 +780,9 @@ pub fn build(
 // ===== container =====
 
 pub const MAGIC: &[u8; 4] = b"A2ES";
-pub const VERSION: u16 = 1;
+/// 2: lengths follow the corrected framing rule. Version 1 slices are read by
+/// re-framing their records (see `upgrade_v1_record`).
+pub const VERSION: u16 = 2;
 
 /// Serialise to the `.a2es` container.
 ///
@@ -867,7 +839,7 @@ pub fn decode(data: &[u8]) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)
         return None;
     }
     let version = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?);
-    if version != VERSION {
+    if version != VERSION && version != 1 {
         return None;
     }
     let op_count = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?) as usize;
@@ -889,9 +861,56 @@ pub fn decode(data: &[u8]) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)
     for _ in 0..rec_count {
         let dt = i32::from_le_bytes(take(data, &mut o, 4)?.try_into().ok()?);
         let len = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?) as usize;
-        records.push((dt, take(data, &mut o, len)?.to_vec()));
+        let record = take(data, &mut o, len)?;
+        let record = if version == 1 { upgrade_v1_record(record) } else { record.to_vec() };
+        records.push((dt, record));
     }
     Some((records, blind_map))
+}
+
+/// Re-frame a version 1 record for the current walk.
+///
+/// Version 1 was cut with the old rule: a frame spans `len - 3` bytes, plus one
+/// for a top-level bundle. Each frame keeps exactly the bytes it had then and
+/// gets a length the current walk reads as that span, so the parser sees what
+/// it saw when the slice was made.
+fn upgrade_v1_record(record: &[u8]) -> Vec<u8> {
+    fn reframe(buf: &[u8], top: bool, depth: usize) -> Option<Vec<u8>> {
+        let mut out = Vec::with_capacity(buf.len() + 8);
+        let mut o = 0;
+        while o < buf.len() {
+            if buf[o] == 0x00 {
+                out.push(0x00);
+                o += 1;
+                continue;
+            }
+            let len = super::stream_processor::read_varint(buf, o);
+            if len.length <= 0 || len.value <= 3 {
+                break;
+            }
+            let n = len.length as usize;
+            let bundle = buf.len() > o + n + 1 && buf[o + n] == 0xFF && buf[o + n + 1] == 0xFF;
+            let size = len.value as usize - 3 + usize::from(bundle && top);
+            if size < n || o + size > buf.len() {
+                break;
+            }
+            let body = &buf[o + n..o + size];
+            let rewritten = match bundle {
+                true if depth < MAX_BUNDLE_DEPTH => framing::decompress_bundle(body)
+                    .and_then(|inner| reframe(&inner, false, depth + 1))
+                    .and_then(|inner| rewrap_bundle(&inner)),
+                _ => None,
+            };
+            match rewritten {
+                Some(b) => out.extend_from_slice(&b),
+                None => out.extend_from_slice(&frame_packet(body)?),
+            }
+            o += size;
+        }
+        out.extend_from_slice(&buf[o..]);
+        Some(out)
+    }
+    reframe(record, true, 0).unwrap_or_else(|| record.to_vec())
 }
 
 #[cfg(test)]
@@ -944,12 +963,13 @@ mod tests {
     }
 
     /// A non-allowlisted host carrying one framed spawn record, as a field
-    /// boss's arrived: `<len 8d 08> 41 36 <id b6 f5 01> …`, 1,037 bytes.
+    /// boss's arrived: `<len 8d 08> 41 36 <id b6 f5 01> …`, length 1,037, so
+    /// 1,035 bytes with its two-byte length.
     fn host_with_spawn() -> (Vec<u8>, usize) {
         let mut body = vec![0x99, 0x36, 0x11, 0x11];
         let at = body.len() + 2;
         body.extend_from_slice(&[0x8d, 0x08, 0x41, 0x36, 0xb6, 0xf5, 0x01]);
-        body.resize(4 + 1034, 0x22);
+        body.resize(4 + 1035, 0x22);
         body.resize(body.len() + 40, 0x11);
         (frame_packet(&body).unwrap(), at)
     }
@@ -961,7 +981,7 @@ mod tests {
             let lifted = lift_embedded(&host, keep);
             assert_eq!(lifted.len(), 1);
             let l = &lifted[0];
-            let body = &l[l.len() - 1032..];
+            let body = &l[l.len() - 1033..];
             assert_eq!(&body[..5], &[0x41, 0x36, 0xb6, 0xf5, 0x01], "starts at the spawn");
             // Its own length (two bytes, `8d 08`), not the one-byte `08` inside it.
             assert!(l.len() > 1000, "cut short: {}", l.len());
@@ -1184,6 +1204,54 @@ mod tests {
             build(&packets, 10_000_000, 10_001_000, &HashMap::new()),
             Err(SliceError::Empty)
         ));
+    }
+
+    #[test]
+    fn a_version_1_slice_is_reframed_for_the_current_walk() {
+        // Version 1 lengths: a frame spans `len - 3`, a top-level bundle one more.
+        fn old(body: &[u8], bundle: bool) -> Vec<u8> {
+            for n in 1u32..=3 {
+                let value = n + body.len() as u32 + 3 - u32::from(bundle);
+                let mut v = encode_varint(value);
+                if v.len() == n as usize {
+                    v.extend_from_slice(body);
+                    return v;
+                }
+            }
+            unreachable!()
+        }
+        let long: Vec<u8> = [0x04, 0x38].into_iter().chain((0..200).map(|i| i as u8 | 1)).collect();
+        let short = vec![0x41, 0x36, 0x05];
+        let mut inner = old(&short, false);
+        inner.extend(old(&long, false));
+        let mut payload = vec![0xFF, 0xFF];
+        payload.extend_from_slice(&(inner.len() as u32).to_le_bytes());
+        payload.extend_from_slice(&lz4_flex::compress(&inner));
+        let slice = EvidenceSlice {
+            records: vec![(0, old(&long, false)), (1, old(&payload, true)), (2, old(&short, false))],
+            blind_map: HashMap::new(),
+            stats: SliceStats::default(),
+        };
+        let mut bytes = encode(&slice);
+        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+
+        let (records, _) = decode(&bytes).expect("a version 1 slice still decodes");
+        let bodies: Vec<Vec<u8>> = records
+            .iter()
+            .map(|(_, r)| {
+                let w = framing::walk(r);
+                assert_eq!(w.consumed, r.len());
+                assert_eq!(w.frames.len(), 1);
+                w.frames[0].payload(r).to_vec()
+            })
+            .collect();
+        assert_eq!(bodies[0], long);
+        assert_eq!(bodies[2], short);
+        let unpacked = framing::decompress_bundle(&bodies[1]).expect("still a bundle");
+        let w = framing::walk_inner(&unpacked);
+        assert_eq!(w.consumed, unpacked.len());
+        let got: Vec<_> = w.frames.iter().map(|f| f.payload(&unpacked).to_vec()).collect();
+        assert_eq!(got, vec![short.clone(), long.clone()]);
     }
 
     #[test]

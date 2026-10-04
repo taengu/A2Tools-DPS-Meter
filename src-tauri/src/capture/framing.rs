@@ -11,9 +11,15 @@
 //!
 //! ```text
 //! 00 ...                      padding, skipped
-//! <varint len> <payload>      a packet; physical size is len - 3 (an AION 2 quirk)
+//! <varint len> <payload>      a packet; len counts the payload plus 4
 //! <varint len> FF FF <u32 size> <lz4>   a compressed bundle of further packets
 //! ```
+//!
+//! So a frame spans `len - 4 + (bytes in the varint)`. With a one-byte varint
+//! that is `len - 3`, which is how the rule was first written down; with a
+//! two-byte varint it is `len - 2`, and reading that as `len - 3` framed every
+//! packet of 126 bytes or more one byte short (a capture of 2026-10-04 lost
+//! 3% of its packets to the desync that followed).
 
 use super::stream_processor::read_varint;
 
@@ -95,11 +101,14 @@ pub fn walk(buffer: &[u8]) -> Framing {
             continue;
         }
 
-        // 2. AION 2 quirk: length - 3 == physical size.
-        let total_packet_bytes = (length_info.value - 3) as usize;
+        // 2. Physical size, varint included.
+        let Some(total_packet_bytes) = frame_size(length_info.value, length_info.length) else {
+            offset += 1;
+            continue;
+        };
 
         // Resync on invalid sizes.
-        if total_packet_bytes == 0 || total_packet_bytes > MAX_PACKET_BYTES {
+        if total_packet_bytes > MAX_PACKET_BYTES {
             offset += 1;
             continue;
         }
@@ -119,28 +128,13 @@ pub fn walk(buffer: &[u8]) -> Framing {
             && buffer[offset + payload_start] == 0xFF
             && buffer[offset + payload_start + 1] == 0xFF;
 
-        if is_bundle {
-            // A bundle is one byte longer than its declared size.
-            let bundle_size = total_packet_bytes + 1;
-            if offset + bundle_size > buffer.len() {
-                break;
-            }
-            out.frames.push(Frame {
-                kind: FrameKind::Bundle,
-                start: offset,
-                end: offset + bundle_size,
-                payload_start,
-            });
-            offset += bundle_size;
-        } else {
-            out.frames.push(Frame {
-                kind: FrameKind::Packet,
-                start: offset,
-                end: offset + total_packet_bytes,
-                payload_start,
-            });
-            offset += total_packet_bytes;
-        }
+        out.frames.push(Frame {
+            kind: if is_bundle { FrameKind::Bundle } else { FrameKind::Packet },
+            start: offset,
+            end: offset + total_packet_bytes,
+            payload_start,
+        });
+        offset += total_packet_bytes;
     }
 
     out.consumed = offset;
@@ -155,10 +149,6 @@ pub fn walk(buffer: &[u8]) -> Framing {
 /// byte at a time. This one reads a buffer the game itself framed, so a length
 /// that does not parse means the decompression or the framing assumption is
 /// wrong, and walking further would invent packets. It stops instead.
-///
-/// The other asymmetry to preserve: an outer bundle occupies `len - 3 + 1`
-/// bytes, a nested one occupies `len - 3`. That extra byte is real and dropping
-/// it desynchronises the rest of the buffer.
 pub fn walk_inner(buffer: &[u8]) -> Framing {
     let mut out = Framing::default();
     let mut offset = 0usize;
@@ -174,12 +164,10 @@ pub fn walk_inner(buffer: &[u8]) -> Framing {
             break;
         }
 
-        // A length of 3 or less would give a zero-or-negative physical size.
-        if length_info.value <= 3 {
+        let Some(total) = frame_size(length_info.value, length_info.length) else {
             offset += 1;
             continue;
-        }
-        let total = (length_info.value - 3) as usize;
+        };
 
         let end = offset + total;
         if end > buffer.len() {
@@ -198,12 +186,24 @@ pub fn walk_inner(buffer: &[u8]) -> Framing {
             payload_start,
         });
 
-        // Note: no `+ 1` here, unlike the outer walk.
         offset += total;
     }
 
     out.consumed = offset;
     out
+}
+
+/// Bytes a frame occupies, given its length varint's value and width. `None`
+/// when that is shorter than the varint itself.
+pub fn frame_size(value: i32, varint_bytes: i32) -> Option<usize> {
+    let size = value as i64 - 4 + varint_bytes as i64;
+    (size >= varint_bytes as i64 && size > 0).then_some(size as usize)
+}
+
+/// The length varint's value for a frame whose bytes after the varint are
+/// `body_len` long.
+pub fn length_value(body_len: usize) -> u32 {
+    body_len as u32 + 4
 }
 
 /// Decompress a bundle payload (one that starts at its `FF FF`).
@@ -226,12 +226,37 @@ pub fn decompress_bundle(payload: &[u8]) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
 
-    /// `<varint len>` where len = payload + 3, per the quirk above.
+    fn varint(mut v: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        loop {
+            let b = (v & 0x7F) as u8;
+            v >>= 7;
+            if v == 0 {
+                out.push(b);
+                return out;
+            }
+            out.push(b | 0x80);
+        }
+    }
+
+    /// `<varint len> <payload>`, len = payload + 4.
     fn packet(payload: &[u8]) -> Vec<u8> {
-        let total = payload.len() + 1; // 1-byte length prefix
-        let mut v = vec![(total + 3) as u8];
+        let mut v = varint(length_value(payload.len()));
         v.extend_from_slice(payload);
         v
+    }
+
+    fn bundle(inner: &[u8]) -> Vec<u8> {
+        let mut payload = vec![0xFF, 0xFF];
+        payload.extend_from_slice(&(inner.len() as u32).to_le_bytes());
+        payload.extend_from_slice(&lz4_flex::compress(inner));
+        packet(&payload)
+    }
+
+    fn body(op: u8, len: usize) -> Vec<u8> {
+        let mut b = vec![op, 0x36];
+        b.extend((0..len - 2).map(|i| (i % 251) as u8 | 1));
+        b
     }
 
     #[test]
@@ -243,6 +268,25 @@ mod tests {
         assert_eq!(f.consumed, buf.len());
         assert_eq!(f.frames[0].payload(&buf), &[0x23, 0x36, 0x01]);
         assert_eq!(f.frames[1].payload(&buf), &[0x41, 0x36, 0x02, 0x03]);
+    }
+
+    #[test]
+    fn the_length_counts_the_payload_plus_four() {
+        // One-, two- and three-byte varints.
+        for len in [3usize, 122, 123, 124, 200, 1_000, 16_379, 16_380, 20_000] {
+            let payload = body(0x23, len);
+            let mut buf = packet(&payload);
+            let width = buf.len() - len;
+            buf.extend(packet(&[0x41, 0x36, 0x07]));
+            let f = walk(&buf);
+            assert_eq!(f.frames.len(), 2, "len {len}");
+            assert_eq!(f.frames[0].payload_start, width);
+            assert_eq!(f.frames[0].payload(&buf), &payload[..], "len {len}");
+            assert_eq!(f.frames[1].payload(&buf), &[0x41, 0x36, 0x07], "len {len}");
+            assert_eq!(f.consumed, buf.len());
+        }
+        assert_eq!(varint(length_value(200)).len(), 2);
+        assert_eq!(varint(length_value(20_000)).len(), 3);
     }
 
     #[test]
@@ -265,17 +309,82 @@ mod tests {
     }
 
     #[test]
-    fn recognises_a_bundle_and_its_extra_byte() {
-        // payload = FF FF + 4-byte size + some lz4-ish bytes
-        let payload = [0xFF, 0xFF, 0x10, 0, 0, 0, 0xAA, 0xBB];
-        let buf = {
-            let mut v = packet(&payload);
-            v.push(0x00); // the bundle's trailing extra byte
-            v
-        };
-        let f = walk(&buf);
-        assert_eq!(f.frames.len(), 1);
-        assert_eq!(f.frames[0].kind, FrameKind::Bundle);
-        assert_eq!(f.frames[0].len(), buf.len(), "bundle spans the extra byte");
+    fn a_bundle_spans_its_length_and_its_packets_frame_inside() {
+        let inner_payloads = vec![body(0x04, 5), body(0x05, 300), body(0x40, 40)];
+        let inner: Vec<u8> = inner_payloads.iter().flat_map(|p| packet(p)).collect();
+        // Small and large bundles: one- and two-byte varints.
+        for pad in [0usize, 400] {
+            let mut inner = inner.clone();
+            inner.extend((0..pad).map(|i| packet(&body(0x23, 3 + i % 3))).flatten());
+            let mut buf = bundle(&inner);
+            buf.extend(packet(&[0x41, 0x36, 0x09]));
+            let f = walk(&buf);
+            assert_eq!(f.frames.len(), 2);
+            assert_eq!(f.frames[0].kind, FrameKind::Bundle);
+            assert_eq!(f.frames[1].payload(&buf), &[0x41, 0x36, 0x09]);
+            let data = decompress_bundle(f.frames[0].payload(&buf)).expect("decompresses");
+            assert_eq!(data, inner);
+            let w = walk_inner(&data);
+            assert_eq!(w.consumed, data.len());
+            for (frame, want) in w.frames.iter().zip(&inner_payloads) {
+                assert_eq!(frame.payload(&data), &want[..]);
+            }
+        }
+    }
+
+    #[test]
+    fn a_nested_bundle_frames_like_any_other_packet() {
+        let nested = bundle(&packet(&body(0x04, 200)));
+        let mut inner = packet(&body(0x05, 150));
+        inner.extend(&nested);
+        inner.extend(packet(&body(0x41, 4)));
+        let w = walk_inner(&inner);
+        assert_eq!(w.consumed, inner.len());
+        let kinds: Vec<_> = w.frames.iter().map(|f| f.kind).collect();
+        assert_eq!(kinds, [FrameKind::Packet, FrameKind::Bundle, FrameKind::Packet]);
+    }
+
+    #[test]
+    fn a_mixed_stream_frames_end_to_end_however_it_is_split() {
+        let payloads: Vec<Vec<u8>> = vec![
+            body(0x04, 30),
+            body(0x05, 126),
+            body(0x40, 700),
+            body(0x23, 3),
+            body(0x45, 16_380),
+            body(0x04, 124),
+        ];
+        let mut stream = Vec::new();
+        let mut want = Vec::new();
+        for (n, p) in payloads.iter().enumerate() {
+            if n == 2 {
+                stream.extend([0x00, 0x00]);
+                let b = bundle(&packet(&body(0x06, 250)));
+                let width = b.iter().position(|x| x & 0x80 == 0).unwrap() + 1;
+                want.push(b[width..].to_vec());
+                stream.extend(b);
+            }
+            stream.extend(packet(p));
+            want.push(p.clone());
+        }
+
+        let whole = walk(&stream);
+        assert_eq!(whole.consumed, stream.len());
+        let got: Vec<_> = whole.frames.iter().map(|f| f.payload(&stream).to_vec()).collect();
+        assert_eq!(got, want);
+
+        // Fed in TCP-sized pieces, keeping the unconsumed tail each time.
+        for step in [1usize, 7, 100, 1460] {
+            let mut pending = Vec::new();
+            let mut got = Vec::new();
+            for chunk in stream.chunks(step) {
+                pending.extend_from_slice(chunk);
+                let f = walk(&pending);
+                got.extend(f.frames.iter().map(|fr| fr.payload(&pending).to_vec()));
+                pending.drain(..f.consumed);
+            }
+            assert!(pending.is_empty(), "step {step}");
+            assert_eq!(got, want, "step {step}");
+        }
     }
 }
