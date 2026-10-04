@@ -11,7 +11,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 function setup(fetch) {
   const logs = [];
   const window = { javaBridge: { readResource: () => iconMap, logToDebug: (message) => logs.push(message) } };
-  vm.runInNewContext(source, { window, fetch, Blob, Uint8Array, atob, btoa, URL: { createObjectURL: () => "blob:icon" } });
+  vm.runInNewContext(source, { window, fetch, console: { debug() {} }, Blob, Uint8Array, atob, btoa, URL: { createObjectURL: () => "blob:icon" } });
   return { icons: window.skillIcons, logs };
 }
 
@@ -49,8 +49,10 @@ test("CORS failure still tries a direct image, but repeated image errors are cac
   images.forEach((img) => icons.applyIconToImage(img, skill));
   await tick();
   images.forEach((img) => assert.match(img.src, /^https:/));
+  assert.equal(logs.length, 0);
   images.forEach((img) => icons.handleImgError(img));
-  assert.equal(logs.length, 2);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /could not load/);
   const redrawn = image();
   icons.applyIconToImage(redrawn, skill);
   await tick();

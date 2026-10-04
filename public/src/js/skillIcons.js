@@ -188,10 +188,7 @@
   const unavailable = new Set();
   const getIconCandidates = (skill = {}) => resolveIconCandidates(skill).filter((url) => !unavailable.has(url));
 
-  // The first few icon failures go to debug.log, so a player's log tells
-  // "the CDN refused the download" (handled: a direct load follows) apart from
-  // "the image could not be loaded at all" (the CDN is blocked or unreachable
-  // on their network).
+  // Warn only when an icon is missing or its direct image load also fails.
   let failuresLogged = 0;
   const logFailure = (what) => {
     if (failuresLogged >= 5) return;
@@ -268,7 +265,7 @@
           unavailable.add(url);
           logFailure(`not found (${err.status}); using fallback: ${url}`);
         } else {
-          logFailure(`download refused (${err?.message || err}); loading it directly instead: ${url}`);
+          console.debug(`[A2Tools] Skill icon: cache download failed (${err?.message || err}); trying direct image: ${url}`);
         }
         return null;
       })
