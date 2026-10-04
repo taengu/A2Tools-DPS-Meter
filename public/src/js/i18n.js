@@ -206,11 +206,13 @@ const createI18n = ({
       safeSetStorage(storageKey, next);
     }
 
+    const localized = async (kind) => {
+      const strings = await loadJson(`./i18n/${kind}/${next}.json`);
+      return Object.keys(strings).length || next === "en"
+        ? strings : loadJson(`./i18n/${kind}/en.json`);
+    };
     const [ui, skills, npcs, dungeons] = await Promise.all([
-      loadJson(`./i18n/ui/${next}.json`),
-      loadJson(`./i18n/skills/${next}.json`),
-      loadJson(`./i18n/npcs/${next}.json`),
-      loadJson(`./i18n/dungeons/${next}.json`),
+      localized("ui"), localized("skills"), localized("npcs"), localized("dungeons"),
     ]);
 
     uiStrings = ui || {};
