@@ -20,7 +20,7 @@ function setup(getBattleDetail) {
   app.hoverTooltipRequestSeqByRowId = new Map();
   const rendered = [];
   app.renderHoverTooltip = (details) => rendered.push(details);
-  return { app, rendered, logs };
+  return { app, rendered, logs, window };
 }
 
 test("hover replaces loading with the player's highest-damage skills", async () => {
@@ -118,4 +118,73 @@ test("reset snapshots do not query an old target and legacy snapshots still work
   const legacy = bridge({ targetId: 42 }, { 42: { skills: [] } });
   await legacy.api.getBattleDetail(1);
   assert.equal(legacy.calls[0].targetId, 42);
+});
+
+
+test("tooltip follows pointer coordinates relative to its container and flips at screen edges", () => {
+  const { app, window } = setup();
+  window.screen = { availLeft: -1280, availTop: 0, availWidth: 1280, availHeight: 720 };
+  window.screenX = -700;
+  window.screenY = 100;
+  let updates = 0;
+  window.javaBridge.updateOverlaySize = () => updates++;
+  app.hoverTooltipEl = {
+    style: {}, offsetWidth: 240, offsetHeight: 180,
+    offsetParent: { getBoundingClientRect: () => ({ left: 10, top: 5 }) },
+  };
+  app.hoverMousePos = { x: 100, y: 80 };
+  app.positionHoverTooltip();
+  assert.equal(app.hoverTooltipEl.style.left, "102px");
+  assert.equal(app.hoverTooltipEl.style.top, "87px");
+  app.hoverMousePos = { x: 550, y: 550 };
+  app.positionHoverTooltip();
+  assert.equal(app.hoverTooltipEl.style.left, "288px");
+  assert.equal(app.hoverTooltipEl.style.top, "353px");
+  assert.equal(updates, 2);
+});
+
+test("moving over the same row repositions the tooltip without fetching skills again", () => {
+  const { app } = setup();
+  app.pinnedDetailsRowId = null;
+  app.shouldSuppressRowInteractions = () => false;
+  app.hoverTooltipEl = { classList: { contains: () => true } };
+  let positions = 0;
+  app.positionHoverTooltip = () => positions++;
+  app.applyHoverTooltip = () => assert.fail("unexpected refetch");
+  app.openHoverDetailsRow({ id: 1 }, { clientX: 120, clientY: 80 });
+  assert.equal(app.hoverMousePos.x, 120);
+  assert.equal(app.hoverMousePos.y, 80);
+  assert.equal(positions, 1);
+});
+
+const sizingSource = bridgeSource.slice(bridgeSource.indexOf("  const updateWindowSize = () => {"), bridgeSource.indexOf("  // Watch all class changes"));
+test("overlay reserves the tooltip's actual width and height and shrinks on close", () => {
+  let tooltip = { getBoundingClientRect: () => ({ right: 610, bottom: 360 }) };
+  let fullPanel = false;
+  const sizes = [];
+  const context = vm.createContext({
+    resizeActive: false, lastSizeKey: "", PANEL_WIDTH: 1200, PANEL_HEIGHT: 800, PROMO_WIDTH: 600, PROMO_HEIGHT: 400,
+    spaceRightBelow: () => ({ w: 900, h: 700 }),
+    window: { A2_VIEW: "main", devicePixelRatio: 1.5, javaBridge: {} },
+    document: {
+      body: { classList: { contains: () => false } },
+      querySelector: (selector) => selector === ".meter" ? { offsetWidth: 380, offsetHeight: 200, scrollHeight: 200 }
+        : selector === ".hoverDetailsTooltip.isVisible" ? tooltip
+        : selector === ".settingsPanel.isOpen" && fullPanel ? {} : null,
+    },
+    invoke: (command, args) => { sizes.push(args); return Promise.resolve(); },
+  });
+  vm.runInContext(sizingSource, context);
+  vm.runInContext("updateWindowSize()", context);
+  assert.equal(sizes[0].width, 618);
+  assert.equal(sizes[0].height, 368);
+  assert.equal(sizes[0].scale, 1.5);
+  tooltip = null;
+  vm.runInContext("updateWindowSize()", context);
+  assert.equal(sizes[1].width, 396);
+  assert.equal(sizes[1].height, 210);
+  fullPanel = true;
+  vm.runInContext("updateWindowSize()", context);
+  assert.equal(sizes[2].width, 1200);
+  assert.equal(sizes[2].height, 800);
 });

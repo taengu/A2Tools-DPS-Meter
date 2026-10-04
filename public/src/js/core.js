@@ -758,6 +758,7 @@ class DpsApp {
     }
     // Skip redundant tooltip renders when still hovering the same row
     if (isSameRow && this.hoverTooltipEl?.classList.contains("isVisible")) {
+      this.positionHoverTooltip();
       return;
     }
     this.detailsUI?.close?.({ keepPinned: false });
@@ -778,8 +779,6 @@ class DpsApp {
       error: "Could not load skills",
     }[tooltipState] || "No skill data for this fight";
     const stateText = this.i18n?.t(`details.tooltip.${tooltipState}`, stateFallback) ?? stateFallback;
-    let top = 0;
-    let left = 372;
     const dps = Number(row?.dps) || 0;
     const dpsText = `${this.dpsFormatter.format(dps)}${this.i18n?.t("meter.dpsSuffix", "/s") ?? "/s"}`;
     const totalDamage = Number(row?.totalDamage) || 0;
@@ -818,14 +817,37 @@ class DpsApp {
         if (skills[i]) window.skillIcons.applyIconToImage(img, skills[i]);
       });
     }
-    const maxLeft = Math.max(372, (this.elList?.clientWidth || 0) - (this.hoverTooltipEl.offsetWidth || 0) - 8);
-    const maxTop = Math.max(8, (this.elList?.clientHeight || 0) - (this.hoverTooltipEl.offsetHeight || 0) - 8);
-    left = Math.max(372, Math.min(maxLeft, left));
-    top = Math.max(0, Math.min(maxTop, top));
-
-    this.hoverTooltipEl.style.left = `${left}px`;
-    this.hoverTooltipEl.style.top = `${top}px`;
     this.hoverTooltipEl.classList.add("isVisible");
+    this.positionHoverTooltip(rowEl);
+  }
+
+  positionHoverTooltip(rowEl = null) {
+    const tooltip = this.hoverTooltipEl;
+    if (!tooltip) return;
+    const container = tooltip.offsetParent;
+    const origin = container?.getBoundingClientRect?.() || { left: 0, top: 0 };
+    const screen = window.screen || {};
+    const availableWidth = Math.max(32, (screen.availLeft || 0) + (screen.availWidth || window.innerWidth)
+      - (window.screenX || 0) - origin.left);
+    const availableHeight = Math.max(32, (screen.availTop || 0) + (screen.availHeight || window.innerHeight)
+      - (window.screenY || 0) - origin.top);
+    const margin = 8;
+    const gap = 12;
+    tooltip.style.maxWidth = `${Math.min(380, availableWidth - margin * 2)}px`;
+    tooltip.style.minWidth = `${Math.min(200, availableWidth - margin * 2)}px`;
+    tooltip.style.maxHeight = `${availableHeight - margin * 2}px`;
+    const rowBounds = rowEl?.getBoundingClientRect?.();
+    const x = (this.hoverMousePos?.x ?? rowBounds?.left ?? origin.left) - origin.left;
+    const y = (this.hoverMousePos?.y ?? rowBounds?.bottom ?? origin.top) - origin.top;
+    const width = tooltip.offsetWidth;
+    const height = tooltip.offsetHeight;
+    let left = x + gap;
+    let top = y + gap;
+    if (left + width + margin > availableWidth) left = x - width - gap;
+    if (top + height + margin > availableHeight) top = y - height - gap;
+    tooltip.style.left = `${Math.max(margin, Math.min(availableWidth - width - margin, left))}px`;
+    tooltip.style.top = `${Math.max(margin, Math.min(availableHeight - height - margin, top))}px`;
+    window.javaBridge?.updateOverlaySize?.();
   }
 
   applyHoverTooltip(row, { forceRefresh = false } = {}) {

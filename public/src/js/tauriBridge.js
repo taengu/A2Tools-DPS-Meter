@@ -772,7 +772,6 @@
   const PANEL_HEIGHT = 820;
   const PROMO_WIDTH = 400;
   const PROMO_HEIGHT = 480;
-  const TOOLTIP_WIDTH = 800;
   let lastSizeKey = "";
 
   // The screen space right of and below the window. The overlay grows from its
@@ -802,7 +801,7 @@
       document.querySelector(".historyPanel.isOpen") ||
       document.querySelector(".historyPanel.open")
     );
-    const tooltipOnly = !fullPanel && !!document.querySelector(".hoverDetailsTooltip.isVisible");
+    const tooltip = fullPanel ? null : document.querySelector(".hoverDetailsTooltip.isVisible");
     // The one-time Discord popup needs room for its card, no more: a
     // full-panel window would block clicks on the game around it.
     const promoOpen = !fullPanel && !!document.querySelector(".discordPromo.isOpen");
@@ -827,18 +826,24 @@
 
     // The tooltip's extra room stops at the screen edge; the meter itself
     // never shrinks below its content.
+    const tooltipBounds = tooltip?.getBoundingClientRect();
+    const room = spaceRightBelow();
+    const tooltipW = tooltipBounds ? Math.ceil(tooltipBounds.right) + 8 : contentW;
+    const tooltipH = tooltipBounds ? Math.ceil(tooltipBounds.bottom) + 8 : contentH;
     const w = fullPanel
       ? PANEL_WIDTH
       : promoOpen
         ? Math.max(contentW, PROMO_WIDTH)
-        : tooltipOnly
-          ? Math.min(TOOLTIP_WIDTH, Math.max(contentW, spaceRightBelow().w))
+        : tooltip
+          ? Math.max(contentW, Math.min(tooltipW, room.w))
           : contentW;
     const h = fullPanel
       ? Math.max(PANEL_HEIGHT, contentH)
       : promoOpen
         ? Math.max(contentH, PROMO_HEIGHT)
-        : contentH;
+        : tooltip
+          ? Math.max(contentH, Math.min(tooltipH, room.h))
+          : contentH;
     const sizeKey = `${w}x${h}@${window.devicePixelRatio || 1}`;
     if (sizeKey === lastSizeKey) return;
     lastSizeKey = sizeKey;
@@ -846,6 +851,8 @@
     // pixels the page is actually drawn at (Windows text size included).
     invoke("resize_window", { width: w, height: h, scale: window.devicePixelRatio || 1 }).catch(() => {});
   };
+
+  window.javaBridge.updateOverlaySize = updateWindowSize;
 
   // Watch all class changes on the container to catch panel open/close instantly
   const containerObserver = new MutationObserver(() => updateWindowSize());

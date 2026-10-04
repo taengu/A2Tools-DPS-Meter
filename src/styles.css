@@ -4431,7 +4431,9 @@ body.legacyUi .meter .item .content .name.isSupporter,
   position: absolute;
   z-index: 40;
   min-width: 200px;
-  max-width: min(380px, calc(100vw - 20px));
+  max-width: 380px;
+  box-sizing: border-box;
+  overflow: hidden;
   padding: 10px 12px;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
