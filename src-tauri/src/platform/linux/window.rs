@@ -11,6 +11,74 @@
 
 use x11_dl::xlib;
 
+/// Detect GDK's actual backend, including XWayland and backend fallbacks.
+pub fn native_wayland(window: &tauri::WebviewWindow) -> bool {
+    use gtk::prelude::*;
+    let window = window.clone();
+    super::dialog::on_gtk_thread(move || {
+        window.gtk_window().ok().is_some_and(|w| {
+            w.display().type_().name() == "GdkWaylandDisplay"
+        })
+    }).unwrap_or(false)
+}
+
+/// Compositor grabs clear client pointer focus. Reject synthetic WebKit
+/// hover events until the pointer returns to this window.
+pub fn native_pointer_down(window: &tauri::WebviewWindow) -> Option<bool> {
+    use gtk::{gdk, prelude::*};
+    let window = window.clone();
+    super::dialog::on_gtk_thread(move || {
+        let gtk_window = window.gtk_window().ok()?;
+        let surface = gtk_window.window()?;
+        let pointer = gtk_window.display().default_seat()?.pointer()?;
+        let hit = pointer.window_at_position().0?;
+        if hit.toplevel() != surface.toplevel() {
+            return None;
+        }
+        Some(surface.device_position(&pointer).3.contains(gdk::ModifierType::BUTTON1_MASK))
+    }).flatten()
+}
+
+/// Commit unpinned size hints before requesting a compositor resize.
+/// WebKit animation frames do not guarantee a GTK surface commit.
+pub async fn prepare_native_resize(
+    window: &tauri::WebviewWindow,
+    min: tauri::LogicalSize<f64>,
+) -> Result<(), String> {
+    use gtk::{gdk, glib, prelude::*};
+    let window = window.clone();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (clock, signal) = super::dialog::on_gtk_thread(move || {
+        let gtk_window = window.gtk_window().map_err(|e| e.to_string())?;
+        let clock = gtk_window.frame_clock().ok_or("Window has no frame clock")?;
+        let geometry = gdk::Geometry::new(
+            min.width.ceil() as i32, min.height.ceil() as i32,
+            0, 0, 0, 0, 0, 0, 0.0, 0.0, gdk::Gravity::NorthWest,
+        );
+        gtk_window.set_geometry_hints(None::<&gtk::Widget>, Some(&geometry), gdk::WindowHints::MIN_SIZE);
+        let sender = std::cell::RefCell::new(Some(tx));
+        let signal = clock.connect_local("after-paint", true, move |_| {
+            if let Some(tx) = sender.borrow_mut().take() {
+                let _ = tx.send(());
+            }
+            None
+        });
+        gtk_window.queue_resize();
+        gtk_window.queue_draw();
+        clock.request_phase(gdk::FrameClockPhase::LAYOUT | gdk::FrameClockPhase::PAINT | gdk::FrameClockPhase::AFTER_PAINT);
+        Ok::<_, String>((glib::SendWeakRef::from(clock.downgrade()), signal))
+    }).ok_or("GTK thread unavailable")??;
+    // Hidden windows may never paint; detach the handler even on timeout.
+    let result = tokio::time::timeout(std::time::Duration::from_secs(2), rx).await;
+    super::dialog::on_gtk_thread(move || {
+        if let Some(clock) = clock.upgrade() {
+            clock.disconnect(signal);
+        }
+    });
+    result.map_err(|_| "Timed out applying resize hints".to_string())?
+        .map_err(|_| "Window closed before resize".to_string())
+}
+
 /// One X connection per thread that asks, closed when the thread ends. The
 /// pointer watch runs on its own thread; gdk's pointer calls would need the
 /// GTK main thread.

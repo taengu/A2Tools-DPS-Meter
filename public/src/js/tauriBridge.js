@@ -10,6 +10,12 @@
   const { listen } = window.__TAURI__.event;
   const { open: shellOpen } = window.__TAURI__.opener;
 
+  // Detect the actual display backend, including XWayland in a Wayland session.
+  let nativeWayland = null;
+  const nativeWaylandReady = invoke("native_wayland")
+    .then((supported) => { nativeWayland = supported; return supported; })
+    .catch(() => { nativeWayland = false; return false; });
+
   // Three windows share this bundle: the game overlay (label "main"), the
   // Details view ("details") which the user can park on a second monitor, and
   // Settings ("settings"). Which one we are is needed synchronously, before
@@ -733,6 +739,118 @@
   const PROMO_HEIGHT = 480;
   const TOOLTIP_WIDTH = 800;
   let lastSizeKey = "";
+  let resizeActive = false;
+  let nativeResize = null;
+  let primaryHeld = false;
+
+  const overlayPadding = () => {
+    const ping = document.body.classList.contains("legacyUi")
+      ? document.querySelector(".pingDisplay") : null;
+    return { w: 16, h: 10 + (ping ? ping.offsetHeight + 8 : 0) };
+  };
+
+  // Follow the compositor viewport while automatic content sizing is paused.
+  const followNativeSize = () => {
+    if (!nativeResize || window.A2_VIEW !== "main") return;
+    const meter = document.querySelector(".meter");
+    if (!meter) return;
+    const padding = overlayPadding();
+    const style = getComputedStyle(meter);
+    const px = (name) => parseFloat(style[name]) || 0;
+    const borderW = style.boxSizing === "border-box" ? 0
+      : px("borderLeftWidth") + px("borderRightWidth") + px("paddingLeft") + px("paddingRight");
+    const borderH = style.boxSizing === "border-box" ? 0
+      : px("borderTopWidth") + px("borderBottomWidth") + px("paddingTop") + px("paddingBottom");
+    meter.style.width = `${Math.max(300, window.innerWidth - padding.w - borderW)}px`;
+    meter.style.height = `${Math.max(30, window.innerHeight - padding.h - borderH)}px`;
+  };
+  window.addEventListener("resize", followNativeSize);
+
+  const finishNativeResize = (cancel = false) => {
+    const operation = nativeResize;
+    if (!operation) return Promise.resolve(true);
+    operation.cancel = operation.cancel || cancel;
+    if (operation.finished) return operation.finished;
+    operation.finished = (async () => {
+      // A release may arrive before the start IPC settles.
+      await operation.started;
+      // Consume the compositor's final configure before pinning the size again.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      followNativeSize();
+      let finished = false;
+      try {
+        const cancelRequested = operation.cancel;
+        finished = await invoke("finish_native_resize", { cancel: cancelRequested });
+        // Preserve cancellation requested during the pointer-return check.
+        if (!finished && operation.cancel && !cancelRequested) {
+          finished = await invoke("finish_native_resize", { cancel: true });
+        }
+      } catch (error) {
+        console.error("[A2Tools] finishing native resize failed", error);
+      }
+      if (!finished) {
+        // WebKit can emit hover events during a grab; GTK must confirm release.
+        operation.finished = null;
+        return false;
+      }
+      if (window.A2_VIEW === "main") {
+        const meter = document.querySelector(".meter");
+        if (meter?.style.height) {
+          meter.style.minHeight = meter.style.height;
+          meter.style.height = "";
+        }
+      }
+      nativeResize = null;
+      resizeActive = false;
+      lastSizeKey = "";
+      return true;
+    })();
+    return operation.finished;
+  };
+
+  const startNativeResize = async (direction, minWidth, minHeight) => {
+    if (nativeResize && !await finishNativeResize(true)) return;
+    if (!primaryHeld) return;
+    resizeActive = true;
+    const operation = { finished: null, started: null, cancel: false };
+    nativeResize = operation;
+    if (window.A2_VIEW === "main") {
+      const meter = document.querySelector(".meter");
+      if (meter) meter.style.minHeight = "";
+    }
+    operation.started = invoke("begin_native_resize", {
+      minWidth, minHeight, scale: window.devicePixelRatio || 1,
+    }).then((held) => {
+      if (held) return window.__TAURI__.window.getCurrentWindow().startResizeDragging(direction);
+      queueMicrotask(() => finishNativeResize(true));
+    }).catch((error) => {
+      console.error("[A2Tools] native window resize failed", error);
+      // Run after this promise settles, so finishing cannot await itself.
+      queueMicrotask(() => finishNativeResize(true));
+    });
+  };
+
+  // GTK3 hides the compositor resize state. End on returned pointer input,
+  // not a pause in motion; GTK rejects synthetic WebKit hover events.
+  const finishOnPointerReturn = (event) => {
+    const inside = event.clientX >= 0 && event.clientY >= 0
+      && event.clientX < window.innerWidth && event.clientY < window.innerHeight;
+    if ((event.buttons & 1) === 0 && inside) {
+      if (!nativeResize) primaryHeld = false;
+      finishNativeResize();
+    }
+  };
+  document.addEventListener("pointermove", finishOnPointerReturn, { capture: true });
+  document.addEventListener("pointerover", finishOnPointerReturn, { capture: true });
+  document.addEventListener("mouseup", (event) => {
+    if (event.button !== 0) return;
+    primaryHeld = false;
+    finishNativeResize();
+  }, { capture: true });
+  document.addEventListener("mousedown", (event) => {
+    primaryHeld = event.button === 0;
+    finishNativeResize(true);
+  }, { capture: true });
 
   // The screen space right of and below the window. The overlay grows from its
   // top-left corner, and growing past the screen edge makes a window manager
@@ -915,8 +1033,14 @@
         e.preventDefault();
         e.stopImmediatePropagation();
         // The backend unpins the size first, then the window manager resizes.
-        invoke("begin_tool_resize", { minWidth: minW, minHeight: minH })
-          .then(() => window.__TAURI__.window.getCurrentWindow().startResizeDragging(DIRECTION[edge]))
+        nativeWaylandReady.then((supported) => {
+          if (supported) {
+            startNativeResize(DIRECTION[edge], minW, minH);
+          } else {
+            return invoke("begin_tool_resize", { minWidth: minW, minHeight: minH })
+              .then(() => window.__TAURI__.window.getCurrentWindow().startResizeDragging(DIRECTION[edge]));
+          }
+        })
           .catch((err) => console.error("[A2Tools] tool window resize failed", err));
         return;
       }
@@ -945,22 +1069,37 @@
     invoke("get_fight_history").then((h) => { window._cachedFightHistory = h; }).catch(() => {});
   }, 10000);
 
-  // ===== Resize handle: expand viewport while dragging =====
-  let resizeActive = false;
+  // ===== Overlay resize handle =====
   const expandViewport = () => {
     resizeActive = true;
     const space = spaceRightBelow();
     invoke("resize_window", { width: Math.min(space.w, 2000), height: Math.min(space.h, 1200), scale: window.devicePixelRatio || 1 }).catch(() => {});
   };
   const shrinkViewport = () => {
+    if (nativeResize) return;
     if (resizeActive) {
       resizeActive = false;
       lastSizeKey = "";
     }
   };
-  // Expand during resize handle drag
   document.addEventListener("mousedown", (e) => {
-    if (e.target?.closest?.(".resizeHandle")) expandViewport();
+    if (e.button !== 0 || !e.target?.closest?.(".resizeHandle")) return;
+    if (nativeWayland === false) {
+      expandViewport();
+      return;
+    }
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    nativeWaylandReady.then((supported) => {
+      if (!primaryHeld) return;
+      if (supported) {
+        const padding = overlayPadding();
+        startNativeResize("SouthEast", 300 + padding.w, 30 + padding.h);
+      } else {
+        // Replay an early press once backend detection has completed.
+        e.target.dispatchEvent(new MouseEvent("mousedown", e));
+      }
+    });
   }, { capture: true });
   document.addEventListener("mouseup", shrinkViewport);
   // A release outside the window sends no mouseup; the next move shows it.

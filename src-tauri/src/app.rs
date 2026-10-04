@@ -1634,10 +1634,48 @@ fn start_tool_drag(window: tauri::WebviewWindow) {
     platform::window::start_drag(&window);
 }
 
-/// Let the window manager resize a tool window from one of the page's edge
-/// handles. Its size hints are pinned (see `platform::window::set_size`), so
-/// they are released for the resize and pinned again at the size it ends on.
-/// The page starts the resize itself (`startResizeDragging`) right after this.
+/// The actual window backend, including XWayland inside a Wayland session.
+#[tauri::command]
+fn native_wayland(window: tauri::WebviewWindow) -> bool {
+    platform::window::native_wayland(&window)
+}
+
+/// Unpin the window before a native Wayland resize gesture.
+#[tauri::command]
+async fn begin_native_resize(
+    window: tauri::WebviewWindow,
+    min_width: f64,
+    min_height: f64,
+    scale: f64,
+) -> Result<bool, String> {
+    if !platform::window::native_wayland(&window) {
+        return Err("Native Wayland resize is unavailable".into());
+    }
+    if ![min_width, min_height, scale].iter().all(|v| v.is_finite() && *v > 0.0) {
+        return Err("Invalid resize dimensions".into());
+    }
+    let display_scale = window.scale_factor().map_err(|e| e.to_string())?;
+    platform::window::prepare_native_resize(&window, tauri::LogicalSize::new(
+        min_width * scale / display_scale,
+        min_height * scale / display_scale,
+    )).await?;
+    Ok(platform::window::native_pointer_down(&window) == Some(true))
+}
+
+#[tauri::command]
+fn finish_native_resize(window: tauri::WebviewWindow, cancel: bool) -> Result<bool, String> {
+    if platform::window::native_wayland(&window) {
+        if !cancel && platform::window::native_pointer_down(&window) != Some(false) {
+            return Ok(false);
+        }
+        let size = window.inner_size().map_err(|e| e.to_string())?;
+        platform::window::set_size(&window, tauri::Size::Physical(size));
+    }
+    Ok(true)
+}
+
+/// Tool-window resizing on X11. Native Wayland uses begin_native_resize and
+/// finishes on returned pointer input rather than a pause in size changes.
 #[tauri::command]
 fn begin_tool_resize(window: tauri::WebviewWindow, min_width: f64, min_height: f64) {
     if window.label() == "main" {
@@ -1645,8 +1683,7 @@ fn begin_tool_resize(window: tauri::WebviewWindow, min_width: f64, min_height: f
     }
     platform::window::release_size(&window, tauri::LogicalSize::new(min_width, min_height));
     std::thread::spawn(move || {
-        // The window manager owns the pointer until the button comes up. Where
-        // the button cannot be read (native Wayland), wait for the size to settle.
+        // Wait for release; use stable size only if the X11 pointer query fails.
         std::thread::sleep(Duration::from_millis(150));
         let mut last = window.inner_size().ok();
         let mut still = 0;
@@ -2450,6 +2487,9 @@ pub fn run() {
             start_drag,
             start_tool_drag,
             begin_tool_resize,
+            native_wayland,
+            begin_native_resize,
+            finish_native_resize,
             reset_auto_detection,
             get_available_devices,
             set_manual_device,
