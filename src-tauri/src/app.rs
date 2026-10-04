@@ -1634,38 +1634,38 @@ fn start_tool_drag(window: tauri::WebviewWindow) {
     platform::window::start_drag(&window);
 }
 
-/// The actual window backend, including XWayland inside a Wayland session.
+/// Whether this backend supports compositor-driven window resizing.
 #[tauri::command]
-fn native_wayland(window: tauri::WebviewWindow) -> bool {
-    platform::window::native_wayland(&window)
+fn compositor_resize_supported(window: tauri::WebviewWindow) -> bool {
+    platform::window::compositor_resize_supported(&window)
 }
 
-/// Unpin the window before a native Wayland resize gesture.
+/// Unpin the window before a compositor resize gesture.
 #[tauri::command]
-async fn begin_native_resize(
+async fn begin_window_resize(
     window: tauri::WebviewWindow,
     min_width: f64,
     min_height: f64,
     scale: f64,
 ) -> Result<bool, String> {
-    if !platform::window::native_wayland(&window) {
-        return Err("Native Wayland resize is unavailable".into());
+    if !platform::window::compositor_resize_supported(&window) {
+        return Err("Compositor resize is unavailable".into());
     }
     if ![min_width, min_height, scale].iter().all(|v| v.is_finite() && *v > 0.0) {
         return Err("Invalid resize dimensions".into());
     }
     let display_scale = window.scale_factor().map_err(|e| e.to_string())?;
-    platform::window::prepare_native_resize(&window, tauri::LogicalSize::new(
+    platform::window::prepare_resize(&window, tauri::LogicalSize::new(
         min_width * scale / display_scale,
         min_height * scale / display_scale,
     )).await?;
-    Ok(platform::window::native_pointer_down(&window) == Some(true))
+    Ok(platform::window::resize_pointer_down(&window) == Some(true))
 }
 
 #[tauri::command]
-fn finish_native_resize(window: tauri::WebviewWindow, cancel: bool) -> Result<bool, String> {
-    if platform::window::native_wayland(&window) {
-        if !cancel && platform::window::native_pointer_down(&window) != Some(false) {
+fn finish_window_resize(window: tauri::WebviewWindow, cancel: bool) -> Result<bool, String> {
+    if platform::window::compositor_resize_supported(&window) {
+        if !cancel && platform::window::resize_pointer_down(&window) != Some(false) {
             return Ok(false);
         }
         let size = window.inner_size().map_err(|e| e.to_string())?;
@@ -1674,8 +1674,7 @@ fn finish_native_resize(window: tauri::WebviewWindow, cancel: bool) -> Result<bo
     Ok(true)
 }
 
-/// Tool-window resizing on X11. Native Wayland uses begin_native_resize and
-/// finishes on returned pointer input rather than a pause in size changes.
+/// Compatibility path for backends without compositor resize support.
 #[tauri::command]
 fn begin_tool_resize(window: tauri::WebviewWindow, min_width: f64, min_height: f64) {
     if window.label() == "main" {
@@ -2487,9 +2486,9 @@ pub fn run() {
             start_drag,
             start_tool_drag,
             begin_tool_resize,
-            native_wayland,
-            begin_native_resize,
-            finish_native_resize,
+            compositor_resize_supported,
+            begin_window_resize,
+            finish_window_resize,
             reset_auto_detection,
             get_available_devices,
             set_manual_device,

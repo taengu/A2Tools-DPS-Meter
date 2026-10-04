@@ -11,20 +11,20 @@
 
 use x11_dl::xlib;
 
-/// Detect GDK's actual backend, including XWayland and backend fallbacks.
-pub fn native_wayland(window: &tauri::WebviewWindow) -> bool {
+/// Linux compositors can resize both native Wayland and X11 windows.
+pub fn compositor_resize_supported(window: &tauri::WebviewWindow) -> bool {
     use gtk::prelude::*;
     let window = window.clone();
     super::dialog::on_gtk_thread(move || {
         window.gtk_window().ok().is_some_and(|w| {
-            w.display().type_().name() == "GdkWaylandDisplay"
+            matches!(w.display().type_().name(), "GdkWaylandDisplay" | "GdkX11Display")
         })
     }).unwrap_or(false)
 }
 
 /// Compositor grabs clear client pointer focus. Reject synthetic WebKit
 /// hover events until the pointer returns to this window.
-pub fn native_pointer_down(window: &tauri::WebviewWindow) -> Option<bool> {
+pub fn resize_pointer_down(window: &tauri::WebviewWindow) -> Option<bool> {
     use gtk::{gdk, prelude::*};
     let window = window.clone();
     super::dialog::on_gtk_thread(move || {
@@ -41,7 +41,7 @@ pub fn native_pointer_down(window: &tauri::WebviewWindow) -> Option<bool> {
 
 /// Commit unpinned size hints before requesting a compositor resize.
 /// WebKit animation frames do not guarantee a GTK surface commit.
-pub async fn prepare_native_resize(
+pub async fn prepare_resize(
     window: &tauri::WebviewWindow,
     min: tauri::LogicalSize<f64>,
 ) -> Result<(), String> {

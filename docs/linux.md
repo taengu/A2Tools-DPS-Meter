@@ -229,9 +229,9 @@ GDK_BACKEND=x11 a2tools-dps-meter
 
 If XWayland is unavailable, the meter falls back to native Wayland. You can also select it with `GDK_BACKEND=wayland a2tools-dps-meter`. GTK's native Wayland keep-above request has no effect in GNOME: focus the meter, press **Alt+Space**, and select **Always on Top**. Repeat for Details or other meter windows as needed. Close the focused window with **Alt+F4**, or use **Settings > Quit** to exit the meter.
 
-### Resizing on native Wayland
+### Resizing on Linux
 
-Drag the meter's bottom-right resize handle, or the edges of a tool window. Native Wayland builds let the compositor resize the actual window instead of temporarily expanding a transparent viewport. This avoids the expansion moving the meter back onto the screen. The application detects its actual display backend, including XWayland inside a Wayland session.
+Drag the meter's bottom-right resize handle, or the edges of a tool window. On X11, XWayland and native Wayland, the compositor resizes the actual window instead of temporarily expanding a transparent viewport. This avoids the expansion moving the meter back onto the screen. The application detects its actual display backend, including XWayland inside a Wayland session.
 
 Pausing with the mouse button held does not end the resize. If you release outside the window, move the pointer back over it to resume automatic sizing to the meter's content.
 

@@ -62,14 +62,14 @@ pub fn primary_button_down() -> Option<bool> {
     None
 }
 
-pub fn native_wayland(_window: &tauri::WebviewWindow) -> bool {
+pub fn compositor_resize_supported(_window: &tauri::WebviewWindow) -> bool {
     false
 }
 
-pub fn native_pointer_down(_window: &tauri::WebviewWindow) -> Option<bool> {
+pub fn resize_pointer_down(_window: &tauri::WebviewWindow) -> Option<bool> {
     None
 }
 
-pub async fn prepare_native_resize(_window: &tauri::WebviewWindow, _min: tauri::LogicalSize<f64>) -> Result<(), String> {
-    Err("Native Wayland resize is unavailable".into())
+pub async fn prepare_resize(_window: &tauri::WebviewWindow, _min: tauri::LogicalSize<f64>) -> Result<(), String> {
+    Err("Compositor resize is unavailable".into())
 }

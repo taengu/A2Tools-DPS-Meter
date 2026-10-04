@@ -10,11 +10,11 @@
   const { listen } = window.__TAURI__.event;
   const { open: shellOpen } = window.__TAURI__.opener;
 
-  // Detect the actual display backend, including XWayland in a Wayland session.
-  let nativeWayland = null;
-  const nativeWaylandReady = invoke("native_wayland")
-    .then((supported) => { nativeWayland = supported; return supported; })
-    .catch(() => { nativeWayland = false; return false; });
+  // Linux uses compositor resizing on both X11 and native Wayland.
+  let compositorResize = null;
+  const compositorResizeReady = invoke("compositor_resize_supported")
+    .then((supported) => { compositorResize = supported; return supported; })
+    .catch(() => { compositorResize = false; return false; });
 
   // Three windows share this bundle: the game overlay (label "main"), the
   // Details view ("details") which the user can park on a second monitor, and
@@ -780,10 +780,10 @@
       let finished = false;
       try {
         const cancelRequested = operation.cancel;
-        finished = await invoke("finish_native_resize", { cancel: cancelRequested });
+        finished = await invoke("finish_window_resize", { cancel: cancelRequested });
         // Preserve cancellation requested during the pointer-return check.
         if (!finished && operation.cancel && !cancelRequested) {
-          finished = await invoke("finish_native_resize", { cancel: true });
+          finished = await invoke("finish_window_resize", { cancel: true });
         }
       } catch (error) {
         console.error("[A2Tools] finishing native resize failed", error);
@@ -818,7 +818,7 @@
       const meter = document.querySelector(".meter");
       if (meter) meter.style.minHeight = "";
     }
-    operation.started = invoke("begin_native_resize", {
+    operation.started = invoke("begin_window_resize", {
       minWidth, minHeight, scale: window.devicePixelRatio || 1,
     }).then((held) => {
       if (held) return window.__TAURI__.window.getCurrentWindow().startResizeDragging(direction);
@@ -1033,7 +1033,7 @@
         e.preventDefault();
         e.stopImmediatePropagation();
         // The backend unpins the size first, then the window manager resizes.
-        nativeWaylandReady.then((supported) => {
+        compositorResizeReady.then((supported) => {
           if (supported) {
             startNativeResize(DIRECTION[edge], minW, minH);
           } else {
@@ -1084,13 +1084,13 @@
   };
   document.addEventListener("mousedown", (e) => {
     if (e.button !== 0 || !e.target?.closest?.(".resizeHandle")) return;
-    if (nativeWayland === false) {
+    if (compositorResize === false) {
       expandViewport();
       return;
     }
     e.preventDefault();
     e.stopImmediatePropagation();
-    nativeWaylandReady.then((supported) => {
+    compositorResizeReady.then((supported) => {
       if (!primaryHeld) return;
       if (supported) {
         const padding = overlayPadding();
