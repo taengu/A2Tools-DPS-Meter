@@ -191,6 +191,7 @@ impl FightHistoryManager {
                 if let Ok(json) = std::fs::read_to_string(&path) {
                     if let Ok(record) = serde_json::from_str::<FightRecord>(&json) {
                         let member_jobs = record.member_jobs();
+                        let uploadable = record.is_uploadable();
                         summaries.push(FightSummary {
                             id: record.id,
                             boss_name: record.boss_name,
@@ -206,6 +207,7 @@ impl FightHistoryManager {
                             mob_code: record.mob_code,
                             dungeon_id: record.dungeon_id,
                             member_jobs,
+                            uploadable,
                         });
                     }
                 }
