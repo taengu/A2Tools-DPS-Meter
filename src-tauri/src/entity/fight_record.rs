@@ -93,7 +93,7 @@ fn uploadable_default() -> bool {
 /// them as bosses, but they die in seconds to one player, and a2tools.app
 /// does not take them as logs. Instances are not held to it: Nightmare's and
 /// the Ascension Trials' bosses can be smaller and are real fights.
-pub const OPEN_WORLD_MIN_HP: i64 = 5_000_000;
+pub const OPEN_WORLD_MIN_HP: i64 = 10_000_000;
 
 impl FightRecord {
     /// Whether this fight may be uploaded: not a training dummy, and not an

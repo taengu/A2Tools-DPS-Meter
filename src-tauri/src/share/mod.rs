@@ -841,7 +841,7 @@ pub async fn upload_detailed(
 ) -> Result<UploadResult, UploadFailure> {
     if !record.is_uploadable() {
         return Err(UploadFailure::fatal(
-            "Open-world bosses under 5 million HP are quest bosses and are not uploaded.",
+            "Open-world bosses under 10 million HP are quest bosses and are not uploaded.",
         ));
     }
     let token = match crate::account::secret::load_stored(app_data_dir) {
