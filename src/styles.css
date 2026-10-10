@@ -1335,11 +1335,6 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   overflow-y: auto;
   padding: 14px 18px 18px;
 }
-/* A thin scrollbar in the panel's own tones, not the system's white one. */
-.settingsPanel .settingsPane {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
-}
 .settingsPanel .settingsSection {
   display: flex;
   flex-direction: column;
@@ -2348,21 +2343,6 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   max-height: 540px;
   overflow-y: auto;
 }
-.historyList::-webkit-scrollbar {
-  width: 10px;
-}
-.historyList::-webkit-scrollbar-track {
-  background: rgb(30, 30, 30);
-  border-radius: 999px;
-}
-.historyList::-webkit-scrollbar-thumb {
-  background-color: rgb(77, 77, 77);
-  border-radius: 999px;
-}
-.historyList::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
 /* The dry-run button. Unlike the delete button it is always visible: previewing
    what an upload contains is a thing you should be able to do without first
    entering a mode that exists to make deletion deliberate. */
@@ -3168,25 +3148,6 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
       scrollbar-gutter: stable;
       contain: layout;
 
-      &::-webkit-scrollbar {
-        width: 10px;
-      }
-
-      &::-webkit-scrollbar-track {
-        background: rgba(30, 30, 30);
-        border-radius: 999px;
-        margin-top: 8px;
-        margin-bottom: -8px;
-      }
-
-      &::-webkit-scrollbar-thumb {
-        background-color: rgb(77, 77, 77);
-        border-radius: 999px;
-      }
-
-      &::-webkit-scrollbar-corner {
-        background: transparent;
-      }
       .skillRow {
         display: grid;
         grid-template-columns: var(--skill-grid-cols);
@@ -4023,53 +3984,6 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   box-sizing: border-box;
   contain: layout;
 }
-.detailsPanel .detailsSkills::-webkit-scrollbar {
-  height: 10px;
-}
-.detailsPanel .detailsSkills::-webkit-scrollbar-track {
-  background: rgb(30, 30, 30);
-  border-radius: 999px;
-}
-.detailsPanel .detailsSkills::-webkit-scrollbar-thumb {
-  background-color: rgb(77, 77, 77);
-  border-radius: 999px;
-}
-.detailsPanel .detailsSkills::-webkit-scrollbar-corner {
-  background: transparent;
-}
-.detailsPanel .detailsSkills .skills::-webkit-scrollbar {
-  width: 10px;
-}
-.detailsPanel .detailsSkills .skills::-webkit-scrollbar-track {
-  background: rgb(30, 30, 30);
-  border-radius: 999px;
-  margin-top: 8px;
-  margin-bottom: -8px;
-}
-.detailsPanel .detailsSkills .skills::-webkit-scrollbar-thumb {
-  background-color: rgb(77, 77, 77);
-  border-radius: 999px;
-}
-.detailsPanel .detailsSkills .skills::-webkit-scrollbar-corner {
-  background: transparent;
-}
-.detailsPanel .detailsBody::-webkit-scrollbar {
-  width: 10px;
-}
-.detailsPanel .detailsBody::-webkit-scrollbar-track {
-  background: rgb(30, 30, 30);
-  border-radius: 999px;
-  margin-top: 8px;
-  margin-bottom: 8px;
-}
-.detailsPanel .detailsBody::-webkit-scrollbar-thumb {
-  background-color: rgb(77, 77, 77);
-  border-radius: 999px;
-}
-.detailsPanel .detailsBody::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
 @keyframes meterBarHoverRipple {
   0% {
     transform: translateX(-100%); /* GPU optimized */
@@ -4245,21 +4159,6 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   overflow-x: auto;
   overflow-y: auto;
   padding: 0 12px;
-}
-.detailsPanel .timelineViewport::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.detailsPanel .timelineViewport::-webkit-scrollbar-track {
-  background: rgb(30, 30, 30);
-  border-radius: 999px;
-}
-.detailsPanel .timelineViewport::-webkit-scrollbar-thumb {
-  background-color: rgb(77, 77, 77);
-  border-radius: 999px;
-}
-.detailsPanel .timelineViewport::-webkit-scrollbar-corner {
-  background: transparent;
 }
 .detailsPanel .timelineCanvas {
   display: block;
@@ -5291,37 +5190,6 @@ body.isHistoryWindow .historyPanel .historyHeader .closeX {
 .difficulty-hard { --tier: #e0524a; }
 .difficulty-level { --tier: #a07ae0; }
 
-/* ---------- scrollbars: hairline, not hardware ---------- */
-
-.historyPanel .historyList::-webkit-scrollbar,
-.detailsPanel .detailsBody::-webkit-scrollbar,
-.detailsPanel .detailsSkills .skills::-webkit-scrollbar,
-.detailsPanel .timelineViewport::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.historyPanel .historyList::-webkit-scrollbar-track,
-.detailsPanel .detailsBody::-webkit-scrollbar-track,
-.detailsPanel .detailsSkills .skills::-webkit-scrollbar-track,
-.detailsPanel .timelineViewport::-webkit-scrollbar-track {
-  margin: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
-}
-.historyPanel .historyList::-webkit-scrollbar-thumb,
-.detailsPanel .detailsBody::-webkit-scrollbar-thumb,
-.detailsPanel .detailsSkills .skills::-webkit-scrollbar-thumb,
-.detailsPanel .timelineViewport::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background-color: rgba(255, 255, 255, 0.15);
-}
-.historyPanel .historyList::-webkit-scrollbar-thumb:hover,
-.detailsPanel .detailsBody::-webkit-scrollbar-thumb:hover,
-.detailsPanel .detailsSkills .skills::-webkit-scrollbar-thumb:hover,
-.detailsPanel .timelineViewport::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.26);
-}
-
 /* ---------- details: shell & header ---------- */
 
 .detailsPanel {
@@ -6024,17 +5892,6 @@ body.isHistoryWindow .historyPanel .historyHeader .closeX {
   overflow-x: hidden;
   overflow-y: auto;
 }
-.detailsPanel .buffBody::-webkit-scrollbar {
-  width: 8px;
-}
-.detailsPanel .buffBody::-webkit-scrollbar-track {
-  background: rgb(30, 30, 30);
-  border-radius: 999px;
-}
-.detailsPanel .buffBody::-webkit-scrollbar-thumb {
-  background-color: rgb(77, 77, 77);
-  border-radius: 999px;
-}
 .detailsPanel .buffRow {
   display: grid;
   grid-template-columns: var(--buff-label-w) 1fr var(--buff-up-w);
@@ -6701,7 +6558,6 @@ html.a2-offline .historyUploadBtn {
   overflow-y: auto;
   border-bottom: 0;
   border-right: 1px solid var(--hud-hairline);
-  scrollbar-width: thin;
 }
 .detailsPanel .detailsBody > .detailsStatsRow .detailsPartyList {
   flex: none;
@@ -6851,7 +6707,6 @@ html.a2-offline .historyUploadBtn {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 .detailsPanel .ftlGroup {
   position: relative;
@@ -7056,4 +6911,35 @@ html.a2-offline .historyUploadBtn {
   .detailsPanel .fightTimelineScroll {
     overflow: visible;
   }
+}
+
+/* ---------- scrollbars ----------
+   One style for every scrolling area: a slim rounded thumb in the panel's own
+   tones on a clear track, no arrow buttons. Areas that hide their bar keep
+   `scrollbar-width: none`, which wins over these. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.16);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  border-width: 1px;
+  background-color: rgba(255, 255, 255, 0.3);
+}
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(255, 255, 255, 0.42);
+}
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
