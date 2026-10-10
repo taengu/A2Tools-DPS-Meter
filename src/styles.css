@@ -1098,16 +1098,17 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
 
    Three rules drive the layout:
 
-   1. Groups, not a list. Every control belongs to a named
-      section — Connection, Appearance, Meter, Keybinds,
-      Diagnostics — and each section header is a tracked-caps
-      rail so the eye can jump between them.
-   2. One control geometry. Dropdowns, keybind buttons, actions
-      and text fields are all the same 26px chip, so a row is
-      read by its label, never by the shape of its control.
-   3. Labels whisper, values speak. Labels sit at 12.5px in the
-      technical face; the numbers they control are tabular and
-      brighter.
+   1. Sections, not a list. A sidebar names each section; one
+      is shown at a time, in a single column of label | control
+      rows, so nothing is read left-right-left.
+   2. The selected section is drawn like your own meter row: the
+      row tint with the player's fill. It is the one loud thing;
+      everything else is hairlines and quiet labels.
+   3. One control geometry. Dropdowns, keybind buttons, actions
+      and text fields are the same 26px chip, so a row is read by
+      its label, never by the shape of its control.
+   4. Sentence case throughout. Section names, buttons and the
+      title read as words, not as tracked-caps rails.
    ============================================================ */
 
 .settingsPanel {
@@ -1136,6 +1137,7 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   border: 1px solid var(--panel-border);
   border-radius: var(--rounded-lg);
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.55);
+  max-height: 86vh;
 }
 
 .settingsPanel.isOpen {
@@ -1158,28 +1160,18 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
 .settingsPanel:lang(zh-Hans) .settingsLabel,
 .settingsPanel:lang(zh-TW) .settingsLabel,
 .settingsPanel:lang(zh-Hant) .settingsLabel,
-.settingsPanel:lang(ko) .settingsMiniTitle,
-.settingsPanel:lang(zh-CN) .settingsMiniTitle,
-.settingsPanel:lang(zh-Hans) .settingsMiniTitle,
-.settingsPanel:lang(zh-TW) .settingsMiniTitle,
-.settingsPanel:lang(zh-Hant) .settingsMiniTitle {
+.settingsPanel:lang(ko) .settingsSectionTitle,
+.settingsPanel:lang(zh-CN) .settingsSectionTitle,
+.settingsPanel:lang(zh-Hans) .settingsSectionTitle,
+.settingsPanel:lang(zh-TW) .settingsSectionTitle,
+.settingsPanel:lang(zh-Hant) .settingsSectionTitle,
+.settingsPanel:lang(ko) .settingsNavItem,
+.settingsPanel:lang(zh-CN) .settingsNavItem,
+.settingsPanel:lang(zh-Hans) .settingsNavItem,
+.settingsPanel:lang(zh-TW) .settingsNavItem,
+.settingsPanel:lang(zh-Hant) .settingsNavItem {
   font-family: var(--cjk-font-stack);
-  letter-spacing: 0.04em;
-}
-/* Full-width CJK glyphs carry less detail per pixel than tracked Latin
-   caps, so the section rails need a step up to stay legible. */
-.settingsPanel:lang(ko) .settingsMiniTitle,
-.settingsPanel:lang(zh-CN) .settingsMiniTitle,
-.settingsPanel:lang(zh-Hans) .settingsMiniTitle,
-.settingsPanel:lang(zh-TW) .settingsMiniTitle,
-.settingsPanel:lang(zh-Hant) .settingsMiniTitle,
-.settingsPanel:lang(ko) .settingsAdvancedBtn .settingsLabel,
-.settingsPanel:lang(zh-CN) .settingsAdvancedBtn .settingsLabel,
-.settingsPanel:lang(zh-Hans) .settingsAdvancedBtn .settingsLabel,
-.settingsPanel:lang(zh-TW) .settingsAdvancedBtn .settingsLabel,
-.settingsPanel:lang(zh-Hant) .settingsAdvancedBtn .settingsLabel {
-  font-size: 11.5px;
-  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 /* ---------- header ---------- */
@@ -1195,9 +1187,8 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   flex: 1;
   min-width: 0;
   font-variation-settings: "wght" 700, "wdth" 87.5;
-  font-size: 12.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: 14px;
+  letter-spacing: 0.01em;
   color: var(--title);
 }
 .settingsPanel .settingsHeader .settingsVersionLink {
@@ -1235,40 +1226,103 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* ---------- body / groups ---------- */
+/* ---------- body: sections beside their settings ---------- */
 
 .settingsPanel .settingsBody {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  padding: 13px 14px 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--set-nav-w, 148px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "nav pane"
+    "foot foot";
 }
 
-.settingsPanel .settingsGroup {
+.settingsPanel .settingsNav {
+  grid-area: nav;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 2px;
   min-width: 0;
+  padding: 12px 8px;
+  border-right: 1px solid var(--hud-hairline);
+  overflow-y: auto;
 }
-
-/* Section rail: tracked caps that terminate in a hairline running to
-   the edge of the column. Cheap, quiet, and it makes the panel read as
-   five short lists instead of one long one. */
-.settingsPanel .settingsMiniTitle {
+.settingsPanel .settingsNavItem {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-variation-settings: "wght" 700, "wdth" 75;
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: transparent;
   color: var(--hud-sub);
+  font-family: inherit;
+  font-variation-settings: "wght" 500, "wdth" 87.5;
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
 }
-.settingsPanel .settingsMiniTitle::after {
+.settingsPanel .settingsNavItem:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: var(--hud-row-bg, rgba(255, 255, 255, 0.05));
+}
+/* The selected section is your own meter row: the player's fill under
+   white, shadowed text. */
+.settingsPanel .settingsNavItem.isActive {
+  color: #fff;
+  font-variation-settings: "wght" 650, "wdth" 87.5;
+  text-shadow: var(--player-name-shadow, var(--text-shadow));
+}
+.settingsPanel .settingsNavItem.isActive::before {
   content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--hud-hairline);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--isUser-fill);
+  opacity: 0.62;
+}
+.settingsPanel .settingsNavItem:focus-visible {
+  outline: 2px solid var(--isUser-fill);
+  outline-offset: -2px;
+}
+.settingsPanel .settingsNavItem { isolation: isolate; }
+/* Streaming is listed only where the meter can serve it (core.js shows
+   its body then). */
+.settingsPanel:has(.streamOverlayGroup[style*="none"]) .settingsNavItem[data-section="streaming"] {
+  display: none;
+}
+
+.settingsPanel .settingsPane {
+  grid-area: pane;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 18px 18px;
+}
+.settingsPanel .settingsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 560px;
+}
+.settingsPanel .settingsSection[hidden] {
+  display: none;
+}
+.settingsPanel .settingsSectionTitle {
+  margin: 0 0 4px;
+  font-variation-settings: "wght" 700, "wdth" 87.5;
+  font-size: 15px;
+  font-weight: normal;
+  line-height: 1.2;
+  color: var(--title);
 }
 
 .settingsPanel .settingsGroupBody {
@@ -1280,25 +1334,28 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   border-top: 1px solid var(--hud-hairline);
 }
 
-/* Two independent stacks; collapses to one when the panel is narrowed. */
-.settingsPanel .settingsColumns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 15px 24px;
-  align-items: start;
-}
-.settingsPanel .settingsColumn {
-  min-width: 0;
-}
-
-/* Short lists that read better side by side than stacked. */
-.settingsPanel .settingsGroupSplit {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  column-gap: 24px;
-}
-.settingsPanel .settingsGroupSplit > * + * {
-  border-top: 0;
+/* Narrow window: the sections become a strip of tabs above the settings. */
+@media (max-width: 560px) {
+  .settingsPanel .settingsBody {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "nav"
+      "pane"
+      "foot";
+  }
+  .settingsPanel .settingsNav {
+    flex-direction: row;
+    padding: 8px 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--hud-hairline);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .settingsPanel .settingsPane {
+    padding: 12px 14px 16px;
+  }
 }
 
 /* ---------- rows ---------- */
@@ -1308,9 +1365,9 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 30px;
-  padding: 3px 0;
+  gap: 16px;
+  min-height: 34px;
+  padding: 4px 0;
   min-width: 0;
 }
 .settingsPanel .settingsInfo {
@@ -1335,53 +1392,24 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   justify-content: flex-end;
 }
 
-/* Connection is status, not preference: three readouts side by side with
-   the label sitting above its control. As full-width rows the two ends of
-   each pair would end up 600px apart with nothing in between. */
-.settingsPanel .settingsGroupStrip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
-  gap: 10px 22px;
-  align-items: start;
-}
-.settingsPanel .settingsGroupStrip > * + * {
-  border-top: 0;
-}
-/* A row with a long value (the detected device's name and port) takes the
-   strip's whole width rather than one of its columns. */
-.settingsPanel .settingsGroupStrip > .settingsRowFullWidth {
-  grid-column: 1 / -1;
-}
-/* Send logs sits under the packet logging toggle it sends the logs of: the
-   Diagnostics grid's last column (its only one when the window is narrow). */
-.settingsPanel .settingsGroupSplit > .sendLogsRow {
-  grid-column: -2 / -1;
-}
-.settingsPanel .settingsRowStacked {
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 6px;
-  min-height: 0;
-  padding: 0;
-}
-.settingsPanel .settingsRowStacked .settingsCharacterIdentity,
-.settingsPanel .settingsRowStacked .settingsDeviceRow,
-.settingsPanel .settingsRowStacked .settingsRowEnd {
-  flex: 1 1 auto;
-  width: 100%;
+/* Connection rows carry two controls at once (name and id; auto-detect and
+   device; the detected port and Reset), so their control side is wider. */
+.settingsPanel .settingsRowWide .settingsCharacterIdentity,
+.settingsPanel .settingsRowWide .settingsDeviceRow,
+.settingsPanel .settingsRowWide .settingsRowEnd {
+  flex: 0 1 300px;
   min-width: 0;
+  justify-content: flex-end;
 }
-.settingsPanel .settingsRowStacked .settingsRowEnd {
-  justify-content: space-between;
-}
-.settingsPanel .settingsRowStacked .characterNameInput {
-  flex: 1 1 60px;
+.settingsPanel .settingsRowWide .characterNameInput {
+  flex: 1 1 120px;
   min-width: 0;
   max-width: none;
 }
-/* The account sits in a half-width cell beside the A2 Tools switches: its
-   state stays on one line next to its button. */
+.settingsPanel .settingsRowWide .localActorIdInput {
+  flex: 0 0 68px;
+  width: 68px;
+}
 .settingsPanel .accountRow .accountState {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1390,10 +1418,6 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
 .settingsPanel .accountRow .accountState.isLong {
   white-space: normal;
   overflow-wrap: anywhere;
-}
-.settingsPanel .settingsRowStacked .localActorIdInput {
-  flex: 0 0 68px;
-  width: 68px;
 }
 
 /* ---------- readouts ---------- */
@@ -1617,8 +1641,7 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
 .settingsPanel .settingsDropdownBtn:focus-visible,
 .settingsPanel .keybindBtn:focus-visible,
 .settingsPanel .settingsAction:focus-visible,
-.settingsPanel .settingsRange:focus-visible,
-.settingsPanel .settingsAdvancedBtn:focus-visible {
+.settingsPanel .settingsRange:focus-visible {
   outline: 2px solid var(--isUser-fill);
   outline-offset: 1px;
 }
@@ -1735,10 +1758,10 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 .settingsPanel .settingsAction {
   justify-content: center;
   padding: 0 12px;
-  font-variation-settings: "wght" 600, "wdth" 75;
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-variation-settings: "wght" 600, "wdth" 87.5;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .settingsPanel .settingsActionDanger {
   color: var(--error-fill);
@@ -1873,51 +1896,8 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 .settingsPanel .settingsToggleInline .settingsToggleLabel {
   flex: 0 0 auto;
   font-variation-settings: "wght" 500, "wdth" 87.5;
-  font-size: 11.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: var(--hud-sub);
-}
-
-/* ---------- advanced disclosure ---------- */
-
-.settingsPanel .settingsAdvancedToggle {
-  margin-top: 4px;
-}
-.settingsPanel .settingsAdvancedBtn {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 2px 0;
-  background: none;
-  border: 0;
-  color: var(--hud-sub);
-  font-family: inherit;
-  cursor: pointer;
-  transition: color 120ms ease;
-}
-.settingsPanel .settingsAdvancedBtn:hover {
-  color: rgba(255, 255, 255, 0.85);
-}
-.settingsPanel .settingsAdvancedBtn .settingsLabel {
-  font-variation-settings: "wght" 700, "wdth" 75;
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: inherit;
-}
-.settingsPanel .settingsAdvancedCaret {
-  font-size: 9px;
-  line-height: 1;
-  transition: transform 150ms ease;
-}
-.settingsPanel .settingsAdvancedToggle.isOpen .settingsAdvancedCaret {
-  transform: rotate(180deg);
-}
-.settingsPanel .settingsAdvancedBody {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 /* ---------- footer ---------- */
@@ -1928,8 +1908,8 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px 12px;
-  margin-top: 2px;
-  padding-top: 13px;
+  grid-area: foot;
+  padding: 10px 14px;
   border-top: 1px solid var(--hud-hairline);
 }
 .settingsPanel .settingsFooterLinks {
@@ -2008,6 +1988,7 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 /* Quit is destructive, so it is outlined rather than filled — present,
    but never the brightest thing in the footer. */
 .settingsPanel .quitButton {
+  margin-left: auto;
   background: transparent;
   border-color: var(--error-fill);
   color: var(--error-fill);
@@ -7396,7 +7377,8 @@ html.settingsWindow .settingsPanel {
   border: 0;
   border-radius: 0;
   background: #0a0e16;
-  overflow-y: auto;
+  overflow: hidden;
+  --set-nav-w: 176px;
 }
 html.settingsWindow .settingsPanel.isOpen { display: flex; }
 
@@ -7406,16 +7388,16 @@ html.settingsWindow .settingsPanel.isOpen { display: flex; }
    panel itself it would also scale the 100% height and push the bottom of
    the scroll area out of the window. */
 html.settingsWindow .settingsHeader,
-html.settingsWindow .settingsBody {
+html.settingsWindow .settingsNav,
+html.settingsWindow .settingsSection,
+html.settingsWindow .settingsFooter {
   zoom: 1.2;
 }
 
 /* Frameless, so the panel header is the drag surface (started by the page,
    see tauriBridge.js; not -webkit-app-region, which froze the app). */
 html.settingsWindow .settingsHeader {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  flex: 0 0 auto;
   background: #0a0e16;
 }
 

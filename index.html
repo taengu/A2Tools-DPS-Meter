@@ -451,74 +451,162 @@
             <button class="closeX settingsClose" type="button" aria-label="Close">×</button>
           </div>
           <div class="settingsBody">
-            <section class="settingsGroup">
-              <div class="settingsMiniTitle" data-i18n="settings.connection">Connection</div>
-              <div class="settingsGroupBody settingsGroupStrip">
-                <div class="settingsRow settingsRowInput settingsRowStacked">
-                  <label
-                    class="settingsLabel"
-                    for="characterNameInput"
-                    data-i18n="settings.characterName">
-                    Name#ID
-                  </label>
-                  <div class="settingsCharacterIdentity">
-                    <input
-                      id="characterNameInput"
-                      class="characterNameInput"
-                      autocomplete="off"
-                      spellcheck="false"
-                      placeholder="Enter your character name"
-                      data-i18n-placeholder="settings.characterNamePlaceholder" />
-                    <div class="settingsActorInline">
-                      <label for="localActorIdInput" class="settingsActorPrefix">#</label>
+            <nav class="settingsNav" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
+              <button class="settingsNavItem isActive" type="button" role="tab" id="settingsTab-connection" aria-controls="settingsSection-connection" aria-selected="true" tabindex="0" data-section="connection" data-i18n="settings.connection">Connection</button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-meter" aria-controls="settingsSection-meter" aria-selected="false" tabindex="-1" data-section="meter" data-i18n="settings.meterSettings">Meter Settings</button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-appearance" aria-controls="settingsSection-appearance" aria-selected="false" tabindex="-1" data-section="appearance" data-i18n="settings.appearance">Appearance</button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-account" aria-controls="settingsSection-account" aria-selected="false" tabindex="-1" data-section="account" data-i18n="settings.account.title">A2 Tools Account</button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-streaming" aria-controls="settingsSection-streaming" aria-selected="false" tabindex="-1" data-section="streaming" data-i18n="settings.streamOverlay.title">Streaming</button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-keybinds" aria-controls="settingsSection-keybinds" aria-selected="false" tabindex="-1" data-section="keybinds" data-i18n="settings.keybinds">Keybinds</button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-diagnostics" aria-controls="settingsSection-diagnostics" aria-selected="false" tabindex="-1" data-section="diagnostics" data-i18n="settings.diagnostics">Diagnostics</button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-advanced" aria-controls="settingsSection-advanced" aria-selected="false" tabindex="-1" data-section="advanced" data-i18n="settings.advanced">Advanced</button>
+            </nav>
+            <div class="settingsPane">
+              <section class="settingsSection isActive" id="settingsSection-connection" role="tabpanel" aria-labelledby="settingsTab-connection" data-section="connection">
+                <h2 class="settingsSectionTitle" data-i18n="settings.connection">Connection</h2>
+                <div class="settingsGroupBody">
+                  <div class="settingsRow settingsRowInput settingsRowWide">
+                    <label
+                      class="settingsLabel"
+                      for="characterNameInput"
+                      data-i18n="settings.characterName">
+                      Name#ID
+                    </label>
+                    <div class="settingsCharacterIdentity">
                       <input
-                        id="localActorIdInput"
-                        class="localActorIdInput"
-                        inputmode="numeric"
-                        placeholder="1234" />
+                        id="characterNameInput"
+                        class="characterNameInput"
+                        autocomplete="off"
+                        spellcheck="false"
+                        placeholder="Enter your character name"
+                        data-i18n-placeholder="settings.characterNamePlaceholder" />
+                      <div class="settingsActorInline">
+                        <label for="localActorIdInput" class="settingsActorPrefix">#</label>
+                        <input
+                          id="localActorIdInput"
+                          class="localActorIdInput"
+                          inputmode="numeric"
+                          placeholder="1234" />
+                      </div>
+                    </div>
+                  </div>
+                  <div class="settingsRow settingsRowSelect settingsRowWide">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.device.label">Capture device</div>
+                    </div>
+                    <div class="settingsDeviceRow">
+                      <label class="settingsCheckboxLabel autoDetectDeviceLabel">
+                        <input type="checkbox" class="autoDetectDeviceCheckbox" checked />
+                        <span data-i18n="settings.device.autoDetect">Auto-detect</span>
+                      </label>
+                      <div class="settingsDropdownWrapper deviceDropdownWrapper">
+                        <button class="settingsDropdownBtn deviceDropdownBtn" type="button" disabled>
+                          <span class="settingsDropdownText">-</span>
+                          <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
+                        </button>
+                        <div class="settingsDropdownMenu deviceDropdownMenu" role="menu"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="settingsRow settingsRowWide">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.lockedPort">Detected device/port</div>
+                    </div>
+                    <div class="settingsRowEnd">
+                      <div class="settingsValue">
+                        <span class="lockedIp">-</span>
+                        <span class="lockedPort">-</span>
+                      </div>
+                      <button
+                        class="settingsAction resetDetectBtn"
+                        type="button"
+                        data-i18n="settings.resetDetection">
+                        Reset
+                      </button>
                     </div>
                   </div>
                 </div>
-                <div class="settingsRow settingsRowSelect settingsRowStacked">
-                  <div class="settingsInfo">
-                    <div class="settingsLabel" data-i18n="settings.device.label">Capture device</div>
-                  </div>
-                  <div class="settingsDeviceRow">
-                    <label class="settingsCheckboxLabel autoDetectDeviceLabel">
-                      <input type="checkbox" class="autoDetectDeviceCheckbox" checked />
-                      <span data-i18n="settings.device.autoDetect">Auto-detect</span>
-                    </label>
-                    <div class="settingsDropdownWrapper deviceDropdownWrapper">
-                      <button class="settingsDropdownBtn deviceDropdownBtn" type="button" disabled>
-                        <span class="settingsDropdownText">-</span>
+              </section>
+              <section class="settingsSection" id="settingsSection-meter" role="tabpanel" aria-labelledby="settingsTab-meter" data-section="meter" hidden>
+                <h2 class="settingsSectionTitle" data-i18n="settings.meterSettings">Meter Settings</h2>
+                <div class="settingsGroupBody">
+                  <div class="settingsRow settingsRowSelect">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.defaultMeterMode.label">Default mode</div>
+                    </div>
+                    <div class="settingsDropdownWrapper defaultMeterModeDropdownWrapper">
+                      <button class="settingsDropdownBtn defaultMeterModeDropdownBtn" type="button">
+                        <span class="settingsDropdownText">TARGET</span>
                         <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
                       </button>
-                      <div class="settingsDropdownMenu deviceDropdownMenu" role="menu"></div>
+                      <div class="settingsDropdownMenu defaultMeterModeDropdownMenu" role="menu"></div>
                     </div>
                   </div>
-                </div>
-                <div class="settingsRow settingsRowStacked settingsRowFullWidth">
-                  <div class="settingsInfo">
-                    <div class="settingsLabel" data-i18n="settings.lockedPort">Detected device/port</div>
-                  </div>
-                  <div class="settingsRowEnd">
-                    <div class="settingsValue">
-                      <span class="lockedIp">-</span>
-                      <span class="lockedPort">-</span>
+                  <div class="settingsRow settingsRowSelect">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.playerLimit.label">Max players shown</div>
                     </div>
-                    <button
-                      class="settingsAction resetDetectBtn"
-                      type="button"
-                      data-i18n="settings.resetDetection">
-                      Reset
-                    </button>
+                    <div class="settingsDropdownWrapper playerLimitDropdownWrapper playerLimitNarrow">
+                      <button class="settingsDropdownBtn playerLimitDropdownBtn" type="button">
+                        <span class="settingsDropdownText">6</span>
+                        <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
+                      </button>
+                      <div class="settingsDropdownMenu playerLimitDropdownMenu" role="menu"></div>
+                    </div>
                   </div>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.pinMeToTop">Always show me at the top</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="pinMeToTopCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.autoHideMeter">Auto-hide meter</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="autoHideMeterCheckbox" checked />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showPing">Show ping</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showPingCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill (TTK)</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showTtkCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show total DPS/DMG</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showTotalDpsCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show suspend button</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showSuspendBtnCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle lockSetting" style="display:none">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show lock button (click-through)</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showLockBtnCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
                 </div>
-              </div>
-            </section>
-            <div class="settingsColumns">
-              <section class="settingsGroup settingsColumn">
-                <div class="settingsMiniTitle" data-i18n="settings.appearance">Appearance</div>
+              </section>
+              <section class="settingsSection" id="settingsSection-appearance" role="tabpanel" aria-labelledby="settingsTab-appearance" data-section="appearance" hidden>
+                <h2 class="settingsSectionTitle" data-i18n="settings.appearance">Appearance</h2>
                 <div class="settingsGroupBody">
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
@@ -664,89 +752,9 @@
                   </div>
                 </div>
               </section>
-              <section class="settingsGroup settingsColumn">
-                <div class="settingsMiniTitle" data-i18n="settings.meterSettings">Meter Settings</div>
+              <section class="settingsSection" id="settingsSection-account" role="tabpanel" aria-labelledby="settingsTab-account" data-section="account" hidden>
+                <h2 class="settingsSectionTitle" data-i18n="settings.account.title">A2 Tools Account</h2>
                 <div class="settingsGroupBody">
-                  <div class="settingsRow settingsRowSelect">
-                    <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.defaultMeterMode.label">Default mode</div>
-                    </div>
-                    <div class="settingsDropdownWrapper defaultMeterModeDropdownWrapper">
-                      <button class="settingsDropdownBtn defaultMeterModeDropdownBtn" type="button">
-                        <span class="settingsDropdownText">TARGET</span>
-                        <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
-                      </button>
-                      <div class="settingsDropdownMenu defaultMeterModeDropdownMenu" role="menu"></div>
-                    </div>
-                  </div>
-                  <div class="settingsRow settingsRowSelect">
-                    <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.playerLimit.label">Max players shown</div>
-                    </div>
-                    <div class="settingsDropdownWrapper playerLimitDropdownWrapper playerLimitNarrow">
-                      <button class="settingsDropdownBtn playerLimitDropdownBtn" type="button">
-                        <span class="settingsDropdownText">6</span>
-                        <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
-                      </button>
-                      <div class="settingsDropdownMenu playerLimitDropdownMenu" role="menu"></div>
-                    </div>
-                  </div>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.pinMeToTop">Always show me at the top</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="pinMeToTopCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.autoHideMeter">Auto-hide meter</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="autoHideMeterCheckbox" checked />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showPing">Show ping</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showPingCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill (TTK)</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showTtkCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show total DPS/DMG</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showTotalDpsCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show suspend button</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showSuspendBtnCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle lockSetting" style="display:none">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show lock button (click-through)</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showLockBtnCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                </div>
-              </section>
-            </div>
-            <section class="settingsGroup">
-              <div class="settingsMiniTitle" data-i18n="settings.account.title">A2 Tools Account</div>
-              <div class="settingsGroupBody">
-                <div class="settingsGroupSplit">
                   <div class="settingsRow accountRow">
                     <div class="settingsInfo">
                       <div class="settingsLabel accountState" data-i18n="settings.account.signedOut">Not signed in</div>
@@ -784,118 +792,113 @@
                   <div class="accountCode"></div>
                   <div class="accountCodeHint" data-i18n="settings.account.codeHint">The page should have opened already. The code expires in 10 minutes.</div>
                 </div>
-              </div>
-            </section>
-            <section class="settingsGroup streamOverlayGroup" style="display:none">
-              <div class="settingsMiniTitle" data-i18n="settings.streamOverlay.title">Streaming</div>
-              <div class="settingsGroupBody">
-                <label class="settingsToggle" title="Serves the meter on your home network so OBS on a second PC can show it as a Browser Source." data-i18n-title="settings.streamOverlay.enableHint">
-                  <span class="settingsToggleLabel settingsLabel" data-i18n="settings.streamOverlay.enable">Stream overlay (OBS on another PC)</span>
-                  <span class="settingsToggleControl">
-                    <input type="checkbox" class="streamOverlayCheckbox" />
-                    <span class="settingsToggleTrack" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <div class="streamOverlayDetails" style="display:none">
-                  <div class="settingsRow">
-                    <label class="settingsLabel" for="streamOverlayPortInput" data-i18n="settings.streamOverlay.port">Port</label>
-                    <div class="settingsRowEnd">
-                      <input
-                        id="streamOverlayPortInput"
-                        class="streamOverlayPortInput"
-                        type="number"
-                        min="1024"
-                        max="65535"
-                        autocomplete="off" />
-                      <button class="settingsAction streamOverlayNewKeyBtn" type="button" data-i18n="settings.streamOverlay.newKey">New key</button>
+              </section>
+              <section class="settingsSection" id="settingsSection-streaming" role="tabpanel" aria-labelledby="settingsTab-streaming" data-section="streaming" hidden>
+                <h2 class="settingsSectionTitle" data-i18n="settings.streamOverlay.title">Streaming</h2>
+                <div class="settingsGroupBody streamOverlayGroup" style="display:none">
+                  <label class="settingsToggle" title="Serves the meter on your home network so OBS on a second PC can show it as a Browser Source." data-i18n-title="settings.streamOverlay.enableHint">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.streamOverlay.enable">Stream overlay (OBS on another PC)</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="streamOverlayCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <div class="streamOverlayDetails" style="display:none">
+                    <div class="settingsRow">
+                      <label class="settingsLabel" for="streamOverlayPortInput" data-i18n="settings.streamOverlay.port">Port</label>
+                      <div class="settingsRowEnd">
+                        <input
+                          id="streamOverlayPortInput"
+                          class="streamOverlayPortInput"
+                          type="number"
+                          min="1024"
+                          max="65535"
+                          autocomplete="off" />
+                        <button class="settingsAction streamOverlayNewKeyBtn" type="button" data-i18n="settings.streamOverlay.newKey">New key</button>
+                      </div>
+                    </div>
+                    <div class="settingsRow">
+                      <label class="settingsLabel" for="streamOverlayNameInput" data-i18n="settings.streamOverlay.displayName">Your name on stream</label>
+                      <div class="settingsRowEnd">
+                        <input
+                          id="streamOverlayNameInput"
+                          class="streamOverlayNameInput"
+                          type="text"
+                          maxlength="24"
+                          spellcheck="false"
+                          autocomplete="off"
+                          placeholder="Your character name"
+                          data-i18n-placeholder="settings.streamOverlay.displayNamePlaceholder" />
+                      </div>
+                    </div>
+                    <div class="streamOverlayUrlBlock">
+                      <div class="settingsLabel" data-i18n="settings.streamOverlay.url">Browser Source URL</div>
+                      <div class="streamOverlayUrls"></div>
+                      <div class="streamOverlayStatus"></div>
+                      <div class="streamOverlayHelp" data-i18n="settings.streamOverlay.help">In OBS on the other PC, add a Browser Source with this URL. The first time, Windows Firewall asks about the meter: allow it on private networks. Anyone on your network with the link can see the meter; New key cuts off old links.</div>
                     </div>
                   </div>
-                  <div class="settingsRow">
-                    <label class="settingsLabel" for="streamOverlayNameInput" data-i18n="settings.streamOverlay.displayName">Your name on stream</label>
+                </div>
+              </section>
+              <section class="settingsSection" id="settingsSection-keybinds" role="tabpanel" aria-labelledby="settingsTab-keybinds" data-section="keybinds" hidden>
+                <h2 class="settingsSectionTitle" data-i18n="settings.keybinds">Keybinds</h2>
+                <div class="settingsGroupBody">
+                  <div class="settingsRow settingsRowKeybind">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.keybind.reload">Reload data</div>
+                    </div>
+                    <button class="keybindBtn reloadKeybindBtn" type="button" data-keybind="reload">
+                      <span class="keybindText">Ctrl+Alt+R</span>
+                    </button>
+                  </div>
+                  <div class="settingsRow settingsRowKeybind">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.keybind.toggle">Show/Hide window</div>
+                    </div>
+                    <button class="keybindBtn toggleKeybindBtn" type="button" data-keybind="toggle">
+                      <span class="keybindText">Ctrl+Alt+Up</span>
+                    </button>
+                  </div>
+                  <div class="settingsRow settingsRowKeybind lockSetting" style="display:none">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.keybind.lock">Lock/unlock overlay</div>
+                    </div>
+                    <button class="keybindBtn lockKeybindBtn" type="button" data-keybind="lock">
+                      <span class="keybindText">Ctrl+Alt+L</span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+              <section class="settingsSection" id="settingsSection-diagnostics" role="tabpanel" aria-labelledby="settingsTab-diagnostics" data-section="diagnostics" hidden>
+                <h2 class="settingsSectionTitle" data-i18n="settings.diagnostics">Diagnostics</h2>
+                <div class="settingsGroupBody">
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.debugLogging">Enable debug logging</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="debugLoggingCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.saveRawPackets">Enable packet logging</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="saveRawPacketsCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <div class="settingsRow sendLogsRow">
+                    <div class="settingsInfo">
+                      <div class="settingsHint sendLogsStatus" data-i18n="settings.sendLogs.hint">Sends your 3 newest packet logs to the developer, for a bug report.</div>
+                    </div>
                     <div class="settingsRowEnd">
-                      <input
-                        id="streamOverlayNameInput"
-                        class="streamOverlayNameInput"
-                        type="text"
-                        maxlength="24"
-                        spellcheck="false"
-                        autocomplete="off"
-                        placeholder="Your character name"
-                        data-i18n-placeholder="settings.streamOverlay.displayNamePlaceholder" />
+                      <button class="settingsAction sendLogsBtn" type="button" data-i18n="settings.sendLogs.button">Send logs to dev</button>
                     </div>
                   </div>
-                  <div class="streamOverlayUrlBlock">
-                    <div class="settingsLabel" data-i18n="settings.streamOverlay.url">Browser Source URL</div>
-                    <div class="streamOverlayUrls"></div>
-                    <div class="streamOverlayStatus"></div>
-                    <div class="streamOverlayHelp" data-i18n="settings.streamOverlay.help">In OBS on the other PC, add a Browser Source with this URL. The first time, Windows Firewall asks about the meter: allow it on private networks. Anyone on your network with the link can see the meter; New key cuts off old links.</div>
-                  </div>
                 </div>
-              </div>
-            </section>
-            <section class="settingsGroup">
-              <div class="settingsMiniTitle" data-i18n="settings.keybinds">Keybinds</div>
-              <div class="settingsGroupBody settingsGroupSplit">
-                <div class="settingsRow settingsRowKeybind">
-                  <div class="settingsInfo">
-                    <div class="settingsLabel" data-i18n="settings.keybind.reload">Reload data</div>
-                  </div>
-                  <button class="keybindBtn reloadKeybindBtn" type="button" data-keybind="reload">
-                    <span class="keybindText">Ctrl+Alt+R</span>
-                  </button>
-                </div>
-                <div class="settingsRow settingsRowKeybind">
-                  <div class="settingsInfo">
-                    <div class="settingsLabel" data-i18n="settings.keybind.toggle">Show/Hide window</div>
-                  </div>
-                  <button class="keybindBtn toggleKeybindBtn" type="button" data-keybind="toggle">
-                    <span class="keybindText">Ctrl+Alt+Up</span>
-                  </button>
-                </div>
-                <div class="settingsRow settingsRowKeybind lockSetting" style="display:none">
-                  <div class="settingsInfo">
-                    <div class="settingsLabel" data-i18n="settings.keybind.lock">Lock/unlock overlay</div>
-                  </div>
-                  <button class="keybindBtn lockKeybindBtn" type="button" data-keybind="lock">
-                    <span class="keybindText">Ctrl+Alt+L</span>
-                  </button>
-                </div>
-              </div>
-            </section>
-            <section class="settingsGroup">
-              <div class="settingsMiniTitle" data-i18n="settings.diagnostics">Diagnostics</div>
-              <div class="settingsGroupBody settingsGroupSplit">
-                <label class="settingsToggle">
-                  <span class="settingsToggleLabel settingsLabel" data-i18n="settings.debugLogging">Enable debug logging</span>
-                  <span class="settingsToggleControl">
-                    <input type="checkbox" class="debugLoggingCheckbox" />
-                    <span class="settingsToggleTrack" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <label class="settingsToggle">
-                  <span class="settingsToggleLabel settingsLabel" data-i18n="settings.saveRawPackets">Enable packet logging</span>
-                  <span class="settingsToggleControl">
-                    <input type="checkbox" class="saveRawPacketsCheckbox" />
-                    <span class="settingsToggleTrack" aria-hidden="true"></span>
-                  </span>
-                </label>
-                <div class="settingsRow sendLogsRow">
-                  <div class="settingsInfo">
-                    <div class="settingsHint sendLogsStatus" data-i18n="settings.sendLogs.hint">Sends your 3 newest packet logs to the developer, for a bug report.</div>
-                  </div>
-                  <div class="settingsRowEnd">
-                    <button class="settingsAction sendLogsBtn" type="button" data-i18n="settings.sendLogs.button">Send logs to dev</button>
-                  </div>
-                </div>
-              </div>
-              <div class="settingsAdvancedToggle">
-                <button class="settingsAdvancedBtn" type="button">
-                  <span class="settingsAdvancedCaret" aria-hidden="true">▾</span>
-                  <span class="settingsLabel" data-i18n="settings.advanced">Advanced</span>
-                </button>
-              </div>
-              <div class="settingsAdvancedBody" style="display: none;">
-                <div class="settingsGroupBody settingsGroupSplit">
+              </section>
+              <section class="settingsSection" id="settingsSection-advanced" role="tabpanel" aria-labelledby="settingsTab-advanced" data-section="advanced" hidden>
+                <h2 class="settingsSectionTitle" data-i18n="settings.advanced">Advanced</h2>
+                <div class="settingsGroupBody">
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
                       <div class="settingsLabel" data-i18n="settings.targetWindow.label">
@@ -961,8 +964,8 @@
                     </button>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            </div>
             <div class="settingsFooter">
               <div class="settingsFooterLinks">
                 <button class="discordButton" type="button">

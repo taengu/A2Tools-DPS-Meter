@@ -1529,6 +1529,43 @@ class DpsApp {
   }
 
   /** Pixels between player bars, 0-16, or null for the skin's own spacing. */
+  // The sidebar's sections: one shown at a time, as a tablist (arrow keys,
+  // Home and End move between the sections that are listed).
+  initSettingsSections() {
+    const items = [...document.querySelectorAll(".settingsNavItem")];
+    if (!items.length) return;
+    const show = (key, { focus = false } = {}) => {
+      for (const item of items) {
+        const on = item.dataset.section === key;
+        item.classList.toggle("isActive", on);
+        item.setAttribute("aria-selected", String(on));
+        item.tabIndex = on ? 0 : -1;
+        if (on && focus) item.focus();
+      }
+      for (const section of document.querySelectorAll(".settingsSection")) {
+        const on = section.dataset.section === key;
+        section.hidden = !on;
+        section.classList.toggle("isActive", on);
+      }
+      const pane = document.querySelector(".settingsPane");
+      if (pane) pane.scrollTop = 0;
+    };
+    const steps = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+    for (const item of items) {
+      item.addEventListener("click", () => show(item.dataset.section));
+      item.addEventListener("keydown", (event) => {
+        if (!(event.key in steps) && event.key !== "Home" && event.key !== "End") return;
+        event.preventDefault();
+        const listed = items.filter((el) => el.getClientRects().length > 0);
+        const at = listed.indexOf(item);
+        const next = event.key === "Home" ? listed[0]
+          : event.key === "End" ? listed[listed.length - 1]
+            : listed[(at + steps[event.key] + listed.length) % listed.length];
+        if (next) show(next.dataset.section, { focus: true });
+      });
+    }
+  }
+
   normalizeBarGap(value) {
     if (value === null || value === undefined || String(value).trim() === "") return null;
     const numeric = Number(value);
@@ -2865,12 +2902,7 @@ class DpsApp {
 
     this.settingsClose?.addEventListener("click", () => this.closeSettingsPanel());
 
-    const advancedToggle = document.querySelector(".settingsAdvancedToggle");
-    const advancedBody = document.querySelector(".settingsAdvancedBody");
-    advancedToggle?.addEventListener("click", () => {
-      const isOpen = advancedToggle.classList.toggle("isOpen");
-      if (advancedBody) advancedBody.style.display = isOpen ? "" : "none";
-    });
+    this.initSettingsSections();
 
     this.resetDetectBtn?.addEventListener("click", () => {
       window.javaBridge?.resetAutoDetection?.();
