@@ -1453,6 +1453,13 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   line-height: 1.25;
   color: var(--set-label);
 }
+/* A label with more to say on hover (its tip, settings.tips.*) is marked
+   by a faint dotted underline. */
+.settingsPanel .settingsLabel[data-i18n-title] {
+  cursor: help;
+  text-decoration: underline dotted rgba(255, 255, 255, 0.28);
+  text-underline-offset: 3px;
+}
 .settingsPanel .settingsRowEnd {
   display: flex;
   align-items: center;

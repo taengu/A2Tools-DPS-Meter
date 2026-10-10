@@ -2456,7 +2456,11 @@ class DpsApp {
     this.setOnlyShowUser(false, { persist: false });
     this.setDebugLogging(storedDebugLogging, { persist: false, syncBackend });
     this.setPinMeToTop(storedPinMeToTop, { persist: false });
-    this.setBetaUi(this.safeGetSetting(this.storageKeys.betaUi) !== "false", { persist: false });
+    // The Classic skins are retired: Classic becomes Standard, Classic Slim
+    // becomes Slim (slimMode is kept as it was). Saved once, so every window
+    // and the next start agree.
+    const wasClassic = this.safeGetSetting(this.storageKeys.betaUi) === "false";
+    this.setBetaUi(true, { persist: wasClassic && syncBackend });
     const storedSlimMode = this.safeGetSetting(this.storageKeys.slimMode) === "true";
     this.setSlimMode(storedSlimMode, { persist: false });
     this.setMainPlayerNamesBold(storedMainPlayerNamesBold, { persist: false });
@@ -3357,14 +3361,11 @@ class DpsApp {
       }
     }
 
-    // One control for both axes of the main window: which skin, and how dense.
-    // They were two separate toggles, which made four states the user had to
-    // assemble themselves.
+    // Standard or Slim. The Classic skins are retired; the values keep their
+    // old names ("beta", "betaSlim") so a saved choice still reads the same.
     const meterLayoutOptions = [
-      { value: "beta", label: this.i18n?.t?.("settings.meterLayout.beta", "Beta UI") ?? "Beta UI" },
-      { value: "betaSlim", label: this.i18n?.t?.("settings.meterLayout.betaSlim", "Beta Slim") ?? "Beta Slim" },
-      { value: "classic", label: this.i18n?.t?.("settings.meterLayout.classic", "Classic UI") ?? "Classic UI" },
-      { value: "classicSlim", label: this.i18n?.t?.("settings.meterLayout.classicSlim", "Classic Slim") ?? "Classic Slim" },
+      { value: "beta", label: this.i18n?.t?.("settings.meterLayout.standard", "Standard") ?? "Standard" },
+      { value: "betaSlim", label: this.i18n?.t?.("settings.meterLayout.slim", "Slim") ?? "Slim" },
     ];
     setupDropdown(
       this.meterLayoutDropdownBtn,
@@ -4221,7 +4222,7 @@ class DpsApp {
     const limit = get("playerLimit");
     if (isSet(limit)) this.setPlayerLimit(limit);
 
-    this.setBetaUi(get("betaUi") !== "false");
+    this.setBetaUi(true);
     this.setSlimMode(get("slimMode") === "true");
     this.applyTheme(get("theme") || this.theme);
     const language = get("language");
@@ -4409,9 +4410,9 @@ class DpsApp {
   }
 
   setMeterLayout(value, { persist = false } = {}) {
-    const beta = String(value).startsWith("beta");
+    // "classic"/"classicSlim" may still arrive from an old setting: Standard/Slim.
     const slim = String(value).endsWith("Slim");
-    this.setBetaUi(beta, { persist });
+    this.setBetaUi(true, { persist });
     this.setSlimMode(slim, { persist });
   }
 
@@ -4692,7 +4693,7 @@ class DpsApp {
       return;
     }
     if (key === this.storageKeys.betaUi) {
-      this.setBetaUi(value !== "false", { persist: false });
+      this.setBetaUi(true, { persist: false });    // Classic is retired
       return;
     }
     if (key === this.storageKeys.slimMode) {

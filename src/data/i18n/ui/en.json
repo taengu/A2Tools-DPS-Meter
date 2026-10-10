@@ -197,10 +197,8 @@
     "slimMode": "Slim mode",
     "meterLayout": {
       "label": "Meter layout",
-      "beta": "Beta UI",
-      "betaSlim": "Beta Slim",
-      "classic": "Classic UI",
-      "classicSlim": "Classic Slim"
+      "standard": "Standard",
+      "slim": "Slim"
     },
     "detailsMonitor": {
       "label": "Details on second monitor",
@@ -363,7 +361,29 @@
     "barGap": {
       "label": "Bar spacing"
     },
-    "debugLoggingLocked": "On while packet logging is on: packet logs need the debug log to be read."
+    "debugLoggingLocked": "On while packet logging is on: packet logs need the debug log to be read.",
+    "tips": {
+      "characterName": "Your in-game name and ID, so the meter knows which row is you. It is usually found on its own.",
+      "device": "The network connection the meter reads game traffic from. Auto-detect finds it; pick one by hand if you use a VPN.",
+      "lockedPort": "The adapter and port the game was found on.",
+      "defaultMeterMode": "The target mode the meter opens in: Boss, Target, Train or All.",
+      "playerLimit": "How many player rows the meter shows; the rest are left out.",
+      "pinMeToTop": "Your row stays first, whatever your damage.",
+      "autoHideMeter": "The meter disappears while another window is in front of the game, and comes back with it.",
+      "detailsMonitor": "Opens the Details window on the chosen display and keeps it there.",
+      "showTtk": "Beside the battle timer, an estimate of how long the whole boss fight will take.",
+      "showTotalDps": "A bar under the rows with the party's combined DPS and damage.",
+      "roundDps": "13,412 shows as 13k.",
+      "showSuspendBtn": "A button on the meter that stops reading game traffic until you press it again.",
+      "showLockBtn": "A button that makes the meter ignore the mouse, so clicks go through to the game.",
+      "windowOpacity": "How see-through the meter's background is. Bars and text stay as they are.",
+      "meterOpacity": "How solid the coloured damage bars are.",
+      "bossNameSize": "Size of the boss or target name above the bars.",
+      "trainingMode": "In Train mode, which dummies the Details window shows: all of them together, or only the one you hit hardest.",
+      "allTargetsWindow": "In All Targets mode, the meter adds up every target hit within this time of the latest hit.",
+      "debugLogging": "Writes a diagnostic log the developer can use to track down problems.",
+      "saveRawPackets": "Records raw game traffic for bug reports. Debug logging turns on with it."
+    }
   },
   "support": {
     "button": "Support Me",

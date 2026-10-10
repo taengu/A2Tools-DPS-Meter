@@ -192,10 +192,8 @@
     "slimMode": "精简模式",
     "meterLayout": {
       "label": "仪表布局",
-      "beta": "Beta 界面",
-      "betaSlim": "Beta 精简",
-      "classic": "经典界面",
-      "classicSlim": "经典精简"
+      "standard": "标准",
+      "slim": "紧凑"
     },
     "detailsMonitor": {
       "label": "在副显示器上显示详情",
@@ -358,7 +356,29 @@
     "barGap": {
       "label": "条形间距"
     },
-    "debugLoggingLocked": "开启数据包日志时保持开启：分析数据包日志需要调试日志。"
+    "debugLoggingLocked": "开启数据包日志时保持开启：分析数据包日志需要调试日志。",
+    "tips": {
+      "characterName": "你的游戏角色名和 ID，让计量器知道哪一行是你。通常会自动识别。",
+      "device": "计量器读取游戏流量的网络连接。自动检测会找到它；使用 VPN 时请手动选择。",
+      "lockedPort": "发现游戏所用的适配器和端口。",
+      "defaultMeterMode": "计量器启动时的目标模式：首领、目标、训练或全部。",
+      "playerLimit": "计量器显示的玩家行数，其余的不显示。",
+      "pinMeToTop": "无论伤害多少，你的行都排在第一。",
+      "autoHideMeter": "其他窗口位于游戏前方时计量器会隐藏，回到游戏后再出现。",
+      "detailsMonitor": "在所选显示器上打开详情窗口并保持在那里。",
+      "showTtk": "在战斗计时器旁显示整场首领战的预计时长。",
+      "showTotalDps": "在各行下方显示队伍总 DPS 和总伤害的条。",
+      "roundDps": "13,412 显示为 13k。",
+      "showSuspendBtn": "在计量器上显示一个按钮，按下后停止读取游戏流量，再按一次恢复。",
+      "showLockBtn": "让计量器忽略鼠标、点击直接作用于游戏的按钮。",
+      "windowOpacity": "计量器背景的透明程度。条形和文字不受影响。",
+      "meterOpacity": "彩色伤害条的不透明程度。",
+      "bossNameSize": "条形上方首领或目标名称的大小。",
+      "trainingMode": "训练模式下详情窗口显示哪些木桩：全部一起，或只显示你打得最多的那个。",
+      "allTargetsWindow": "全部目标模式下，计量器汇总最后一次命中前这段时间内命中的所有目标。",
+      "debugLogging": "写入开发者用于排查问题的诊断日志。",
+      "saveRawPackets": "记录原始游戏流量以便提交错误报告。调试日志会随之开启。"
+    }
   },
   "support": {
     "button": "支持我一下",

@@ -187,10 +187,8 @@
     "slimMode": "Modo compacto",
     "meterLayout": {
       "label": "Layout do medidor",
-      "beta": "Beta UI",
-      "betaSlim": "Beta compacto",
-      "classic": "Interface clássica",
-      "classicSlim": "Clássica compacta"
+      "standard": "Padrão",
+      "slim": "Compacto"
     },
     "detailsMonitor": {
       "label": "Detalhes no segundo monitor",
@@ -351,7 +349,29 @@
     "barGap": {
       "label": "Espaçamento das barras"
     },
-    "debugLoggingLocked": "Ativo enquanto o registro de pacotes estiver ativo: os registros de pacotes precisam do registro de depuração."
+    "debugLoggingLocked": "Ativo enquanto o registro de pacotes estiver ativo: os registros de pacotes precisam do registro de depuração.",
+    "tips": {
+      "characterName": "Seu nome e ID no jogo, para o medidor saber qual linha é você. Normalmente é detectado sozinho.",
+      "device": "A conexão de rede da qual o medidor lê o tráfego do jogo. A detecção automática a encontra; com VPN, escolha manualmente.",
+      "lockedPort": "O adaptador e a porta em que o jogo foi encontrado.",
+      "defaultMeterMode": "O modo de alvo ao abrir: Chefe, Alvo, Treino ou Todos.",
+      "playerLimit": "Quantas linhas de jogadores o medidor mostra; o resto fica de fora.",
+      "pinMeToTop": "Sua linha fica em primeiro, seja qual for seu dano.",
+      "autoHideMeter": "O medidor some enquanto outra janela está na frente do jogo e volta com ele.",
+      "detailsMonitor": "Abre a janela de detalhes na tela escolhida e a mantém lá.",
+      "showTtk": "Ao lado do cronômetro, uma estimativa de quanto durará toda a luta contra o chefe.",
+      "showTotalDps": "Uma barra sob as linhas com o DPS e o dano de todo o grupo.",
+      "roundDps": "13.412 aparece como 13k.",
+      "showSuspendBtn": "Um botão no medidor que para de ler o tráfego do jogo até você apertar de novo.",
+      "showLockBtn": "Um botão que faz o medidor ignorar o mouse, para os cliques irem ao jogo.",
+      "windowOpacity": "Quão transparente é o fundo do medidor. Barras e texto não mudam.",
+      "meterOpacity": "Quão sólidas são as barras coloridas de dano.",
+      "bossNameSize": "Tamanho do nome do chefe ou alvo acima das barras.",
+      "trainingMode": "No modo treino, quais bonecos a janela de detalhes mostra: todos juntos ou só o que você mais acerta.",
+      "allTargetsWindow": "No modo Todos os alvos, o medidor soma cada alvo atingido dentro deste tempo antes do último golpe.",
+      "debugLogging": "Grava um registro de diagnóstico que o desenvolvedor pode usar para encontrar problemas.",
+      "saveRawPackets": "Grava o tráfego bruto do jogo para relatórios de erro. O registro de depuração liga junto."
+    }
   },
   "support": {
     "button": "Me apoie",

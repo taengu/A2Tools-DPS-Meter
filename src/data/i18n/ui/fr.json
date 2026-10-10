@@ -187,10 +187,8 @@
     "slimMode": "Mode compact",
     "meterLayout": {
       "label": "Disposition du meter",
-      "beta": "Beta UI",
-      "betaSlim": "Bêta compact",
-      "classic": "Interface classique",
-      "classicSlim": "Classique compact"
+      "standard": "Standard",
+      "slim": "Compact"
     },
     "detailsMonitor": {
       "label": "Détails sur le second écran",
@@ -351,7 +349,29 @@
     "barGap": {
       "label": "Espacement des barres"
     },
-    "debugLoggingLocked": "Activé tant que la journalisation des paquets l'est : les journaux de paquets ont besoin du journal de débogage."
+    "debugLoggingLocked": "Activé tant que la journalisation des paquets l'est : les journaux de paquets ont besoin du journal de débogage.",
+    "tips": {
+      "characterName": "Ton nom et ton ID en jeu, pour que le compteur sache quelle ligne est la tienne. Il est en général trouvé tout seul.",
+      "device": "La connexion réseau dont le compteur lit le trafic du jeu. La détection automatique la trouve ; avec un VPN, choisis-la à la main.",
+      "lockedPort": "La carte et le port sur lesquels le jeu a été trouvé.",
+      "defaultMeterMode": "Le mode de cible à l'ouverture : Boss, Cible, Entraînement ou Tous.",
+      "playerLimit": "Combien de lignes de joueurs le compteur affiche ; les autres sont masquées.",
+      "pinMeToTop": "Ta ligne reste en premier, quels que soient tes dégâts.",
+      "autoHideMeter": "Le compteur disparaît quand une autre fenêtre passe devant le jeu, et revient avec lui.",
+      "detailsMonitor": "Ouvre la fenêtre Détails sur l'écran choisi et l'y garde.",
+      "showTtk": "À côté du chronomètre, une estimation de la durée totale du combat contre le boss.",
+      "showTotalDps": "Une barre sous les lignes avec le DPS et les dégâts de tout le groupe.",
+      "roundDps": "13 412 s'affiche 13k.",
+      "showSuspendBtn": "Un bouton sur le compteur qui arrête la lecture du trafic du jeu jusqu'à ce que tu appuies à nouveau.",
+      "showLockBtn": "Un bouton qui fait ignorer la souris au compteur, pour que les clics passent au jeu.",
+      "windowOpacity": "La transparence du fond du compteur. Les barres et le texte ne changent pas.",
+      "meterOpacity": "L'opacité des barres de dégâts colorées.",
+      "bossNameSize": "Taille du nom du boss ou de la cible au-dessus des barres.",
+      "trainingMode": "En mode entraînement, quels mannequins la fenêtre Détails affiche : tous ensemble, ou seulement celui que tu frappes le plus.",
+      "allTargetsWindow": "En mode Toutes les cibles, le compteur additionne chaque cible touchée dans ce délai avant le dernier coup.",
+      "debugLogging": "Écrit un journal de diagnostic que le développeur peut utiliser pour trouver les problèmes.",
+      "saveRawPackets": "Enregistre le trafic brut du jeu pour les rapports de bug. Le journal de débogage s'active avec."
+    }
   },
   "support": {
     "button": "Me soutenir",

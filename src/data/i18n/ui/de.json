@@ -187,10 +187,8 @@
     "slimMode": "Schlanker Modus",
     "meterLayout": {
       "label": "Meter-Layout",
-      "beta": "Beta UI",
-      "betaSlim": "Beta schlank",
-      "classic": "Klassische UI",
-      "classicSlim": "Klassisch schlank"
+      "standard": "Standard",
+      "slim": "Schmal"
     },
     "detailsMonitor": {
       "label": "Details auf zweitem Monitor",
@@ -351,7 +349,29 @@
     "barGap": {
       "label": "Balkenabstand"
     },
-    "debugLoggingLocked": "An, solange die Paketprotokollierung an ist: Paketprotokolle brauchen das Debug-Protokoll zur Auswertung."
+    "debugLoggingLocked": "An, solange die Paketprotokollierung an ist: Paketprotokolle brauchen das Debug-Protokoll zur Auswertung.",
+    "tips": {
+      "characterName": "Dein Name und deine ID im Spiel, damit das Meter weiß, welche Zeile du bist. Wird meist von selbst erkannt.",
+      "device": "Die Netzwerkverbindung, aus der das Meter den Spielverkehr liest. Die automatische Erkennung findet sie; mit VPN wähle sie von Hand.",
+      "lockedPort": "Der Adapter und Port, auf dem das Spiel gefunden wurde.",
+      "defaultMeterMode": "Der Zielmodus beim Öffnen: Boss, Ziel, Training oder Alle.",
+      "playerLimit": "Wie viele Spielerzeilen das Meter zeigt; der Rest wird ausgelassen.",
+      "pinMeToTop": "Deine Zeile bleibt oben, egal wie viel Schaden du machst.",
+      "autoHideMeter": "Das Meter verschwindet, solange ein anderes Fenster vor dem Spiel ist, und kommt mit dem Spiel zurück.",
+      "detailsMonitor": "Öffnet das Detailfenster auf dem gewählten Bildschirm und hält es dort.",
+      "showTtk": "Neben dem Kampftimer eine Schätzung, wie lange der ganze Bosskampf dauert.",
+      "showTotalDps": "Eine Leiste unter den Zeilen mit DPS und Schaden der ganzen Gruppe.",
+      "roundDps": "13.412 wird als 13k angezeigt.",
+      "showSuspendBtn": "Eine Taste am Meter, die das Lesen des Spielverkehrs anhält, bis du sie erneut drückst.",
+      "showLockBtn": "Eine Taste, mit der das Meter die Maus ignoriert, sodass Klicks im Spiel ankommen.",
+      "windowOpacity": "Wie durchsichtig der Hintergrund des Meters ist. Balken und Text bleiben, wie sie sind.",
+      "meterOpacity": "Wie deckend die farbigen Schadensbalken sind.",
+      "bossNameSize": "Größe des Boss- oder Zielnamens über den Balken.",
+      "trainingMode": "Im Trainingsmodus: welche Puppen das Detailfenster zeigt – alle zusammen oder nur die, die du am stärksten triffst.",
+      "allTargetsWindow": "Im Modus „Alle Ziele“ zählt das Meter alle Ziele, die innerhalb dieser Zeit vor dem letzten Treffer getroffen wurden.",
+      "debugLogging": "Schreibt ein Diagnoseprotokoll, mit dem der Entwickler Probleme finden kann.",
+      "saveRawPackets": "Zeichnet rohen Spielverkehr für Fehlerberichte auf. Das Debug-Protokoll wird mit eingeschaltet."
+    }
   },
   "support": {
     "button": "Unterstütze mich",

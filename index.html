@@ -464,7 +464,7 @@
                     <label
                       class="settingsLabel"
                       for="characterNameInput"
-                      data-i18n="settings.characterName">Your character</label>
+                      data-i18n="settings.characterName" title="Your in-game name and ID, so the meter knows which row is you. It is usually found on its own." data-i18n-title="settings.tips.characterName">Your character</label>
                     <div class="settingsCharacterIdentity">
                       <input
                         id="characterNameInput"
@@ -485,7 +485,7 @@
                   </div>
                   <div class="settingsRow settingsRowSelect settingsRowWide">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.device.label">Network adapter</div>
+                      <div class="settingsLabel" data-i18n="settings.device.label" title="The network connection the meter reads game traffic from. Auto-detect finds it; pick one by hand if you use a VPN." data-i18n-title="settings.tips.device">Network adapter</div>
                     </div>
                     <div class="settingsDeviceRow">
                       <label class="settingsCheckboxLabel autoDetectDeviceLabel">
@@ -503,7 +503,7 @@
                   </div>
                   <div class="settingsRow settingsRowWide">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.lockedPort">Detected connection</div>
+                      <div class="settingsLabel" data-i18n="settings.lockedPort" title="The adapter and port the game was found on." data-i18n-title="settings.tips.lockedPort">Detected connection</div>
                     </div>
                     <div class="settingsRowEnd">
                       <div class="settingsValue">
@@ -566,7 +566,7 @@
                 <div class="settingsGroupBody">
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.defaultMeterMode.label">Starting target mode</div>
+                      <div class="settingsLabel" data-i18n="settings.defaultMeterMode.label" title="The target mode the meter opens in: Boss, Target, Train or All." data-i18n-title="settings.tips.defaultMeterMode">Starting target mode</div>
                     </div>
                     <div class="settingsDropdownWrapper defaultMeterModeDropdownWrapper">
                       <button class="settingsDropdownBtn defaultMeterModeDropdownBtn" type="button">
@@ -578,7 +578,7 @@
                   </div>
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.playerLimit.label">Max players shown</div>
+                      <div class="settingsLabel" data-i18n="settings.playerLimit.label" title="How many player rows the meter shows; the rest are left out." data-i18n-title="settings.tips.playerLimit">Max players shown</div>
                     </div>
                     <div class="settingsDropdownWrapper playerLimitDropdownWrapper playerLimitNarrow">
                       <button class="settingsDropdownBtn playerLimitDropdownBtn" type="button">
@@ -589,14 +589,14 @@
                     </div>
                   </div>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.pinMeToTop">Keep my row at the top</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.pinMeToTop" title="Your row stays first, whatever your damage." data-i18n-title="settings.tips.pinMeToTop">Keep my row at the top</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="pinMeToTopCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.autoHideMeter">Hide when AION2 isn't focused</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.autoHideMeter" title="The meter disappears while another window is in front of the game, and comes back with it." data-i18n-title="settings.tips.autoHideMeter">Hide when AION2 isn't focused</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="autoHideMeterCheckbox" checked />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
@@ -604,7 +604,7 @@
                   </label>
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.detailsMonitor.label">Details on second monitor</div>
+                      <div class="settingsLabel" data-i18n="settings.detailsMonitor.label" title="Opens the Details window on the chosen display and keeps it there." data-i18n-title="settings.tips.detailsMonitor">Details on second monitor</div>
                       <div class="settingsHint detailsMonitorHint"></div>
                     </div>
                     <div class="settingsDropdownWrapper detailsMonitorDropdownWrapper">
@@ -623,21 +623,21 @@
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill estimate</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk" title="Beside the battle timer, an estimate of how long the whole boss fight will take." data-i18n-title="settings.tips.showTtk">Show time to kill estimate</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showTtkCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show party total</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps" title="A bar under the rows with the party's combined DPS and damage." data-i18n-title="settings.tips.showTotalDps">Show party total</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showTotalDpsCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.roundDps">Shorten DPS to thousands (13k)</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.roundDps" title="13,412 shows as 13k." data-i18n-title="settings.tips.roundDps">Shorten DPS to thousands (13k)</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="roundDpsCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
@@ -651,14 +651,14 @@
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show pause capture button</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn" title="A button on the meter that stops reading game traffic until you press it again." data-i18n-title="settings.tips.showSuspendBtn">Show pause capture button</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showSuspendBtnCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle lockSetting" style="display:none">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show click-through lock button</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn" title="A button that makes the meter ignore the mouse, so clicks go through to the game." data-i18n-title="settings.tips.showLockBtn">Show click-through lock button</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showLockBtnCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
@@ -699,7 +699,7 @@
                     </div>
                     <div class="settingsDropdownWrapper meterLayoutDropdownWrapper">
                       <button class="settingsDropdownBtn meterLayoutDropdownBtn" type="button">
-                        <span class="settingsDropdownText">Beta UI</span>
+                        <span class="settingsDropdownText">Standard</span>
                         <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
                       </button>
                       <div class="settingsDropdownMenu meterLayoutDropdownMenu" role="menu"></div>
@@ -707,7 +707,7 @@
                   </div>
                   <div class="settingsRow settingsRowInput">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.windowOpacity.label">Background opacity</div>
+                      <div class="settingsLabel" data-i18n="settings.windowOpacity.label" title="How see-through the meter's background is. Bars and text stay as they are." data-i18n-title="settings.tips.windowOpacity">Background opacity</div>
                     </div>
                     <div class="settingsRangeInline">
                       <input
@@ -725,7 +725,7 @@
                   </div>
                   <div class="settingsRow settingsRowInput">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.meterOpacity.label">Bar opacity</div>
+                      <div class="settingsLabel" data-i18n="settings.meterOpacity.label" title="How solid the coloured damage bars are." data-i18n-title="settings.tips.meterOpacity">Bar opacity</div>
                     </div>
                     <div class="settingsRangeInline">
                       <input
@@ -761,7 +761,7 @@
                   </div>
                   <div class="settingsRow settingsRowInput">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.bossNameSize.label">Title size</div>
+                      <div class="settingsLabel" data-i18n="settings.bossNameSize.label" title="Size of the boss or target name above the bars." data-i18n-title="settings.tips.bossNameSize">Title size</div>
                     </div>
                     <div class="settingsRangeInline">
                       <input
@@ -881,7 +881,7 @@
                 <div class="settingsGroupBody">
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.trainingMode.label">Details in Train mode</div>
+                      <div class="settingsLabel" data-i18n="settings.trainingMode.label" title="In Train mode, which dummies the Details window shows: all of them together, or only the one you hit hardest." data-i18n-title="settings.tips.trainingMode">Details in Train mode</div>
                     </div>
                     <div class="settingsDropdownWrapper trainSelectionModeDropdownWrapper">
                       <button class="settingsDropdownBtn trainSelectionModeDropdownBtn" type="button">
@@ -893,7 +893,7 @@
                   </div>
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.allTargetsWindow.label">All Targets time window</div>
+                      <div class="settingsLabel" data-i18n="settings.allTargetsWindow.label" title="In All Targets mode, the meter adds up every target hit within this time of the latest hit." data-i18n-title="settings.tips.allTargetsWindow">All Targets time window</div>
                     </div>
                     <div class="settingsDropdownWrapper allTargetsWindowDropdownWrapper">
                       <button class="settingsDropdownBtn allTargetsWindowDropdownBtn" type="button">
@@ -907,14 +907,14 @@
                 <h3 class="settingsSubTitle" data-i18n="settings.diagnostics">Diagnostics</h3>
                 <div class="settingsGroupBody">
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.debugLogging">Debug logging</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.debugLogging" title="Writes a diagnostic log the developer can use to track down problems." data-i18n-title="settings.tips.debugLogging">Debug logging</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="debugLoggingCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.saveRawPackets">Packet logging</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.saveRawPackets" title="Records raw game traffic for bug reports. Debug logging turns on with it." data-i18n-title="settings.tips.saveRawPackets">Packet logging</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="saveRawPacketsCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
