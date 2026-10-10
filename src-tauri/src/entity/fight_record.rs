@@ -79,31 +79,9 @@ pub struct FightSummary {
     /// for two Clerics where `jobs` has one.
     #[serde(default)]
     pub member_jobs: Vec<String>,
-    /// Whether it may be uploaded (FightRecord::is_uploadable), so History
-    /// offers the button only where an upload would be accepted.
-    #[serde(default = "uploadable_default")]
-    pub uploadable: bool,
 }
-
-fn uploadable_default() -> bool {
-    true
-}
-
-/// An open-world boss below this much HP is a quest boss: the NPC table marks
-/// them as bosses, but they die in seconds to one player, and a2tools.app
-/// does not take them as logs. Instances are not held to it: Nightmare's and
-/// the Ascension Trials' bosses can be smaller and are real fights.
-pub const OPEN_WORLD_MIN_HP: i64 = 10_000_000;
 
 impl FightRecord {
-    /// Whether this fight may be uploaded: not a training dummy, and not an
-    /// open-world quest boss (dungeon 0, max HP known and under
-    /// OPEN_WORLD_MIN_HP). A fight with no HP reading is let through.
-    pub fn is_uploadable(&self) -> bool {
-        let hp = self.details.max_hp as i64;
-        !self.is_train && !(self.dungeon_id == 0 && hp > 0 && hp < OPEN_WORLD_MIN_HP)
-    }
-
     /// Each player's class, one entry per player. With a party roster, only
     /// its members: a summon or aura that was never tied to its owner stays
     /// in `actors` with its owner's class and no roster identity. Without
@@ -149,22 +127,6 @@ pub fn obscure_nickname(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn open_world_quest_bosses_are_not_uploadable() {
-        let fight = |dungeon: i32, hp: i32, train: bool| {
-            let mut v = old_record();
-            v["dungeonId"] = dungeon.into();
-            v["details"]["maxHp"] = hp.into();
-            v["isTrain"] = train.into();
-            serde_json::from_value::<FightRecord>(v).unwrap()
-        };
-        assert!(!fight(0, 230_000, false).is_uploadable(), "an open-world quest boss");
-        assert!(fight(0, 20_100_000, false).is_uploadable(), "a field boss");
-        assert!(fight(0, 0, false).is_uploadable(), "no HP reading: let through");
-        assert!(fight(200003, 230_000, false).is_uploadable(), "a small boss in an instance (Nightmare)");
-        assert!(!fight(600072, 50_000_000, true).is_uploadable(), "a training dummy");
-    }
 
     fn old_record() -> serde_json::Value {
         serde_json::json!({

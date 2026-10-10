@@ -432,10 +432,8 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
     const actionsEl = document.createElement("div");
     actionsEl.className = "historyRowActions";
 
-    // Training dummies are not logs, nor are open-world quest bosses (under
-    // 10 million HP: FightRecord::is_uploadable), and a fight still in
-    // progress has no end.
-    if (!fight.isLive && !fight.isTrain && fight.uploadable !== false) {
+    // Training dummies are not logs, and a fight still in progress has no end.
+    if (!fight.isLive && !fight.isTrain) {
       const uploadBtn = document.createElement("button");
       uploadBtn.className = "historyPreviewBtn historyUploadBtn";
       uploadBtn.type = "button";

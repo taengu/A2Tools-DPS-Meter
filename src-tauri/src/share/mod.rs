@@ -696,7 +696,7 @@ const ENDED_AFTER_MS: i64 = 10_000;
 /// would publish a fight that has not happened yet.
 pub fn wants_auto_upload(app_data_dir: &Path, record: &FightRecord, now_ms: i64) -> bool {
     let meta = read_meta(app_data_dir, &record.id);
-    record.is_uploadable()
+    !record.is_train
         && now_ms - (record.start_time_ms + record.duration_ms) >= ENDED_AFTER_MS
         && slice_path(app_data_dir, &record.id).exists()
         && meta.url.is_none()
@@ -839,11 +839,6 @@ pub async fn upload_detailed(
     record: &FightRecord,
     settings: &crate::config::settings::Settings,
 ) -> Result<UploadResult, UploadFailure> {
-    if !record.is_uploadable() {
-        return Err(UploadFailure::fatal(
-            "Open-world bosses under 10 million HP are quest bosses and are not uploaded.",
-        ));
-    }
     let token = match crate::account::secret::load_stored(app_data_dir) {
         crate::account::secret::Stored::Token(token) => token,
         crate::account::secret::Stored::Locked => {
