@@ -255,7 +255,31 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
     const name = names[id];
     if (typeof name === "string" && name.trim()) return name;
     const skillName = track.skill ? i18n?.getSkillName?.(track.skill, "") : "";
-    return skillName || `#${id}`;
+    return skillName || familyName(track.skill) || `#${id}`;
+  };
+
+  // A skill code the table lacks (a summon's aura, 17150001) is one of a
+  // skill's codes: the table names its siblings (17150000 to 17150240 are
+  // all "Divine Aura"). The nearest code below it, then above, in the same
+  // first six digits; otherwise nothing.
+  const familyName = (skill) => {
+    const code = Number(skill);
+    if (!(code > 0)) return "";
+    const base = Math.floor(code / 100) * 100;
+    for (let d = 1; d < 100; d += 1) {
+      for (const c of [code - d, code + d]) {
+        if (c < base || c >= base + 100) continue;
+        const n = i18n?.getSkillName?.(c, "");
+        if (n) return n;
+      }
+    }
+    // Wider: the skill's first five digits (17150001 -> 1715000x..).
+    const wide = Math.floor(code / 1000) * 1000;
+    for (let c = wide; c < wide + 1000; c += 10) {
+      const n = i18n?.getSkillName?.(c, "");
+      if (n) return n;
+    }
+    return "";
   };
 
   const casterInfo = (id) => {
@@ -330,7 +354,9 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
       el = createIcon(icon, track.skill);
       iconEls.set(key, el);
     }
-    if (iconsUsed.has(key)) return el.cloneNode(true);
+    // A second row gets an icon of its own: a copy taken while the first
+    // was still loading kept its placeholder. The image is cached by then.
+    if (iconsUsed.has(key)) return createIcon(icon, track.skill);
     iconsUsed.add(key);
     return el;
   };

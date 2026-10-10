@@ -200,7 +200,14 @@
   // the skill that applied it, else a dot.
   const getAbnormalIconCandidates = (iconName, skillCode) => {
     const out = [];
-    if (typeof iconName === "string" && /^[A-Za-z0-9_]+$/.test(iconName)) out.push(`${BASE_URL}/${iconName}.png`);
+    if (typeof iconName === "string" && /^[A-Za-z0-9_]+$/.test(iconName)) {
+      out.push(`${BASE_URL}/${iconName}.png`);
+      // Some buff icons are named after the skill's with "_Buff" added and
+      // are not on the CDN (ICON_CL_SKILL_040_Buff, Earth's Blessing): the
+      // skill's own icon is the next best.
+      const plain = iconName.replace(/_(Buff|Debuff)$/i, "");
+      if (plain !== iconName) out.push(`${BASE_URL}/${plain}.png`);
+    }
     if (Number(skillCode) > 0) {
       for (const url of resolveIconCandidates({ code: skillCode })) {
         if (url !== WAND_ICON && url !== SWORDS_ICON && !out.includes(url)) out.push(url);
@@ -364,9 +371,16 @@
     }
     let candidates = [];
     try {
+      // The list is plain JSON. It holds data: URIs full of %-escapes, so
+      // decoding it before parsing broke it, and every icon whose first
+      // file failed fell straight to the wand (buffs' "_Buff" icons). An
+      // older encoded list is still read.
       const raw = imgEl.dataset.iconCandidates || "[]";
-      const decoded = raw.includes("%") ? decodeURIComponent(raw) : raw;
-      candidates = JSON.parse(decoded);
+      try {
+        candidates = JSON.parse(raw);
+      } catch (_) {
+        candidates = JSON.parse(decodeURIComponent(raw));
+      }
     } catch (_) {
       candidates = [];
     }
