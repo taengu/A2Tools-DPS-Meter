@@ -5257,6 +5257,11 @@ body.isHistoryWindow .historyPanel .historyHeader .closeX {
 }
 /* Dungeon tier, in History rows and the Details title: green Exploration,
    blue Normal, red Hard, violet Level n. */
+/* The dungeon beside the boss in the Details header. */
+.detailsPanel .detailsHeader .detailsFightTitle .fightTitleDungeon {
+  color: var(--hud-sub, rgba(255, 255, 255, 0.6));
+  font-variation-settings: "wght" 500, "wdth" 87.5;
+}
 .difficultyBadge {
   --tier: #8a94a6;
   display: inline-block;

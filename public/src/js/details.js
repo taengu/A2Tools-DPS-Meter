@@ -62,6 +62,7 @@ const createDetailsUI = ({
   let fightBossName = "";
   // The instance the fight was in (0 in the open world), for its difficulty.
   let fightDungeonId = 0;
+  let fightMobCode = 0;
   let lastUnfilteredDetails = null;
   const detailsCacheByRowId = new Map();
   const COMPACT_MAX_SKILLS = 5;
@@ -161,11 +162,23 @@ const createDetailsUI = ({
     if (!bossName) { detailsFightTitleEl.innerHTML = ""; return; }
     const fightVs = labelText("details.fightVs", "Fight vs");
     const suffix = dateStr ? ` - ${dateStr}` : "";
-    const tier = fightDungeonId > 0 ? window.i18n?.getDungeonDifficulty?.(fightDungeonId) : null;
+    // Where and how hard: "Krao Cave" with its tier, or for an instance the
+    // dungeon table does not name (Nightmare), the boss's category and its own
+    // level.
+    const i18n = window.i18n;
+    let place = fightDungeonId > 0 ? (i18n?.getDungeonName?.(fightDungeonId) || "") : "";
+    let tier = fightDungeonId > 0 ? i18n?.getDungeonDifficulty?.(fightDungeonId) : null;
+    if (fightMobCode > 0) {
+      if (!place) place = i18n?.getNpcCategory?.(fightMobCode) || "";
+      const level = i18n?.getNpcLevel?.(fightMobCode) || "";
+      if (level) tier = { key: "level", label: level };
+    }
+    const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const placeHtml = place ? ` <span class="fightTitleDungeon">${escape(place)}</span>` : "";
     const tierBadge = tier
-      ? ` <span class="difficultyBadge difficulty-${tier.key}">${tier.label}</span>`
+      ? ` <span class="difficultyBadge difficulty-${tier.key}">${escape(tier.label)}</span>`
       : "";
-    detailsFightTitleEl.innerHTML = `${fightVs} <span class="fightTitleBossName">${bossName}</span>${tierBadge}${suffix}`;
+    detailsFightTitleEl.innerHTML = `${fightVs} <span class="fightTitleBossName">${bossName}</span>${placeHtml}${tierBadge}${suffix}`;
   };
 
   const STATUS = [
@@ -2417,6 +2430,7 @@ const createDetailsUI = ({
       : 0;
     fightBossName = firstTarget ? getTargetLabel(firstTarget) : (row?.name ?? "");
     fightDungeonId = Number(getDungeonId?.()) || 0;
+    fightMobCode = Number(firstTarget?.mobCode) || 0;
     updateHeaderText();
     detailsPanel.classList.add("open");
     detailsPanel.style.removeProperty("width");
@@ -2480,6 +2494,7 @@ const createDetailsUI = ({
     fightStartMs = 0;
     fightBossName = "";
     fightDungeonId = 0;
+    fightMobCode = 0;
     window._resumeFpsMonitor?.();
   };
   detailsClose?.addEventListener("click", close);
@@ -2543,6 +2558,7 @@ const createDetailsUI = ({
     fightStartMs = Number(record.startTimeMs) || 0;
     fightBossName = record.bossName || (Number(record.targetId) > 0 ? `Mob #${record.targetId}` : "");
     fightDungeonId = Number(record.dungeonId) || 0;
+    fightMobCode = Number(record.mobCode) || 0;
     updateHeaderText();
     detailsPanel.classList.add("open");
     detailsPanel.style.removeProperty("width");

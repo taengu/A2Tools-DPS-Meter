@@ -330,6 +330,19 @@ const createI18n = ({
 
   // "Ferocious Horn Den (Hard)" for the instance the party roster reports, or
   // the name alone where the tier is not known.
+  // The dungeon's name alone, or "" when the table has no entry for the id.
+  const getDungeonName = (dungeonId) => {
+    const entry = dungeonStrings?.[String(Number(dungeonId) || 0)];
+    return entry?.name ? String(entry.name) : "";
+  };
+
+  // The category the NPC table gives a boss ("Nightmare"), for instances the
+  // dungeon table does not name.
+  const getNpcCategory = (id) => {
+    const npc = npcStrings?.[String(id)];
+    return npc && typeof npc === "object" && npc.category ? String(npc.category) : "";
+  };
+
   const getDungeonLabel = (dungeonId) => {
     const entry = dungeonStrings?.[String(dungeonId)];
     if (!entry || !entry.name) return "";
@@ -347,6 +360,8 @@ const createI18n = ({
     getNpcLevel,
     loadAbnormalNames,
     getDungeonLabel,
+    getDungeonName,
+    getNpcCategory,
     getDungeonDifficulty,
     getLanguage: () => currentLanguage,
     onChange,

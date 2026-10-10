@@ -28,8 +28,13 @@ blinding in `src-tauri/src/capture/evidence_slice.rs`. If you change what goes i
 tell us first.
 
 Since A2Tools 2.0.56 the allowlist also keeps the buff and debuff records (`2A 38`, `2B 38`,
-`2C 38`) for a log's Buffs timeline. They are optional: a slice without them is accepted and
-derived exactly as before, and its log says it has no buff data. Add them when you are ready.
+`2C 38`) for a log's Buffs timeline. **Please include them.** Keep every one in the fight's
+window, the same as damage records: the site builds each player's buff and debuff uptime from
+them, and a log without them shows no Buffs timeline at all. They carry entity, effect and skill
+ids, timings and a position, never a name, so they need no blinding.
+
+A slice without them is still accepted and derived exactly as before (its log says it has no
+buff data), so a meter that cannot add them yet keeps uploading.
 
 Every slice is checked, whichever meter cut it:
 
