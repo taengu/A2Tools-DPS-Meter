@@ -11,7 +11,8 @@
     "name": "Krao Cave"
   },
   "600004": {
-    "name": "Krao Cave"
+    "name": "Krao Cave",
+    "difficulty": "hard"
   },
   "600011": {
     "name": "Urugugu Canyon"
@@ -36,6 +37,10 @@
   },
   "600024": {
     "name": "Fire Temple"
+  },
+  "600025": {
+    "name": "Fire Temple",
+    "difficulty": "normal"
   },
   "600031": {
     "name": "Draupnir"
@@ -119,7 +124,8 @@
     "name": "Vakron Sky Island"
   },
   "600074": {
-    "name": "Vakron Sky Island"
+    "name": "Vakron Sky Island",
+    "difficulty": "normal"
   },
   "600091": {
     "name": "Ferocious Horn Den",
@@ -191,6 +197,10 @@
   },
   "600163": {
     "name": "Consumed Deus Research Base",
+    "difficulty": "hard"
+  },
+  "610044": {
+    "name": "Dying Dramata's Nest",
     "difficulty": "hard"
   }
 }
