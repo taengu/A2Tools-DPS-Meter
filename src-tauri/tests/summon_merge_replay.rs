@@ -113,3 +113,35 @@ fn other_players_spirits_merge_into_their_owner() {
         assert!((saved - shown).abs() <= 0.01 * shown, "#{id}: history {saved}, meter {shown}");
     }
 }
+
+/// A Spiritmaster's spirits in an uploaded slice, as the log service derives
+/// it.
+///
+/// `A2_SM_SLICE`: the slice of a2tools.app log `8iW_nvXE9po3RIVGrWgrxA`
+/// (2026-10-10, Neglected Gadioton, Krao Cave). Five spirits spawned before
+/// the slice began, so nothing in it links them to their owner. Their damage
+/// carries the Spiritmaster's power scalars, and they cast 16xxxxxx skills,
+/// which files them as players. The saved record never merged a player, so
+/// each spirit kept a row of its own; the live meter merged them.
+#[test]
+fn spirits_spawned_before_the_slice_merge_into_their_owner() {
+    let Ok(path) = std::env::var("A2_SM_SLICE") else {
+        eprintln!("A2_SM_SLICE unset; skipping");
+        return;
+    };
+    let slice = std::fs::read(path).unwrap();
+    let fight = a2tools_dps_meter_lib::rederive::derive_fight(
+        &slice,
+        include_str!("../../src/data/i18n/npcs/en.json"),
+        include_str!("../../src/data/i18n/skills/en.json"),
+        include_str!("../../src/data/dot_skill_ids.json"),
+    )
+    .unwrap();
+    let r = &fight.record;
+    let ids: Vec<i32> = r.actors.iter().map(|a| a.actor_id).collect();
+    println!("rows: {ids:?}");
+    assert_eq!(ids, vec![1143, 6503, 8852, 8893, 9911], "one row per party member");
+    // Hidden or merged, the spirits' 151,801 must land on the Spiritmaster.
+    let sm: i64 = r.details.skills.iter().filter(|s| s.actor_id == 9911).map(|s| s.dmg as i64).sum();
+    assert!(sm >= 803_708 + 150_000, "Spiritmaster row holds {sm}");
+}

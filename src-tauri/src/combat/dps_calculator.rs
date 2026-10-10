@@ -1281,19 +1281,37 @@ impl DpsCalculator {
                 .filter(|id| known_players.contains(id))
                 .map(|id| *canonical.get(&resolve_nickname(id, &nickname_data, &summon_data)).unwrap_or(&id))
                 .collect();
+            // Distinct skills per row, for the rotation test below.
+            let mut skill_sets: HashMap<i32, HashSet<i32>> = HashMap::new();
+            for (&actor_id, actor_data) in &target_data.actors {
+                let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
+                if raw_uid <= 0 { continue; }
+                let uid = *canonical.get(&resolve_nickname(raw_uid, &nickname_data, &summon_data)).unwrap_or(&raw_uid);
+                skill_sets.entry(uid).or_default().extend(actor_data.skills.keys().map(|k| k.0));
+            }
+            let skills_of = |id: i32| skill_sets.get(&id).map_or(0, |s| s.len());
+            let local_ids = self.resolve_local_ids(&summon_data);
             let mut seen = HashSet::new();
             for (&actor_id, actor_data) in &target_data.actors {
                 let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
                 if raw_uid <= 0 { continue; }
                 if summon_data.contains_key(&raw_uid) || nickname_data.contains_key(&raw_uid) { continue; }
-                // Never merge known players — they have their own identity
-                if known_players.contains(&raw_uid) { continue; }
+                if local_ids.as_ref().is_some_and(|ids| ids.contains(&raw_uid)) { continue; }
+                // An actor that used a class's skills is filed as a player, and
+                // so is a summon casting its owner's class skills: a
+                // Spiritmaster's spirits use 16xxxxxx codes. Such an actor goes
+                // only by power scalar, and only to a player with three times
+                // its distinct skills, as in `get_dps`. Skipping them outright
+                // left five spirits of a Spiritmaster whose spawns were before
+                // the slice as rows of their own (2026-10-10, Krao Cave), while
+                // the live meter merged them.
+                let is_player = known_players.contains(&raw_uid);
                 if !seen.insert(raw_uid) { continue; }
                 // Use loose detection from any skill this actor used
                 let job = actor_data.skills.keys()
                     .find_map(|&(sc, _)| JobClass::convert_from_skill_loose(sc))
                     .map(|j| j.class_name().to_string());
-                if let Some(job) = &job {
+                if let Some(job) = job.as_ref().filter(|_| !is_player) {
                     let matching: Vec<i32> = actor_jobs.iter()
                         .filter(|(id, j)| **id != raw_uid && *j == job && nickname_data.contains_key(id))
                         .map(|(id, _)| *id)
@@ -1309,11 +1327,14 @@ impl DpsCalculator {
                 // another Elementalist's spirits as their own rows, or folded
                 // every spirit into one of the two (2026-10-03).
                 let Some(mine) = scalars.get(&raw_uid).filter(|s| !s.is_empty()) else { continue };
+                let my_skills = skills_of(raw_uid);
+                if is_player && my_skills == 0 { continue; }
                 let owners: Vec<i32> = player_ids.iter()
                     .copied()
                     .filter(|&id| {
                         id != raw_uid
                             && job.as_ref().is_none_or(|j| actor_jobs.get(&id) == Some(j))
+                            && (!is_player || skills_of(id) >= 3 * my_skills)
                             && scalars.get(&id).is_some_and(|s| !s.is_disjoint(mine))
                     })
                     .collect();
