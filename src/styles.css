@@ -6975,6 +6975,33 @@ html.a2-offline .historyUploadBtn {
   z-index: 30;
 }
 
+/* The timeline's text follows the Details font size, as the skill table
+   does: its labels match the skill names (0.875 x 0.84 of the font),
+   headings and the axis a step under. Everything below is in em of it. */
+.detailsPanel .fightTimeline {
+  font-size: calc(var(--details-font-size, 16px) * 0.74);
+}
+.detailsPanel .fightTimelineTitle { font-size: 1.1em; }
+.detailsPanel .fightTimelineBar .buffChip { font-size: 0.9em; }
+.detailsPanel .ftlGroupTitle { font-size: 0.92em; }
+.detailsPanel .ftlHealNote { font-size: 1em; }
+.detailsPanel .ftlGroupDps .dpsChartLegend .legendItem { font-size: 0.95em; }
+.detailsPanel .fightTimeline .buffGroupHeader { font-size: 1em; }
+.detailsPanel .fightTimeline .buffGroupCount { font-size: 0.9em; }
+.detailsPanel .fightTimeline .buffLabel { font-size: 1em; }
+.detailsPanel .fightTimeline .buffCaster,
+.detailsPanel .fightTimeline .buffTag { font-size: 0.85em; }
+.detailsPanel .fightTimeline .buffUptime { font-size: 0.95em; }
+.detailsPanel .fightTimeline .buffStacks { font-size: 0.8em; }
+.detailsPanel .fightTimeline .buffPassives { font-size: 0.9em; }
+.detailsPanel .fightTimeline .buffNote { font-size: 1em; max-width: none; }
+.detailsPanel .fightTimeline .buffRow { height: 1.85em; }
+.detailsPanel .fightTimeline .buffLane { height: 1.15em; }
+.detailsPanel .fightTimeline .buffIcon { width: 1.35em; height: 1.35em; }
+.detailsPanel .fightTimelineAxis { height: 1.9em; }
+.detailsPanel .fightTimelineAxisLane { font-size: 0.9em; }
+.detailsPanel .fightTimelineAxisTag { font-size: 0.9em; }
+
 /* Narrow (a phone on the web, a small window): one column that scrolls,
    the party and stats on top as before, a narrower gutter. */
 @media (max-width: 999px) {

@@ -1294,7 +1294,15 @@ const createDetailsUI = ({
       const v = parseFloat(cs?.getPropertyValue?.(name));
       return Number.isFinite(v) ? v : fallback;
     };
-    return { gutter: num("--ftl-gutter", 300), right: num("--ftl-right", 52), chartHeight: num("--ftl-chart-h", 150) };
+    // The timeline's text follows the Details font size (styles.css): the
+    // canvases draw theirs at the same size, and grow their rows with it.
+    const text = parseFloat(cs?.fontSize) || 12;
+    return {
+      gutter: num("--ftl-gutter", 300),
+      right: num("--ftl-right", 52),
+      chartHeight: Math.max(num("--ftl-chart-h", 150), Math.round(text * 12)),
+      text,
+    };
   };
   // One grid step for the chart, the casts and the axis, so their lines meet.
   const ftlStepSec = (durationSec) =>
@@ -1641,7 +1649,7 @@ const createDetailsUI = ({
       if (v >= 1_000) return (v / 1_000).toFixed(v >= 10_000 ? 0 : 1).replace(/\.0$/, "") + "K";
       return String(Math.round(v));
     };
-    ctx.font = "10px sans-serif";
+    ctx.font = `${Math.round(metrics.text * 0.85 * 10) / 10}px sans-serif`;
     ctx.textBaseline = "middle";
     // Left axis — DPS
     ctx.fillStyle = "rgba(255,255,255,0.5)";
@@ -1849,9 +1857,10 @@ const createDetailsUI = ({
     // Dimensions: the whole timeline width, the lane between the shared label
     // gutter and right margin; the skill's icon and name in the gutter.
     const metrics = ftlMetrics();
-    const ICON_SIZE = 20;
-    const LANE_HEIGHT = 28;
+    const ICON_SIZE = Math.max(20, Math.round(metrics.text * 1.55));
+    const LANE_HEIGHT = ICON_SIZE + 8;
     const LANE_PAD = 4;
+    const LABEL_ICON = Math.max(18, Math.round(metrics.text * 1.35));
     const LEFT_MARGIN = metrics.gutter;
     const RIGHT_MARGIN = metrics.right;
     const durationSec = battleTimeMs / 1000;
@@ -1902,24 +1911,24 @@ const createDetailsUI = ({
       // The lane's label in the gutter: its icon, then its name.
       const labelY = laneIdx * LANE_HEIGHT + LANE_HEIGHT / 2;
       if (entry && entry.ready && entry.img.complete && entry.img.naturalWidth > 0) {
-        ctx.drawImage(entry.img, 12, labelY - 9, 18, 18);
+        ctx.drawImage(entry.img, 12, labelY - LABEL_ICON / 2, LABEL_ICON, LABEL_ICON);
       } else {
         ctx.fillStyle = color;
         ctx.globalAlpha = 0.7;
-        ctx.fillRect(12, labelY - 9, 18, 18);
+        ctx.fillRect(12, labelY - LABEL_ICON / 2, LABEL_ICON, LABEL_ICON);
         ctx.globalAlpha = 1.0;
       }
-      ctx.font = "12.5px Bahnschrift, 'Segoe UI', sans-serif";
+      ctx.font = `${metrics.text}px Bahnschrift, 'Segoe UI', sans-serif`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillStyle = "rgba(255,255,255,0.86)";
-      const maxText = LEFT_MARGIN - 12 - 18 - 8 - 12;
+      const maxText = LEFT_MARGIN - 12 - LABEL_ICON - 8 - 12;
       let label = lane.name || `Skill ${lane.code}`;
       if (ctx.measureText(label).width > maxText) {
         while (label.length > 1 && ctx.measureText(label + "…").width > maxText) label = label.slice(0, -1);
         label += "…";
       }
-      ctx.fillText(label, 12 + 18 + 8, labelY);
+      ctx.fillText(label, 12 + LABEL_ICON + 8, labelY);
 
       lane.timestamps.forEach((ts) => {
         const x = LEFT_MARGIN + (ts / battleTimeMs) * laneWidth;
