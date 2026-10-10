@@ -554,7 +554,12 @@ class DpsApp {
     });
     // Settings, Details and History run this same bundle; only the overlay
     // checks, or every Settings open would ask again.
-    if (window.A2_VIEW === "main") window.ReleaseChecker?.start?.();
+    // Not in the private build, which checks for nothing (build_features).
+    if (window.A2_VIEW === "main") {
+      Promise.resolve(window.a2BuildReady).then((build) => {
+        if (build?.online !== false) window.ReleaseChecker?.start?.();
+      });
+    }
     this.setupConsoleDebugging();
     this.bindNativeHotkeyBridge();
 
@@ -2726,6 +2731,7 @@ class DpsApp {
         const group = document.querySelector(".discordActivityGroup");
         if (group && ok) group.style.display = "";
         if (window.A2_VIEW !== "main") return;
+        if (window.a2Build?.online === false) return;   // nothing to offer
         // At most one offer per launch: the account one waits for a launch
         // where the Discord one does not open.
         if (!(ok && this.maybeShowDiscordPromo())) this.maybeShowAccountPromo();
@@ -5918,6 +5924,7 @@ class DpsApp {
   async maybeShowAccountPromo() {
     const promo = document.querySelector("#accountPromo");
     if (!promo) return;
+    if ((await window.a2BuildReady)?.online === false) return;
     if (this.safeGetSetting(this.storageKeys.accountPromoShown) === "true") return;
     const current = this.safeGetSetting(this.storageKeys.autoUpload);
     if (current === "true" || current === "false") return;

@@ -433,7 +433,8 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
     actionsEl.className = "historyRowActions";
 
     // Training dummies are not logs, and a fight still in progress has no end.
-    if (!fight.isLive && !fight.isTrain) {
+    // The private build uploads nothing (build_features); preview stays.
+    if (!fight.isLive && !fight.isTrain && window.a2Build?.online !== false) {
       const uploadBtn = document.createElement("button");
       uploadBtn.className = "historyPreviewBtn historyUploadBtn";
       uploadBtn.type = "button";

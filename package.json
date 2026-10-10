@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "build:offline": "tauri build -- --no-default-features --features desktop",
+    "dev:offline": "tauri dev -- --no-default-features --features desktop",
     "rename-msi": "node -e \"const fs=require('fs'),p=require('path'),d='src-tauri/target/release/bundle/msi';fs.readdirSync(d).filter(f=>f.endsWith('.msi')).forEach(f=>{const n=f.replace(/ /g,'-');if(n!==f){fs.renameSync(p.join(d,f),p.join(d,n));console.log(f+' -> '+n)}})\""
   },
   "dependencies": {

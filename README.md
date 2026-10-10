@@ -88,6 +88,31 @@ The MSI installer will be at `src-tauri/target/release/bundle/msi/`.
 npm run tauri dev
 ```
 
+### Building a private (offline) copy
+
+For anyone who wants a meter that talks to nothing but the game: build it yourself without its online features.
+
+```bash
+npm install
+npm run build:offline
+```
+
+That runs `tauri build -- --no-default-features --features desktop`, which leaves out the Cargo feature `online`. The code below is not switched off in this build, it is not in it: the network client (`reqwest`) and the Discord client are not linked at all, which `cargo tree --no-default-features --features desktop` shows.
+
+Left out:
+
+- the A2 Tools account, uploading logs to a2tools.app, and automatic uploads
+- the supporter roster download (gold names); a local `patrons-local.bin` still works
+- update checks and the updater
+- Send Logs to Dev
+- Discord activity ("what I'm playing")
+- the stream overlay for OBS (it serves the meter on your network)
+- downloading Npcap's installer: install [Npcap](https://npcap.com/#download) yourself first
+
+Settings and History hide what is not there. Everything else works the same, offline: capture, the meter, Details, History, buffs, screenshots, the upload preview (it writes what an upload would contain, to disk only).
+
+Two things still leave the computer, and only these: skill and buff icons, loaded from the game's own CDN (`assets.playnccdn.com`; the window's content security policy allows nothing else), and links you click yourself (Discord, Support), which open in your browser. `npm install` and the Rust build fetch their packages as usual. Run it without building with `npm run dev:offline`.
+
 ## FAQ
 
 **Q: The meter shows "Detecting AION2 connection..."**
