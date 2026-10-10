@@ -223,7 +223,7 @@
     "saveRawPackets": "패킷 로깅 활성화",
     "resetAllSettings": "모든 설정 초기화",
     "bold": {
-      "label": "굵게",
+      "label": "굵은 글씨",
       "names": "이름",
       "dps": "DPS"
     },
@@ -266,7 +266,7 @@
     },
     "version": "버전",
     "theme": {
-      "label": "테마",
+      "label": "색상 테마",
       "options": {
         "aion2": "AION2",
         "asmodian": "아스모디안",
@@ -284,13 +284,13 @@
       "label": "언어"
     },
     "windowOpacity": {
-      "label": "메인 창 불투명도"
+      "label": "배경 불투명도"
     },
     "meterOpacity": {
-      "label": "미터 바 불투명도"
+      "label": "막대 불투명도"
     },
     "bossNameSize": {
-      "label": "대상 이름 크기"
+      "label": "제목 크기"
     },
     "targetWindow": {
       "label": "대상 시간 범위",
@@ -366,7 +366,7 @@
       "failed": "보내지 못했습니다: {error}"
     },
     "barGap": {
-      "label": "플레이어 막대 간격"
+      "label": "막대 간격"
     },
     "debugLoggingLocked": "패킷 로깅이 켜져 있는 동안 켜져 있습니다. 패킷 로그를 분석하려면 디버그 로그가 필요합니다."
   },

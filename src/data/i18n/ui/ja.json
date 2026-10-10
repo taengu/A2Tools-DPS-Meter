@@ -261,7 +261,7 @@
     },
     "version": "バージョン",
     "theme": {
-      "label": "テーマ",
+      "label": "カラーテーマ",
       "options": {
         "aion2": "AION2",
         "asmodian": "Asmodian",
@@ -279,13 +279,13 @@
       "label": "言語"
     },
     "windowOpacity": {
-      "label": "メインウィンドウの不透明度"
+      "label": "背景の不透明度"
     },
     "meterOpacity": {
-      "label": "メーターバーの不透明度"
+      "label": "バーの不透明度"
     },
     "bossNameSize": {
-      "label": "ターゲット名のサイズ"
+      "label": "タイトルの大きさ"
     },
     "targetWindow": {
       "label": "ターゲットの時間範囲",
@@ -359,7 +359,7 @@
       "failed": "送信できませんでした: {error}"
     },
     "barGap": {
-      "label": "プレイヤーバーの間隔"
+      "label": "バーの間隔"
     },
     "debugLoggingLocked": "パケットログがオンの間はオンのままです。パケットログの解析にはデバッグログが必要です。"
   },

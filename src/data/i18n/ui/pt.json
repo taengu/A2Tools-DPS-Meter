@@ -218,7 +218,7 @@
     "saveRawPackets": "Ativar registro de pacotes",
     "resetAllSettings": "Redefinir todas as configurações",
     "bold": {
-      "label": "Negrito",
+      "label": "Texto em negrito",
       "names": "Nomes",
       "dps": "DPS"
     },
@@ -261,7 +261,7 @@
     },
     "version": "Versão",
     "theme": {
-      "label": "Tema",
+      "label": "Tema de cores",
       "options": {
         "aion2": "AION2",
         "asmodian": "Asmodian",
@@ -279,13 +279,13 @@
       "label": "Idioma"
     },
     "windowOpacity": {
-      "label": "Opacidade da janela principal"
+      "label": "Opacidade do fundo"
     },
     "meterOpacity": {
       "label": "Opacidade das barras"
     },
     "bossNameSize": {
-      "label": "Tamanho do nome do alvo"
+      "label": "Tamanho do título"
     },
     "targetWindow": {
       "label": "Intervalo de tempo do alvo",
@@ -359,7 +359,7 @@
       "failed": "Não foi possível enviar: {error}"
     },
     "barGap": {
-      "label": "Espaçamento entre barras de jogadores"
+      "label": "Espaçamento das barras"
     },
     "debugLoggingLocked": "Ativo enquanto o registro de pacotes estiver ativo: os registros de pacotes precisam do registro de depuração."
   },

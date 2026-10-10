@@ -218,7 +218,7 @@
     "saveRawPackets": "Activer la journalisation des paquets",
     "resetAllSettings": "Réinitialiser tous les paramètres",
     "bold": {
-      "label": "Gras",
+      "label": "Texte en gras",
       "names": "Noms",
       "dps": "DPS"
     },
@@ -261,7 +261,7 @@
     },
     "version": "Version",
     "theme": {
-      "label": "Thème",
+      "label": "Thème de couleurs",
       "options": {
         "aion2": "AION2",
         "asmodian": "Asmodian",
@@ -279,13 +279,13 @@
       "label": "Langue"
     },
     "windowOpacity": {
-      "label": "Opacité de la fenêtre principale"
+      "label": "Opacité du fond"
     },
     "meterOpacity": {
       "label": "Opacité des barres"
     },
     "bossNameSize": {
-      "label": "Taille du nom de la cible"
+      "label": "Taille du titre"
     },
     "targetWindow": {
       "label": "Plage de temps de la cible",
@@ -359,7 +359,7 @@
       "failed": "Envoi impossible : {error}"
     },
     "barGap": {
-      "label": "Espacement entre les barres des joueurs"
+      "label": "Espacement des barres"
     },
     "debugLoggingLocked": "Activé tant que la journalisation des paquets l'est : les journaux de paquets ont besoin du journal de débogage."
   },

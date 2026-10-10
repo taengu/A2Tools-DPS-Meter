@@ -223,7 +223,7 @@
     "saveRawPackets": "啟用封包日誌",
     "resetAllSettings": "重置所有設定",
     "bold": {
-      "label": "加粗",
+      "label": "粗體文字",
       "names": "名稱",
       "dps": "DPS"
     },
@@ -266,7 +266,7 @@
     },
     "version": "版本",
     "theme": {
-      "label": "主題",
+      "label": "配色主題",
       "options": {
         "aion2": "AION2",
         "asmodian": "魔族",
@@ -284,13 +284,13 @@
       "label": "語言"
     },
     "windowOpacity": {
-      "label": "主視窗不透明度"
+      "label": "背景不透明度"
     },
     "meterOpacity": {
-      "label": "計量條不透明度"
+      "label": "條形不透明度"
     },
     "bossNameSize": {
-      "label": "目標名稱大小"
+      "label": "標題大小"
     },
     "targetWindow": {
       "label": "目標時間範圍",
@@ -366,7 +366,7 @@
       "failed": "無法傳送：{error}"
     },
     "barGap": {
-      "label": "玩家條間距"
+      "label": "條形間距"
     },
     "debugLoggingLocked": "開啟封包記錄時保持開啟：分析封包記錄需要除錯記錄。"
   },

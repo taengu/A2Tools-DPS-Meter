@@ -218,7 +218,7 @@
     "saveRawPackets": "Paket-Logging aktivieren",
     "resetAllSettings": "Alle Einstellungen zurücksetzen",
     "bold": {
-      "label": "Fett",
+      "label": "Fettschrift",
       "names": "Namen",
       "dps": "DPS"
     },
@@ -261,7 +261,7 @@
     },
     "version": "Version",
     "theme": {
-      "label": "Design",
+      "label": "Farbschema",
       "options": {
         "aion2": "AION2",
         "asmodian": "Asmodian",
@@ -279,13 +279,13 @@
       "label": "Sprache"
     },
     "windowOpacity": {
-      "label": "Deckkraft des Hauptfensters"
+      "label": "Hintergrund-Deckkraft"
     },
     "meterOpacity": {
-      "label": "Deckkraft der Meter-Balken"
+      "label": "Balken-Deckkraft"
     },
     "bossNameSize": {
-      "label": "Größe des Zielnamens"
+      "label": "Titelgröße"
     },
     "targetWindow": {
       "label": "Ziel-Zeitfenster",
@@ -359,7 +359,7 @@
       "failed": "Senden fehlgeschlagen: {error}"
     },
     "barGap": {
-      "label": "Abstand zwischen Spielerbalken"
+      "label": "Balkenabstand"
     },
     "debugLoggingLocked": "An, solange die Paketprotokollierung an ist: Paketprotokolle brauchen das Debug-Protokoll zur Auswertung."
   },

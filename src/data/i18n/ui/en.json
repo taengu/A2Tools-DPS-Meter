@@ -228,7 +228,7 @@
     "saveRawPackets": "Enable packet logging",
     "resetAllSettings": "Reset all settings",
     "bold": {
-      "label": "Bold",
+      "label": "Bold text",
       "names": "Names",
       "dps": "DPS"
     },
@@ -271,7 +271,7 @@
     },
     "version": "Version",
     "theme": {
-      "label": "Theme",
+      "label": "Colour theme",
       "options": {
         "aion2": "AION2",
         "asmodian": "Asmodian",
@@ -289,13 +289,13 @@
       "label": "Language"
     },
     "windowOpacity": {
-      "label": "Main window opacity"
+      "label": "Background opacity"
     },
     "meterOpacity": {
-      "label": "Meter bar opacity"
+      "label": "Bar opacity"
     },
     "bossNameSize": {
-      "label": "Target name size"
+      "label": "Title size"
     },
     "targetWindow": {
       "label": "Target time range",
@@ -371,7 +371,7 @@
       "failed": "Could not send: {error}"
     },
     "barGap": {
-      "label": "Spacing between player bars"
+      "label": "Bar spacing"
     },
     "debugLoggingLocked": "On while packet logging is on: packet logs need the debug log to be read."
   },
