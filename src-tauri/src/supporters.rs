@@ -19,11 +19,17 @@
 //! opted into being visibly gold in the first place; this only keeps the roster
 //! from doubling as a donor list.
 //!
-//! ## Format (`patrons-v1.bin`)
+//! ## Format (`patrons-v1.bin`, `patrons-v2.bin`)
 //!
 //! ```text
 //! "A2PR" | u16 version | u8 key_kind | u8 salt_len | salt | u32 count | [u64 key]*
 //! ```
+//!
+//! Both files have this layout (header version 1); they differ in key kind.
+//! `patrons-v1.bin` is name-keyed, for meters before 2.0.56, which reject any
+//! other kind. `patrons-v2.bin`, read from 2.0.56 on, is keyed on name and
+//! server (`KeyKind::NameServer`), built by a2tools.app from the characters
+//! each supporter's own uploads prove they play.
 //!
 //! Keys are sorted so lookup is a binary search, and truncated to 8 bytes — a
 //! collision needs 2^64, and the cost of one is that a stranger's name renders
@@ -57,6 +63,20 @@ pub enum KeyKind {
     /// only knowable from a packet capture — so this is for after characters can
     /// be verified.
     Dbid,
+    /// A character's name on its home server: a name is unique on a server, so
+    /// this is the one character the supporter showed is theirs (the site
+    /// knows it from their own uploads), not every namesake on every server.
+    ///
+    /// Key material: the normalised name's UTF-8 bytes, a `0x00`, then the
+    /// server id as a little-endian `u16` (`"misti" 00 18 05` for Misti on
+    /// 1304). A player whose server is not known does not match.
+    NameServer,
+}
+
+impl Default for KeyKind {
+    fn default() -> Self {
+        KeyKind::Name
+    }
 }
 
 impl KeyKind {
@@ -64,6 +84,7 @@ impl KeyKind {
         match b {
             0 => Some(KeyKind::Name),
             1 => Some(KeyKind::Dbid),
+            2 => Some(KeyKind::NameServer),
             _ => None,
         }
     }
@@ -72,6 +93,7 @@ impl KeyKind {
         match self {
             KeyKind::Name => 0,
             KeyKind::Dbid => 1,
+            KeyKind::NameServer => 2,
         }
     }
 }
@@ -79,7 +101,7 @@ impl KeyKind {
 /// A parsed roster, ready to answer "is this one of them?".
 #[derive(Debug, Clone, Default)]
 pub struct Roster {
-    kind_is_dbid: bool,
+    kind: KeyKind,
     salt: Vec<u8>,
     keys: HashSet<u64>,
 }
@@ -93,6 +115,10 @@ impl Roster {
         self.keys.len()
     }
 
+    pub fn kind(&self) -> KeyKind {
+        self.kind
+    }
+
     /// Normalise a character name the way the roster builder did.
     ///
     /// Lowercased and trimmed, nothing cleverer. Unicode case folding would be
@@ -101,6 +127,14 @@ impl Roster {
     /// the rule that is easy to reimplement correctly on the other side.
     fn normalise(name: &str) -> String {
         name.trim().to_lowercase()
+    }
+
+    /// A `KeyKind::NameServer` key's material: name, `0x00`, server (u16 LE).
+    fn name_server_material(name: &str, server_id: u16) -> Vec<u8> {
+        let mut material = Self::normalise(name).into_bytes();
+        material.push(0);
+        material.extend_from_slice(&server_id.to_le_bytes());
+        material
     }
 
     fn hash(&self, material: &[u8]) -> u64 {
@@ -113,23 +147,29 @@ impl Roster {
 
     /// Is this character a supporter?
     ///
-    /// `dbid` is used when the roster is keyed on it and we have one; otherwise
-    /// the name is. A name-keyed roster still works for players with no roster
-    /// entry, which is most of the people you will ever see.
-    pub fn contains(&self, name: &str, dbid: u64) -> bool {
+    /// What is used depends on what the roster is keyed on: the `dbid` (0 when
+    /// not known), the name, or the name with the server. For the server, a
+    /// known `dbid` is the authority (its top sixteen bits are the server);
+    /// otherwise `server_id`, the caller's best knowledge (0 when none, which
+    /// matches nothing). A name-keyed roster still works for players with no
+    /// roster entry, which is most of the people you will ever see.
+    pub fn contains(&self, name: &str, dbid: u64, server_id: u16) -> bool {
         if self.keys.is_empty() {
             return false;
         }
-        if self.kind_is_dbid {
-            if dbid == 0 {
-                return false;
+        match self.kind {
+            KeyKind::Dbid => dbid != 0 && self.keys.contains(&self.hash(&dbid.to_le_bytes())),
+            KeyKind::Name => {
+                !name.trim().is_empty()
+                    && self.keys.contains(&self.hash(Self::normalise(name).as_bytes()))
             }
-            return self.keys.contains(&self.hash(&dbid.to_le_bytes()));
+            KeyKind::NameServer => {
+                let server = if dbid != 0 { (dbid >> 48) as u16 } else { server_id };
+                server != 0
+                    && !name.trim().is_empty()
+                    && self.keys.contains(&self.hash(&Self::name_server_material(name, server)))
+            }
         }
-        if name.is_empty() {
-            return false;
-        }
-        self.keys.contains(&self.hash(Self::normalise(name).as_bytes()))
     }
 
     /// Parse a roster file. Returns `None` for anything that is not one, so a
@@ -166,7 +206,7 @@ impl Roster {
             keys.insert(u64::from_le_bytes(take(data, &mut o, 8)?.try_into().ok()?));
         }
         Some(Roster {
-            kind_is_dbid: kind == KeyKind::Dbid,
+            kind,
             salt,
             keys,
         })
@@ -185,6 +225,10 @@ impl Roster {
 /// name-keyed roster can only ever match the local player, whose name is stored
 /// intact. Each actor's `dbid` is kept for exactly this reason: a dbid-keyed
 /// roster resolves everyone, because a roster id survives being masked.
+///
+/// A name-and-server roster takes each actor's server from its `dbid`, else
+/// its own stated server, else the record's (the recording player's home
+/// server), as the live meter does.
 pub fn apply_to_record(record: &mut crate::entity::fight_record::FightRecord, roster: &Roster) {
     if roster.is_empty() {
         // Nothing published and no override: clear rather than leave a stale
@@ -194,25 +238,39 @@ pub fn apply_to_record(record: &mut crate::entity::fight_record::FightRecord, ro
         }
         return;
     }
+    let fallback_server = record.server_id;
     for actor in &mut record.actors {
-        actor.is_supporter = roster.contains(&actor.nickname, actor.dbid);
+        let server = if actor.server_id != 0 { actor.server_id } else { fallback_server };
+        actor.is_supporter = roster.contains(&actor.nickname, actor.dbid, server);
     }
 }
 
-/// Build a roster file. Used by whatever publishes `patrons-v1.bin`, and by the
+/// Build a roster file. Used by whatever publishes the roster, and by the
 /// tests that check the meter reads what the publisher wrote.
+///
+/// Entries are a name (`Name`), a decimal dbid (`Dbid`), or `server:name`
+/// (`NameServer`, e.g. `1304:Misti`); a `NameServer` entry without a valid
+/// server is left out.
 pub fn build(kind: KeyKind, salt: &[u8], entries: &[String]) -> Vec<u8> {
     let mut keys: Vec<u64> = entries
         .iter()
-        .map(|e| {
+        .filter_map(|e| {
             let material: Vec<u8> = match kind {
                 KeyKind::Name => Roster::normalise(e).into_bytes(),
                 KeyKind::Dbid => e.parse::<u64>().unwrap_or(0).to_le_bytes().to_vec(),
+                KeyKind::NameServer => {
+                    let (server, name) = e.split_once(':')?;
+                    let server = server.trim().parse::<u16>().ok().filter(|&s| s != 0)?;
+                    if name.trim().is_empty() {
+                        return None;
+                    }
+                    Roster::name_server_material(name, server)
+                }
             };
             let mut hasher = Sha256::new();
             hasher.update(salt);
             hasher.update(&material);
-            u64::from_le_bytes(hasher.finalize()[..8].try_into().unwrap_or_default())
+            Some(u64::from_le_bytes(hasher.finalize()[..8].try_into().unwrap_or_default()))
         })
         .collect();
     keys.sort_unstable();
@@ -242,34 +300,85 @@ mod tests {
         let names = vec!["Misti".to_string(), "Grandine".to_string()];
         let roster = Roster::parse(&build(KeyKind::Name, SALT, &names)).expect("parses");
         assert_eq!(roster.len(), 2);
-        assert!(roster.contains("Misti", 0));
-        assert!(roster.contains("Grandine", 0));
-        assert!(!roster.contains("SomeoneElse", 0));
+        assert!(roster.contains("Misti", 0, 0));
+        assert!(roster.contains("Grandine", 0, 0));
+        assert!(!roster.contains("SomeoneElse", 0, 0));
     }
 
     #[test]
     fn name_matching_ignores_case_and_padding() {
         let roster =
             Roster::parse(&build(KeyKind::Name, SALT, &["Misti".to_string()])).expect("parses");
-        assert!(roster.contains("misti", 0));
-        assert!(roster.contains("MISTI", 0));
-        assert!(roster.contains("  Misti  ", 0));
+        assert!(roster.contains("misti", 0, 0));
+        assert!(roster.contains("MISTI", 0, 0));
+        assert!(roster.contains("  Misti  ", 0, 0));
     }
 
     #[test]
     fn cjk_names_work() {
         let name = "九州依然在".to_string();
         let roster = Roster::parse(&build(KeyKind::Name, SALT, &[name.clone()])).expect("parses");
-        assert!(roster.contains(&name, 0));
+        assert!(roster.contains(&name, 0, 0));
     }
 
     #[test]
     fn a_dbid_roster_ignores_names() {
         let roster = Roster::parse(&build(KeyKind::Dbid, SALT, &["285134151408007616".to_string()]))
             .expect("parses");
-        assert!(roster.contains("anything", 285_134_151_408_007_616));
-        assert!(!roster.contains("Misti", 0), "a dbid roster must not match on name");
-        assert!(!roster.contains("", 1));
+        assert!(roster.contains("anything", 285_134_151_408_007_616, 0));
+        assert!(!roster.contains("Misti", 0, 0), "a dbid roster must not match on name");
+        assert!(!roster.contains("", 1, 0));
+    }
+
+    #[test]
+    fn a_name_server_roster_matches_only_that_server() {
+        let roster = Roster::parse(&build(KeyKind::NameServer, SALT, &["1304:Misti".into()]))
+            .expect("parses");
+        assert_eq!(roster.kind(), KeyKind::NameServer);
+        assert!(roster.contains("Misti", 0, 1304));
+        assert!(roster.contains("  misti ", 0, 1304), "normalised as names are");
+        assert!(!roster.contains("Misti", 0, 2304), "a namesake on another server");
+        assert!(!roster.contains("Misti", 0, 0), "an unknown server matches nothing");
+        // A dbid states the server, and wins over the caller's guess.
+        let on_1304 = (1304u64 << 48) | 0x1_b9c0;
+        assert!(roster.contains("Misti", on_1304, 2304));
+        assert!(!roster.contains("Misti", (2304u64 << 48) | 0x1_b9c0, 1304));
+    }
+
+    #[test]
+    fn the_name_server_key_is_the_published_encoding() {
+        // What a2tools.app builds: sha256(salt ‖ name ‖ 00 ‖ server u16 LE),
+        // first 8 bytes as a little-endian u64.
+        let mut h = Sha256::new();
+        h.update(SALT);
+        h.update(b"misti\x00\x18\x05");
+        let want = u64::from_le_bytes(h.finalize()[..8].try_into().unwrap());
+        let file = build(KeyKind::NameServer, SALT, &["1304:Misti".into()]);
+        let key = u64::from_le_bytes(file[file.len() - 8..].try_into().unwrap());
+        assert_eq!(key, want);
+    }
+
+    #[test]
+    fn a_name_server_entry_without_a_server_is_left_out() {
+        let file = build(KeyKind::NameServer, SALT, &["Misti".into(), "0:Misti".into(), "x:Misti".into()]);
+        assert!(Roster::parse(&file).expect("parses").is_empty());
+    }
+
+    #[test]
+    fn a_saved_fight_takes_each_actors_server_else_the_records() {
+        let roster = Roster::parse(&build(
+            KeyKind::NameServer,
+            SALT,
+            &["1304:Misti".into(), "2304:Grandine".into()],
+        ))
+        .expect("roster");
+        let mut record = record_with(vec![("Misti", 0), ("Grandine", 0), ("Grandine", 0)]);
+        record.server_id = 1304;
+        record.actors[2].server_id = 2304;
+        apply_to_record(&mut record, &roster);
+        assert!(record.actors[0].is_supporter, "the record's server");
+        assert!(!record.actors[1].is_supporter, "a namesake taken as on 1304");
+        assert!(record.actors[2].is_supporter, "the actor's own server");
     }
 
     #[test]
@@ -278,8 +387,8 @@ mod tests {
         let b = build(KeyKind::Name, b"salt-two", &["Misti".into()]);
         assert_ne!(a, b, "the same name under a different salt must hash differently");
         // Each still matches under its own salt, which travels with the file.
-        assert!(Roster::parse(&a).unwrap().contains("Misti", 0));
-        assert!(Roster::parse(&b).unwrap().contains("Misti", 0));
+        assert!(Roster::parse(&a).unwrap().contains("Misti", 0, 0));
+        assert!(Roster::parse(&b).unwrap().contains("Misti", 0, 0));
     }
 
     #[test]
@@ -395,10 +504,10 @@ mod tests {
     fn an_empty_roster_makes_nobody_gold() {
         let roster = Roster::parse(&build(KeyKind::Name, SALT, &[])).expect("parses");
         assert!(roster.is_empty());
-        assert!(!roster.contains("Misti", 1));
+        assert!(!roster.contains("Misti", 1, 0));
         // And so does the default, which is what the meter holds before the
         // first fetch and after a failed one.
-        assert!(!Roster::default().contains("Misti", 1));
+        assert!(!Roster::default().contains("Misti", 1, 0));
     }
 
     #[test]
@@ -411,6 +520,6 @@ mod tests {
             bytes.len()
         );
         let roster = Roster::parse(&bytes).expect("parses");
-        assert!(roster.contains("Player9999", 0));
+        assert!(roster.contains("Player9999", 0, 0));
     }
 }

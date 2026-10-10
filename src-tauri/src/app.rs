@@ -1056,7 +1056,10 @@ async fn fetch_url(state: tauri::State<'_, AppState>, url: String) -> Result<Str
 #[cfg(feature = "online")]
 /// Where the supporter roster lives. The same bucket the installer is served
 /// from, so it costs no new infrastructure and is already cached at the edge.
-const SUPPORTER_ROSTER_URL: &str = "https://cdn.a2tools.app/patrons-v1.bin";
+///
+/// v2 is keyed on name and server (`KeyKind::NameServer`), which meters before
+/// 2.0.56 reject; they keep reading the name-keyed `patrons-v1.bin`.
+const SUPPORTER_ROSTER_URL: &str = "https://cdn.a2tools.app/patrons-v2.bin";
 
 /// A roster placed here overrides the downloaded one.
 ///
@@ -1072,12 +1075,15 @@ const SUPPORTER_ROSTER_URL: &str = "https://cdn.a2tools.app/patrons-v1.bin";
 /// "why is this person gold" report.
 const SUPPORTER_ROSTER_OVERRIDE: &str = "patrons-local.bin";
 
-/// How often to look again. The override is polled quickly so dropping the file
-/// in shows up while you are still looking at the meter; the published roster
-/// changes rarely enough that six hours is generous.
+/// How often to look again. The override is a local file, read quickly so
+/// dropping it in shows up while you are still looking at the meter. The
+/// published roster is asked for every half hour, so a new supporter goes gold
+/// soon; the ETag makes an unchanged roster a bodiless 304. A failed fetch (a
+/// 404 before a roster is published, the CDN down) waits the same, never the
+/// override's 15 seconds: every meter retrying that fast would be a storm.
 const ROSTER_POLL_OVERRIDE: Duration = Duration::from_secs(15);
 #[cfg(feature = "online")]
-const ROSTER_POLL_PUBLISHED: Duration = Duration::from_secs(6 * 60 * 60);
+const ROSTER_POLL_PUBLISHED: Duration = Duration::from_secs(30 * 60);
 
 /// Read the local override, if one is there.
 fn load_supporter_override(app_data_dir: &std::path::Path) -> Option<crate::supporters::Roster> {
@@ -1107,28 +1113,54 @@ fn load_supporter_override(app_data_dir: &std::path::Path) -> Option<crate::supp
 }
 
 #[cfg(feature = "online")]
-/// Download and parse the supporter roster.
+/// What a roster fetch came back with.
+#[cfg(feature = "online")]
+enum RosterFetch {
+    /// A roster, and the ETag to ask with next time.
+    Fresh(crate::supporters::Roster, Option<String>),
+    /// 304: the one held is current.
+    Unchanged,
+    /// Anything else.
+    Failed,
+}
+
+#[cfg(feature = "online")]
+/// Download and parse the supporter roster, unless `etag` says it is unchanged.
 ///
-/// Every failure is `None` and nobody renders gold. That is deliberate: this is
-/// a cosmetic, and there is no version of "the CDN is down" that should produce
-/// a visible error, a retry storm, or a wrong answer.
-async fn fetch_supporter_roster(client: &reqwest::Client) -> Option<crate::supporters::Roster> {
-    let response = client
-        .get(SUPPORTER_ROSTER_URL)
-        .timeout(Duration::from_secs(30))
-        .send()
-        .await
-        .ok()?;
-    if !response.status().is_success() {
-        return None;
+/// Every failure is `Failed` and changes nothing on screen. That is
+/// deliberate: this is a cosmetic, and there is no version of "the CDN is
+/// down" that should produce a visible error, a retry storm, or a wrong answer.
+async fn fetch_supporter_roster(client: &reqwest::Client, etag: Option<&str>) -> RosterFetch {
+    let mut request = client.get(SUPPORTER_ROSTER_URL).timeout(Duration::from_secs(30));
+    if let Some(tag) = etag {
+        request = request.header(reqwest::header::IF_NONE_MATCH, tag);
     }
-    let bytes = response.bytes().await.ok()?;
+    let Ok(response) = request.send().await else {
+        return RosterFetch::Failed;
+    };
+    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+        return RosterFetch::Unchanged;
+    }
+    if !response.status().is_success() {
+        return RosterFetch::Failed;
+    }
+    let tag = response
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let Ok(bytes) = response.bytes().await else {
+        return RosterFetch::Failed;
+    };
     // A roster for ten thousand supporters is about 80 KB; anything far past
     // that is not one of ours.
     if bytes.len() > 8 * 1024 * 1024 {
-        return None;
+        return RosterFetch::Failed;
     }
-    crate::supporters::Roster::parse(&bytes)
+    match crate::supporters::Roster::parse(&bytes) {
+        Some(roster) => RosterFetch::Fresh(roster, tag),
+        None => RosterFetch::Failed,
+    }
 }
 
 // ── the private build ──────────────────────────────────────────────────────
@@ -2905,18 +2937,21 @@ pub fn run() {
             let handle_roster = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let mut had_override = false;
+                // The published roster: asked for when due, with the ETag of
+                // the one held. The loop itself turns every 15 s, for the
+                // override; the CDN is asked only on its own schedule.
+                #[cfg(feature = "online")]
+                let mut roster_etag: Option<String> = None;
+                #[cfg(feature = "online")]
+                let mut next_fetch = std::time::Instant::now();
                 loop {
-                    #[cfg(feature = "online")]
-                    let mut wait = ROSTER_POLL_PUBLISHED;
-                    #[cfg(not(feature = "online"))]
-                    let mut wait = ROSTER_POLL_OVERRIDE;
+                    let wait = ROSTER_POLL_OVERRIDE;
                     if let Some(state) = handle_roster.try_state::<AppState>() {
                         // The override wins when present, and is re-read every
                         // pass so editing it takes effect without a restart.
                         match load_supporter_override(&state.app_data_dir) {
                             Some(roster) => {
                                 had_override = true;
-                                wait = ROSTER_POLL_OVERRIDE;
                                 state.data_storage.set_supporters(roster);
                             }
                             None => {
@@ -2924,35 +2959,45 @@ pub fn run() {
                                 if had_override {
                                     tracing::info!("Supporter roster override removed");
                                     had_override = false;
+                                    // The override replaced the published one:
+                                    // fetch it again in full, now.
+                                    #[cfg(feature = "online")]
+                                    {
+                                        roster_etag = None;
+                                        next_fetch = std::time::Instant::now();
+                                    }
                                 }
                                 #[cfg(not(feature = "online"))]
                                 if just_lost_override {
                                     state.data_storage.set_supporters(Default::default());
                                 }
                                 #[cfg(feature = "online")]
-                                match fetch_supporter_roster(&state.http).await {
-                                    Some(roster) => {
-                                        tracing::info!(
-                                            "Supporter roster: {} entries",
-                                            roster.len()
-                                        );
-                                        state.data_storage.set_supporters(roster);
-                                    }
-                                    None => {
-                                        tracing::debug!("Supporter roster unavailable");
-                                        // Keep looking for the override often, so
-                                        // dropping the file in works on a machine
-                                        // that has never reached the CDN.
-                                        wait = ROSTER_POLL_OVERRIDE;
-                                        // Only wipe the roster if the override we
-                                        // were using has just gone away. Clearing
-                                        // on any failed fetch would mean one CDN
-                                        // hiccup removes every supporter's gold
-                                        // until the next successful poll.
-                                        if just_lost_override {
-                                            state
-                                                .data_storage
-                                                .set_supporters(Default::default());
+                                if std::time::Instant::now() >= next_fetch {
+                                    next_fetch = std::time::Instant::now() + ROSTER_POLL_PUBLISHED;
+                                    match fetch_supporter_roster(&state.http, roster_etag.as_deref()).await {
+                                        RosterFetch::Fresh(roster, tag) => {
+                                            tracing::info!(
+                                                "Supporter roster: {} entries ({:?}-keyed)",
+                                                roster.len(),
+                                                roster.kind()
+                                            );
+                                            roster_etag = tag;
+                                            state.data_storage.set_supporters(roster);
+                                        }
+                                        RosterFetch::Unchanged => {}
+                                        RosterFetch::Failed => {
+                                            tracing::debug!("Supporter roster unavailable");
+                                            // Only wipe the roster if the override
+                                            // we were using has just gone away.
+                                            // Clearing on any failed fetch would
+                                            // mean one CDN hiccup removes every
+                                            // supporter's gold until the next
+                                            // successful poll.
+                                            if just_lost_override {
+                                                state
+                                                    .data_storage
+                                                    .set_supporters(Default::default());
+                                            }
                                         }
                                     }
                                 }

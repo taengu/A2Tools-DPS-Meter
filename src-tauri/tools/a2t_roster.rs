@@ -3,7 +3,8 @@
 //! ```text
 //! a2t-roster names.txt -o patrons-v1.bin        one character name per line
 //! a2t-roster names.txt --dbid -o patrons-v1.bin ids instead of names
-//! a2t-roster --check patrons-v1.bin --find Misti
+//! a2t-roster chars.txt --server -o patrons-v2.bin   server:name per line
+//! a2t-roster --check patrons-v1.bin --find Misti [--on 1304]
 //! ```
 //!
 //! Until accounts exist this list is curated by hand from payment messages, so
@@ -54,7 +55,8 @@ fn main() -> ExitCode {
         };
         println!("{path}: {} entries, {} bytes", roster.len(), bytes.len());
         if let Some(name) = value_of("--find") {
-            let hit = roster.contains(&name, name.parse::<u64>().unwrap_or(0));
+            let server = value_of("--on").and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
+            let hit = roster.contains(&name, name.parse::<u64>().unwrap_or(0), server);
             println!("{name:?}: {}", if hit { "supporter" } else { "not found" });
             return if hit { ExitCode::SUCCESS } else { ExitCode::FAILURE };
         }
@@ -65,6 +67,8 @@ fn main() -> ExitCode {
     let out = value_of("-o").unwrap_or_else(|| "patrons-v1.bin".to_string());
     let kind = if args.iter().any(|a| a == "--dbid") {
         KeyKind::Dbid
+    } else if args.iter().any(|a| a == "--server") {
+        KeyKind::NameServer
     } else {
         KeyKind::Name
     };
@@ -119,7 +123,8 @@ a2t-roster — build the supporter roster the meter downloads
 
   a2t-roster names.txt [-o patrons-v1.bin]   one character name per line
   a2t-roster ids.txt --dbid [-o out.bin]     roster ids instead of names
-  a2t-roster --check <file> [--find NAME]    read a roster back
+  a2t-roster chars.txt --server [-o out.bin] server:name per line (1304:Misti)
+  a2t-roster --check <file> [--find NAME] [--on SERVER]   read a roster back
 
 Blank lines and lines starting with # are ignored, so the source list can carry
 notes about who each entry is without publishing them.";

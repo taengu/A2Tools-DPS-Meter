@@ -985,6 +985,11 @@ impl DataStorage {
         }
     }
 
+    /// `name`'s home server, if a self or loot record has stated it; else 0.
+    pub fn player_server(&self, name: &str) -> u16 {
+        self.inner.read().player_servers.get(name.trim()).copied().unwrap_or(0)
+    }
+
     /// Your home server, as your own self record states it; 0 for a record
     /// that states none (a tutorial character), which forgets the last one.
     pub fn note_self_server(&self, server_id: u16) {

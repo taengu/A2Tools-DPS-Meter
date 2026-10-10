@@ -547,13 +547,30 @@ impl DpsCalculator {
             return;
         }
         let party = self.data_storage.get_party_members();
+        let local_server = self.data_storage.fight_server_id();
         for row in dps_data.map.values_mut() {
             let name = row.nickname.trim();
             if name.is_empty() {
                 continue;
             }
             let dbid = party.get(name).map(|m| m.dbid).unwrap_or(0);
-            row.is_supporter = roster.contains(name, dbid);
+            let server = match self.data_storage.player_server(name) {
+                0 => local_server,
+                s => s,
+            };
+            row.is_supporter = roster.contains(name, dbid, server);
+        }
+    }
+
+    /// The server a name-and-server supporter roster checks `name` on, when no
+    /// dbid states it (a party member's does, and wins in `Roster::contains`):
+    /// the one a self, loot or summon record placed them on, else yours, since
+    /// the open world around you is your server's; 0 when nothing has said,
+    /// which matches nobody.
+    fn supporter_server(&self, name: &str) -> u16 {
+        match self.data_storage.player_server(name) {
+            0 => self.data_storage.fight_server_id(),
+            s => s,
         }
     }
 
@@ -998,8 +1015,11 @@ impl DpsCalculator {
                         hits_received: hits_recv,
                         dbid: roster.map(|m| m.dbid).unwrap_or(0),
                         server_id: roster.map(|m| m.server_id).unwrap_or(0),
-                        is_supporter: supporters
-                            .contains(nick, roster.map(|m| m.dbid).unwrap_or(0)),
+                        is_supporter: supporters.contains(
+                            nick,
+                            roster.map(|m| m.dbid).unwrap_or(0),
+                            self.supporter_server(nick),
+                        ),
                         level: roster.map(|m| m.level).unwrap_or(0),
                         gear_score: roster.map(|m| m.gear_score).unwrap_or(0),
                         combat_power: roster.map(|m| m.combat_power).unwrap_or(0),
@@ -1214,6 +1234,7 @@ impl DpsCalculator {
                     is_supporter: supporters.contains(
                         nick,
                         party_members.get(nick.as_str()).map(|m| m.dbid).unwrap_or(0),
+                        self.supporter_server(nick),
                     ),
                     // Same reason again: the live rows already show combat
                     // power from the roster; the saved record is where it
