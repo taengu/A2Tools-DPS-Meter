@@ -1270,6 +1270,21 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   cursor: pointer;
   transition: color 120ms ease, background 120ms ease;
 }
+.settingsPanel .settingsNavItem { gap: 9px; }
+/* Each section's Lucide icon, in the label's colour. */
+.settingsPanel .settingsNavItem svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+  opacity: 0.85;
+}
+.settingsPanel .settingsNavItem.isActive svg { opacity: 1; }
+.settingsPanel .settingsNavItem span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .settingsPanel .settingsNavItem:hover {
   color: rgba(255, 255, 255, 0.9);
   background: var(--hud-row-bg, rgba(255, 255, 255, 0.05));
@@ -7378,7 +7393,7 @@ html.settingsWindow .settingsPanel {
   border-radius: 0;
   background: #0a0e16;
   overflow: hidden;
-  --set-nav-w: 176px;
+  --set-nav-w: 204px;
 }
 html.settingsWindow .settingsPanel.isOpen { display: flex; }
 

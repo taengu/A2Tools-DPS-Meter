@@ -452,14 +452,14 @@
           </div>
           <div class="settingsBody">
             <nav class="settingsNav" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
-              <button class="settingsNavItem isActive" type="button" role="tab" id="settingsTab-connection" aria-controls="settingsSection-connection" aria-selected="true" tabindex="0" data-section="connection" data-i18n="settings.connection">Connection</button>
-              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-meter" aria-controls="settingsSection-meter" aria-selected="false" tabindex="-1" data-section="meter" data-i18n="settings.meterSettings">Meter Settings</button>
-              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-appearance" aria-controls="settingsSection-appearance" aria-selected="false" tabindex="-1" data-section="appearance" data-i18n="settings.appearance">Appearance</button>
-              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-account" aria-controls="settingsSection-account" aria-selected="false" tabindex="-1" data-section="account" data-i18n="settings.account.title">A2 Tools Account</button>
-              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-streaming" aria-controls="settingsSection-streaming" aria-selected="false" tabindex="-1" data-section="streaming" data-i18n="settings.streamOverlay.title">Streaming</button>
-              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-keybinds" aria-controls="settingsSection-keybinds" aria-selected="false" tabindex="-1" data-section="keybinds" data-i18n="settings.keybinds">Keybinds</button>
-              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-diagnostics" aria-controls="settingsSection-diagnostics" aria-selected="false" tabindex="-1" data-section="diagnostics" data-i18n="settings.diagnostics">Diagnostics</button>
-              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-advanced" aria-controls="settingsSection-advanced" aria-selected="false" tabindex="-1" data-section="advanced" data-i18n="settings.advanced">Advanced</button>
+              <button class="settingsNavItem isActive" type="button" role="tab" id="settingsTab-connection" aria-controls="settingsSection-connection" aria-selected="true" tabindex="0" data-section="connection"><i data-lucide="plug" aria-hidden="true"></i><span data-i18n="settings.connection">Connection</span></button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-account" aria-controls="settingsSection-account" aria-selected="false" tabindex="-1" data-section="account"><i data-lucide="circle-user" aria-hidden="true"></i><span data-i18n="settings.account.title">A2 Tools Account</span></button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-meter" aria-controls="settingsSection-meter" aria-selected="false" tabindex="-1" data-section="meter"><i data-lucide="gauge" aria-hidden="true"></i><span data-i18n="settings.meterSettings">Meter Settings</span></button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-appearance" aria-controls="settingsSection-appearance" aria-selected="false" tabindex="-1" data-section="appearance"><i data-lucide="palette" aria-hidden="true"></i><span data-i18n="settings.appearance">Appearance</span></button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-streaming" aria-controls="settingsSection-streaming" aria-selected="false" tabindex="-1" data-section="streaming"><i data-lucide="cast" aria-hidden="true"></i><span data-i18n="settings.streamOverlay.title">Streaming</span></button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-keybinds" aria-controls="settingsSection-keybinds" aria-selected="false" tabindex="-1" data-section="keybinds"><i data-lucide="keyboard" aria-hidden="true"></i><span data-i18n="settings.keybinds">Keybinds</span></button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-diagnostics" aria-controls="settingsSection-diagnostics" aria-selected="false" tabindex="-1" data-section="diagnostics"><i data-lucide="stethoscope" aria-hidden="true"></i><span data-i18n="settings.diagnostics">Diagnostics</span></button>
+              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-advanced" aria-controls="settingsSection-advanced" aria-selected="false" tabindex="-1" data-section="advanced"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span data-i18n="settings.advanced">Advanced</span></button>
             </nav>
             <div class="settingsPane">
               <section class="settingsSection isActive" id="settingsSection-connection" role="tabpanel" aria-labelledby="settingsTab-connection" data-section="connection">
@@ -527,6 +527,40 @@
                   </div>
                 </div>
               </section>
+              <section class="settingsSection" id="settingsSection-account" role="tabpanel" aria-labelledby="settingsTab-account" data-section="account" hidden>
+                <h2 class="settingsSectionTitle" data-i18n="settings.account.title">A2 Tools Account</h2>
+                <div class="settingsGroupBody">
+                  <div class="settingsRow accountRow">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel accountState" data-i18n="settings.account.signedOut">Not signed in</div>
+                      <div class="settingsHint accountHint" data-i18n="settings.account.hint">Sign in to sync characters and settings with a2tools.app.</div>
+                    </div>
+                    <div class="settingsRowEnd">
+                      <button class="settingsAction accountConnectBtn" type="button" data-i18n="settings.account.connect">Sign in</button>
+                      <button class="settingsAction settingsActionDanger accountSignOutBtn" type="button" style="display:none" data-i18n="settings.account.signOut">Sign out</button>
+                    </div>
+                  </div>
+                  <label class="settingsToggle discordActivityGroup" style="display:none" title="While AION2 is open, your Discord status shows your character's name, class, level and server, and the boss you are fighting. It goes through the Discord app on this computer; no account is needed." data-i18n-title="settings.discord.activityHint">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.discord.activity">Show what I'm playing in Discord</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="discordActivityCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle" title="When a boss fight ends it is uploaded to your account, with the visibility you chose on a2tools.app. Other players stay masked. Training dummies are never uploaded." data-i18n-title="settings.account.autoUploadHint">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.account.autoUpload">Upload boss fights automatically</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="autoUploadCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                </div>
+                <div class="accountCodeBox" style="display:none">
+                  <div class="accountCodeLabel" data-i18n="settings.account.codePrompt">Approve this code in your browser:</div>
+                  <div class="accountCode"></div>
+                  <div class="accountCodeHint" data-i18n="settings.account.codeHint">The page should have opened already. The code expires in 10 minutes.</div>
+                </div>
+              </section>
               <section class="settingsSection" id="settingsSection-meter" role="tabpanel" aria-labelledby="settingsTab-meter" data-section="meter" hidden>
                 <h2 class="settingsSectionTitle" data-i18n="settings.meterSettings">Meter Settings</h2>
                 <div class="settingsGroupBody">
@@ -568,41 +602,19 @@
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showPing">Show ping</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showPingCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill (TTK)</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showTtkCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show total DPS/DMG</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showTotalDpsCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show suspend button</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showSuspendBtnCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle lockSetting" style="display:none">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show lock button (click-through)</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showLockBtnCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
+                  <div class="settingsRow settingsRowSelect">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.detailsMonitor.label">Show Details on monitor</div>
+                      <div class="settingsHint detailsMonitorHint"></div>
+                    </div>
+                    <div class="settingsDropdownWrapper detailsMonitorDropdownWrapper">
+                      <button class="settingsDropdownBtn detailsMonitorDropdownBtn" type="button">
+                        <span class="settingsDropdownText">Off</span>
+                        <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
+                      </button>
+                      <div class="settingsDropdownMenu detailsMonitorDropdownMenu" role="menu"></div>
+                    </div>
+                  </div>
                 </div>
               </section>
               <section class="settingsSection" id="settingsSection-appearance" role="tabpanel" aria-labelledby="settingsTab-appearance" data-section="appearance" hidden>
@@ -642,19 +654,6 @@
                         <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
                       </button>
                       <div class="settingsDropdownMenu meterLayoutDropdownMenu" role="menu"></div>
-                    </div>
-                  </div>
-                  <div class="settingsRow settingsRowSelect">
-                    <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.detailsMonitor.label">Show Details on monitor</div>
-                      <div class="settingsHint detailsMonitorHint"></div>
-                    </div>
-                    <div class="settingsDropdownWrapper detailsMonitorDropdownWrapper">
-                      <button class="settingsDropdownBtn detailsMonitorDropdownBtn" type="button">
-                        <span class="settingsDropdownText">Off</span>
-                        <span class="settingsDropdownCaret" aria-hidden="true">▾</span>
-                      </button>
-                      <div class="settingsDropdownMenu detailsMonitorDropdownMenu" role="menu"></div>
                     </div>
                   </div>
                   <div class="settingsRow settingsRowInput">
@@ -750,32 +749,38 @@
                       </label>
                     </div>
                   </div>
-                </div>
-              </section>
-              <section class="settingsSection" id="settingsSection-account" role="tabpanel" aria-labelledby="settingsTab-account" data-section="account" hidden>
-                <h2 class="settingsSectionTitle" data-i18n="settings.account.title">A2 Tools Account</h2>
-                <div class="settingsGroupBody">
-                  <div class="settingsRow accountRow">
-                    <div class="settingsInfo">
-                      <div class="settingsLabel accountState" data-i18n="settings.account.signedOut">Not signed in</div>
-                      <div class="settingsHint accountHint" data-i18n="settings.account.hint">Sign in to sync characters and settings with a2tools.app.</div>
-                    </div>
-                    <div class="settingsRowEnd">
-                      <button class="settingsAction accountConnectBtn" type="button" data-i18n="settings.account.connect">Sign in</button>
-                      <button class="settingsAction settingsActionDanger accountSignOutBtn" type="button" style="display:none" data-i18n="settings.account.signOut">Sign out</button>
-                    </div>
-                  </div>
-                  <label class="settingsToggle discordActivityGroup" style="display:none" title="While AION2 is open, your Discord status shows your character's name, class, level and server, and the boss you are fighting. It goes through the Discord app on this computer; no account is needed." data-i18n-title="settings.discord.activityHint">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.discord.activity">Show what I'm playing in Discord</span>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showPing">Show ping</span>
                     <span class="settingsToggleControl">
-                      <input type="checkbox" class="discordActivityCheckbox" />
+                      <input type="checkbox" class="showPingCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
-                  <label class="settingsToggle" title="When a boss fight ends it is uploaded to your account, with the visibility you chose on a2tools.app. Other players stay masked. Training dummies are never uploaded." data-i18n-title="settings.account.autoUploadHint">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.account.autoUpload">Upload boss fights automatically</span>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill (TTK)</span>
                     <span class="settingsToggleControl">
-                      <input type="checkbox" class="autoUploadCheckbox" />
+                      <input type="checkbox" class="showTtkCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show total DPS/DMG</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showTotalDpsCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show suspend button</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showSuspendBtnCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle lockSetting" style="display:none">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show lock button (click-through)</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showLockBtnCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
@@ -786,11 +791,6 @@
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
-                </div>
-                <div class="accountCodeBox" style="display:none">
-                  <div class="accountCodeLabel" data-i18n="settings.account.codePrompt">Approve this code in your browser:</div>
-                  <div class="accountCode"></div>
-                  <div class="accountCodeHint" data-i18n="settings.account.codeHint">The page should have opened already. The code expires in 10 minutes.</div>
                 </div>
               </section>
               <section class="settingsSection" id="settingsSection-streaming" role="tabpanel" aria-labelledby="settingsTab-streaming" data-section="streaming" hidden>
