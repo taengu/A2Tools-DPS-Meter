@@ -1583,14 +1583,19 @@ impl DpsCalculator {
                     hit_timestamps: Vec::new(),
                     specs: Vec::new(),
                 });
-                entry.dmg = entry.dmg.saturating_add(hd.total_heal.min(i32::MAX as i64) as i32);
-                entry.time += hd.tick_count;
-                // The heals inside this fight's window, from its first hit, as
-                // damage's hit times are: HEAL's HPS chart and cast lanes.
+                // Only the heals inside this fight's window count: healing is
+                // kept for the whole session, so the totals used to include
+                // every heal since the last reset (777 ticks for both bosses of
+                // the 2026-10-02 capture). Their times, from the fight's first
+                // hit as damage's are, feed HEAL's HPS chart and cast lanes.
                 let (from, to) = (target_data.first_damage_time, target_data.last_damage_time);
-                entry.hit_timestamps.extend(
-                    hd.timestamps.iter().filter(|&&t| t >= from && t <= to).map(|&t| t - from),
-                );
+                let mut healed: i64 = 0;
+                for &(t, amount) in hd.ticks.iter().filter(|(t, _)| *t >= from && *t <= to) {
+                    healed += amount;
+                    entry.time += 1;
+                    entry.hit_timestamps.push(t - from);
+                }
+                entry.dmg = entry.dmg.saturating_add(healed.min(i32::MAX as i64) as i32);
             }
         }
 

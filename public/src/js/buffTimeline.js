@@ -354,12 +354,14 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
 
   // The bar's color says who cast it: the player themselves, a party
   // member (their class color), or anyone else (the boss, a stranger).
+  // Your own buffs too are in your class colour: a generic "self" blue made
+  // nearly every row of a player's own buffs the same blue.
   const barColor = (track) => {
     const by = Number(track.by);
-    if (data && by && by === Number(data.playerId) && Number(track.on) === by) return "var(--buff-self)";
     const caster = casterInfo(by);
     if (caster.isTarget) return "var(--buff-hostile)";
-    return caster.color || "var(--buff-other)";
+    if (caster.color) return caster.color;
+    return data && by && by === Number(data.playerId) ? "var(--buff-self)" : "var(--buff-other)";
   };
 
   const row = (track, rowIndex) => {

@@ -104,9 +104,11 @@ fn dungeon_of_map(roster_dungeon: i32, map: Option<i32>) -> i32 {
 pub struct HealSkillData {
     pub total_heal: i64,
     pub tick_count: i32,
-    /// When each tick landed (ms, the capture clock). A fight's details take
-    /// the ones inside its window, for HEAL's HPS chart and heal cast lanes.
-    pub timestamps: Vec<i64>,
+    /// Each tick: when it landed (ms, the capture clock) and how much it
+    /// healed. Healing is kept per healer for the whole session; a fight's
+    /// details count only the ticks inside its window (its totals, its HPS
+    /// chart and its heal cast lanes).
+    pub ticks: Vec<(i64, i64)>,
 }
 
 /// A hit the game reports with no damage, by its hit type (`EHitType`).
@@ -1176,7 +1178,7 @@ impl DataStorage {
                     .or_default();
                 e.total_heal += heal_amount as i64;
                 e.tick_count += 1;
-                e.timestamps.push(pdp.timestamp());
+                e.ticks.push((pdp.timestamp(), heal_amount as i64));
             }
             return;
         }
@@ -1692,7 +1694,7 @@ impl DataStorage {
             .or_default();
         e.total_heal += amount;
         e.tick_count += 1;
-        e.timestamps.push(timestamp);
+        e.ticks.push((timestamp, amount));
     }
 
     pub fn get_heal_snapshot(&self) -> HashMap<i32, HashMap<(i32, bool), HealSkillData>> {
@@ -2057,7 +2059,7 @@ fn forget_entity(inner: &mut Inner, id: i32) {
             let e = mine.entry(key).or_default();
             e.total_heal += h.total_heal;
             e.tick_count += h.tick_count;
-            e.timestamps.extend(h.timestamps);
+            e.ticks.extend(h.ticks);
         }
     }
     let held: Vec<(i32, i32)> = inner.held_dot_ticks.keys().filter(|k| k.1 == id).copied().collect();
