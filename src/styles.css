@@ -1322,6 +1322,11 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   overflow-y: auto;
   padding: 14px 18px 18px;
 }
+/* A thin scrollbar in the panel's own tones, not the system's white one. */
+.settingsPanel .settingsPane {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
 .settingsPanel .settingsSection {
   display: flex;
   flex-direction: column;
