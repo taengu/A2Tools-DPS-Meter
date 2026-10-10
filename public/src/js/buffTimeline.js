@@ -367,20 +367,18 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
     el.className = "buffRow";
     el.dataset.row = String(rowIndex);
 
+    // The name is in its bar's colour: who cast it (you, a party member in
+    // their class colour, or the boss). Their name is in the tooltip; beside
+    // the buff's own name it read as part of it.
+    const color = barColor(track);
     const label = document.createElement("div");
     label.className = "buffLabel";
     label.appendChild(iconFor(track));
     const name = document.createElement("span");
     name.className = "buffName";
     name.textContent = buffName(track);
+    name.style.color = color;
     label.appendChild(name);
-    const by = Number(track.by);
-    if (by && by !== Number(track.on)) {
-      const caster = document.createElement("span");
-      caster.className = "buffCaster";
-      caster.textContent = casterInfo(by).name;
-      label.appendChild(caster);
-    }
     if (track.summon) {
       const tag = document.createElement("span");
       tag.className = "buffTag";
@@ -393,7 +391,6 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
     lane.className = "buffLane";
     const bars = layoutBuffSegments(track._segments, data.durationMs);
     const maxStacks = Math.max(1, ...bars.map((b) => b.stacks));
-    const color = barColor(track);
     bars.forEach((bar, barIndex) => {
       const b = document.createElement("div");
       b.className = "buffBar";
