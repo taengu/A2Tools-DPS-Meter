@@ -1191,16 +1191,29 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   letter-spacing: 0.01em;
   color: var(--title);
 }
-.settingsPanel .settingsHeader .settingsVersionLink {
-  flex: 0 0 auto;
+/* The version closes the sections column: clicking it opens the release
+   notes (core.js). */
+/* The tab list is the nav's own children, for the layout. */
+.settingsPanel .settingsTabs { display: contents; }
+.settingsPanel .settingsNav .settingsVersionLink {
+  margin-top: auto;
+  align-self: flex-start;
+  padding: 8px 10px 2px;
   font-variant-numeric: tabular-nums;
-  font-variation-settings: "wght" 500, "wdth" 87.5;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--hud-faint);
+  font-variation-settings: "wght" 600, "wdth" 87.5;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.72);
 }
-.settingsPanel .settingsHeader .settingsVersionLink:hover {
-  color: var(--hud-sub);
+.settingsPanel .settingsNav .settingsVersionLink:hover {
+  color: #fff;
+}
+@media (max-width: 560px) {
+  .settingsPanel .settingsNav .settingsVersionLink {
+    margin: 0 0 0 auto;
+    align-self: center;
+    padding: 0 6px;
+  }
 }
 .settingsPanel .settingsHeader .closeX {
   flex: 0 0 auto;
