@@ -458,7 +458,6 @@
               <button class="settingsNavItem" type="button" role="tab" id="settingsTab-appearance" aria-controls="settingsSection-appearance" aria-selected="false" tabindex="-1" data-section="appearance"><i data-lucide="palette" aria-hidden="true"></i><span data-i18n="settings.appearance">Appearance</span></button>
               <button class="settingsNavItem" type="button" role="tab" id="settingsTab-streaming" aria-controls="settingsSection-streaming" aria-selected="false" tabindex="-1" data-section="streaming"><i data-lucide="cast" aria-hidden="true"></i><span data-i18n="settings.streamOverlay.title">Streaming</span></button>
               <button class="settingsNavItem" type="button" role="tab" id="settingsTab-keybinds" aria-controls="settingsSection-keybinds" aria-selected="false" tabindex="-1" data-section="keybinds"><i data-lucide="keyboard" aria-hidden="true"></i><span data-i18n="settings.keybinds">Keybinds</span></button>
-              <button class="settingsNavItem" type="button" role="tab" id="settingsTab-diagnostics" aria-controls="settingsSection-diagnostics" aria-selected="false" tabindex="-1" data-section="diagnostics"><i data-lucide="stethoscope" aria-hidden="true"></i><span data-i18n="settings.diagnostics">Diagnostics</span></button>
               <button class="settingsNavItem" type="button" role="tab" id="settingsTab-advanced" aria-controls="settingsSection-advanced" aria-selected="false" tabindex="-1" data-section="advanced"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span data-i18n="settings.advanced">Advanced</span></button>
             </nav>
             <div class="settingsPane">
@@ -622,6 +621,41 @@
                       <div class="settingsDropdownMenu detailsMonitorDropdownMenu" role="menu"></div>
                     </div>
                   </div>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showPing">Show ping</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showPingCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill (TTK)</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showTtkCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show total DPS/DMG</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showTotalDpsCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show suspend button</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showSuspendBtnCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle lockSetting" style="display:none">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show lock button (click-through)</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showLockBtnCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
                 </div>
               </section>
               <section class="settingsSection" id="settingsSection-appearance" role="tabpanel" aria-labelledby="settingsTab-appearance" data-section="appearance" hidden>
@@ -756,41 +790,6 @@
                       </label>
                     </div>
                   </div>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showPing">Show ping</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showPingCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill (TTK)</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showTtkCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show total DPS/DMG</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showTotalDpsCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show suspend button</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showSuspendBtnCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle lockSetting" style="display:none">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show lock button (click-through)</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showLockBtnCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
                 </div>
               </section>
               <section class="settingsSection" id="settingsSection-streaming" role="tabpanel" aria-labelledby="settingsTab-streaming" data-section="streaming" hidden>
@@ -869,33 +868,6 @@
                   </div>
                 </div>
               </section>
-              <section class="settingsSection" id="settingsSection-diagnostics" role="tabpanel" aria-labelledby="settingsTab-diagnostics" data-section="diagnostics" hidden>
-                <h2 class="settingsSectionTitle" data-i18n="settings.diagnostics">Diagnostics</h2>
-                <div class="settingsGroupBody">
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.debugLogging">Enable debug logging</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="debugLoggingCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.saveRawPackets">Enable packet logging</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="saveRawPacketsCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <div class="settingsRow sendLogsRow">
-                    <div class="settingsInfo">
-                      <div class="settingsHint sendLogsStatus" data-i18n="settings.sendLogs.hint">Sends your 3 newest packet logs to the developer, for a bug report.</div>
-                    </div>
-                    <div class="settingsRowEnd">
-                      <button class="settingsAction sendLogsBtn" type="button" data-i18n="settings.sendLogs.button">Send logs to dev</button>
-                    </div>
-                  </div>
-                </div>
-              </section>
               <section class="settingsSection" id="settingsSection-advanced" role="tabpanel" aria-labelledby="settingsTab-advanced" data-section="advanced" hidden>
                 <h2 class="settingsSectionTitle" data-i18n="settings.advanced">Advanced</h2>
                 <div class="settingsGroupBody">
@@ -955,6 +927,28 @@
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.debugLogging">Enable debug logging</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="debugLoggingCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.saveRawPackets">Enable packet logging</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="saveRawPacketsCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <div class="settingsRow sendLogsRow">
+                    <div class="settingsInfo">
+                      <div class="settingsHint sendLogsStatus" data-i18n="settings.sendLogs.hint">Sends your 3 newest packet logs to the developer, for a bug report.</div>
+                    </div>
+                    <div class="settingsRowEnd">
+                      <button class="settingsAction sendLogsBtn" type="button" data-i18n="settings.sendLogs.button">Send logs to dev</button>
+                    </div>
+                  </div>
                   <div class="settingsRow settingsRowAction">
                     <button
                       class="settingsAction settingsActionDanger resetAllSettingsBtn"
