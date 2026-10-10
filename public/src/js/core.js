@@ -143,6 +143,7 @@ class DpsApp {
 
     // 빈데이터 덮어쓰기 방지 스냅샷
     this.lastSnapshot = null;
+    this._barsTargetLabel = null;
     // reset 직후 서버가 구 데이터 계속 주는 현상 방지
     this.resetPending = false;
     this.refreshPending = false;
@@ -747,6 +748,7 @@ class DpsApp {
 
 
     this.lastSnapshot = null;
+    this._barsTargetLabel = null;
     this.lastJson = null;
     this.lastTargetMode = "";
     this.lastTargetName = "";
@@ -1181,6 +1183,7 @@ class DpsApp {
       if (rows.length === 0) {
         this.lastJson = raw;
         this.lastSnapshot = [];
+        this._barsTargetLabel = null;
         this._lastRenderedListSignature = "";
         this._lastRenderedRowsSummary = null;
         this.meterUI?.onResetMeterUi?.();
@@ -1286,7 +1289,20 @@ class DpsApp {
     }
     // render
     this.lastDungeonId = dungeonId;
-    const nextTargetLabel = this.getTargetLabel({ targetId, targetName, targetMode, dungeonId });
+    let nextTargetLabel = this.getTargetLabel({ targetId, targetName, targetMode, dungeonId });
+    // The title names the fight the bars below are from. After a zone change
+    // or leaving a dungeon the backend has no target, and the title fell back
+    // to the mode ("BOSS TARGETS") while the last fight's bars stayed up: keep
+    // that fight's title while its bars are shown and no new target has come.
+    const tracksOne = targetMode === "bossTargets" || targetMode === "lastHitByMe";
+    const noTarget = !(Number(targetId) > 0) && !String(targetName || "").trim();
+    if (!tracksOne) {
+      this._barsTargetLabel = null;
+    } else if (rowsToRender.length > 0 && !noTarget) {
+      this._barsTargetLabel = nextTargetLabel;
+    } else if (rowsToRender.length > 0 && noTarget && this._barsTargetLabel) {
+      nextTargetLabel = this._barsTargetLabel;
+    }
     if (this.elBossName) {
       if (this.elBossName.textContent !== nextTargetLabel) {
         this.elBossName.textContent = nextTargetLabel;
@@ -1607,6 +1623,7 @@ class DpsApp {
     this.resetPending = false;
     this.lastJson = null;
     this.lastSnapshot = null;
+    this._barsTargetLabel = null;
     this._lastRenderedListSignature = "";
     this._lastRenderedRowsSummary = null;
     this.setTargetSelection(this.targetSelection, { persist: false, syncBackend: true, reason });
@@ -4533,6 +4550,7 @@ class DpsApp {
     this.refreshPending = true;
     this.refreshPendingStartedAt = this.nowMs();
     this.lastSnapshot = null;
+    this._barsTargetLabel = null;
     this.lastJson = null;
     this.lastTargetMode = "";
     this.lastTargetName = "";
