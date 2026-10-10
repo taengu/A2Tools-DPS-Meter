@@ -73,6 +73,8 @@ class DpsApp {
       showTtk: "dpsMeter.showTtk",
       showTotalDps: "dpsMeter.showTotalDps",
       roundDps: "dpsMeter.roundDps",
+      autoDetectDevice: "dpsMeter.autoDetectDevice",
+      manualDevice: "dpsMeter.manualDevice",
       showDpsSuffix: "dpsMeter.showDpsSuffix",
       playerLimit: "dpsMeter.playerLimit",
       theme: "dpsMeter.theme",
@@ -227,6 +229,16 @@ class DpsApp {
       globalThis.uiDebug?.log?.("getSetting blocked", { key, error: String(e) });
     }
     return this.safeGetStorage(key);
+  }
+
+  /** Auto-detect of the capture device: on unless unticked in Settings. A
+   *  device saved by an older version, before the switch itself was saved,
+   *  also means it was off. */
+  readAutoDetectDevice() {
+    const saved = this.safeGetSetting("dpsMeter.autoDetectDevice");
+    if (saved === "false") return false;
+    if (saved === "true") return true;
+    return !this.safeGetSetting("dpsMeter.manualDevice");
   }
 
   safeSetSetting(key, value) {
@@ -2796,18 +2808,24 @@ class DpsApp {
       this.refreshConnectionInfo();
     });
 
-    // Device selection: auto-detect checkbox + manual device dropdown
-    this._autoDetectDevice = !this.safeGetSetting("dpsMeter.manualDevice");
+    // Device selection: auto-detect checkbox + manual device dropdown. Both
+    // are saved (#39): unticking Auto-detect, and the device picked, were held
+    // nowhere, so reopening Settings ticked it again and lost the choice.
+    this._autoDetectDevice = this.readAutoDetectDevice();
     if (this.autoDetectDeviceCheckbox) {
       this.autoDetectDeviceCheckbox.checked = this._autoDetectDevice;
       this._updateDeviceDropdownState();
       this.autoDetectDeviceCheckbox.addEventListener("change", () => {
         this._autoDetectDevice = this.autoDetectDeviceCheckbox.checked;
+        this.safeSetSetting("dpsMeter.autoDetectDevice", String(this._autoDetectDevice));
         this._updateDeviceDropdownState();
         if (this._autoDetectDevice) {
+          this.safeSetSetting("dpsMeter.manualDevice", "");
           window.javaBridge?.setManualDevice?.("");
           this.refreshConnectionInfo();
         } else {
+          const saved = this.safeGetSetting("dpsMeter.manualDevice");
+          if (saved) window.javaBridge?.setManualDevice?.(saved);
           this._loadDeviceDropdown();
         }
       });
@@ -4117,7 +4135,7 @@ class DpsApp {
     this.trainSelectionMode = this.settingsSelections.trainSelectionMode;
     this.detailsMonitor = this.getDetailsMonitorSetting();
 
-    this._autoDetectDevice = !this.safeGetSetting("dpsMeter.manualDevice");
+    this._autoDetectDevice = this.readAutoDetectDevice();
     if (this.autoDetectDeviceCheckbox) this.autoDetectDeviceCheckbox.checked = this._autoDetectDevice;
     this._updateDeviceDropdownState();
     this._loadDeviceDropdown();
@@ -4989,6 +5007,7 @@ class DpsApp {
       item.textContent = opt.label;
       if (opt.value === selected) item.classList.add("isActive");
       item.addEventListener("click", () => {
+        this.safeSetSetting("dpsMeter.manualDevice", opt.value);
         window.javaBridge?.setManualDevice?.(opt.value);
         this.deviceDropdownMenu.classList.remove("isOpen");
         const textEl = this.deviceDropdownBtn.querySelector(".settingsDropdownText");

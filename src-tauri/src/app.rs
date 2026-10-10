@@ -2374,6 +2374,14 @@ pub fn run() {
             if settings.get("dpsMeter.saveRawPackets").as_deref() == Some("true") {
                 logging::logger::set_packet_log_enabled(true, &app_data_dir);
             }
+            // A capture device the player picked by hand (Settings, Auto-detect
+            // off) is kept across restarts: it was held in memory only, so a
+            // VPN adapter chosen over auto-detection was lost (#39).
+            if settings.get("dpsMeter.autoDetectDevice").as_deref() == Some("false") {
+                if let Some(device) = settings.get("dpsMeter.manualDevice").filter(|d| !d.trim().is_empty()) {
+                    port_detector.set_preferred_device(Some(device));
+                }
+            }
 
             let state = AppState {
                 data_storage: data_storage.clone(),
