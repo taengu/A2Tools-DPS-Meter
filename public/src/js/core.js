@@ -1576,7 +1576,6 @@ class DpsApp {
 
   /** The skin's spacing between bars, for the slider before it is first moved. */
   defaultBarGap() {
-    if (document.body.classList.contains("legacyUi")) return 4;
     return this.slimMode ? 2 : 3;
   }
 
@@ -4416,13 +4415,11 @@ class DpsApp {
     this.setSlimMode(slim, { persist });
   }
 
-  // Beta UI is the redesigned main window and is the default. Switching it off
-  // adds body.legacyUi, which activates the pre-redesign skin in styles.css.
+  // The redesigned main window is the only skin since the Classic ones were
+  // retired; dpsMeter.betaUi stays "true" (a saved "false" is moved over at
+  // start, see the settings load).
   setBetaUi(enabled, { persist = false } = {}) {
-    this.betaUi = !!enabled;
-    document.body.classList.toggle("legacyUi", !this.betaUi);
-    // Both skins show the same placeholder text; only the type scale and the
-    // uppercase transform differ, so the fitted size has to be recomputed.
+    this.betaUi = true;
     this.fitBossName();
     this.syncSettingsDropdownSelection(this.meterLayoutDropdownBtn, this.meterLayoutDropdownMenu, this.getMeterLayout());
     if (window.A2_VIEW === "main") window.javaBridge?.updateOverlaySize?.();

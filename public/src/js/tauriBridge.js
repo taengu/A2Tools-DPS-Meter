@@ -971,11 +971,7 @@
   let nativeResize = null;
   let primaryHeld = false;
 
-  const overlayPadding = () => {
-    const ping = document.body.classList.contains("legacyUi")
-      ? document.querySelector(".pingDisplay") : null;
-    return { w: 16, h: 10 + (ping ? ping.offsetHeight + 8 : 0) };
-  };
+  const overlayPadding = () => ({ w: 16, h: 10 });
 
   const overlayMinimum = (meter) => {
     const height = meter.style.height;
@@ -1151,15 +1147,8 @@
     if (meter) {
       contentW = Math.ceil(meter.offsetWidth) + 16;
       const meterH = Math.max(meter.offsetHeight, meter.scrollHeight);
-      // In the beta UI the ping sits inside the footer row, so it is already
-      // part of offsetHeight. The legacy skin hangs it below the window, where
-      // it still needs its own allowance.
-      let pingH = 0;
-      if (document.body.classList.contains("legacyUi")) {
-        const ping = document.querySelector(".pingDisplay");
-        pingH = ping ? ping.offsetHeight + 8 : 0;
-      }
-      contentH = Math.ceil(meterH + pingH) + 10;
+      // The ping sits inside the footer row, so it is part of offsetHeight.
+      contentH = Math.ceil(meterH) + 10;
     }
 
     // The tooltip's extra room stops at the screen edge; the meter itself
