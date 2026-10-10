@@ -169,7 +169,9 @@
       "bossHp": "Boss HP",
       "ping": "Ping"
     },
-    "hpsChart": "Healing per second"
+    "hpsChart": "Healing per second",
+    "sectionChart": "Chart",
+    "showSections": "Show sections"
   },
   "history": {
     "title": "Battle History",

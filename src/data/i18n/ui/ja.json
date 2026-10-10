@@ -164,7 +164,9 @@
       "bossHp": "ボスHP",
       "ping": "Ping"
     },
-    "hpsChart": "秒間回復量"
+    "hpsChart": "秒間回復量",
+    "sectionChart": "グラフ",
+    "showSections": "表示する項目"
   },
   "history": {
     "title": "戦闘履歴",

@@ -6828,6 +6828,23 @@ html.a2-offline .historyUploadBtn {
 .detailsPanel .fightTimelineBar .buffToolbar {
   padding: 0;
 }
+/* The section chips sit at the bar's right; a hidden section's group goes,
+   and the buff filters with the buffs. */
+.detailsPanel .fightTimelineBar .ftlSectionToggles {
+  margin-left: auto;
+}
+.detailsPanel .fightTimeline.hide-dps .ftlGroupDps,
+.detailsPanel .fightTimeline.hide-buffs .ftlGroupBuffs,
+.detailsPanel .fightTimeline.hide-buffs .fightTimelineBar .buffToolbar,
+.detailsPanel .fightTimeline.hide-casts .ftlGroupCasts {
+  display: none;
+}
+/* HEAL without heal times has no chart or casts to show. */
+.detailsPanel .fightTimeline.isHealMode.noHealTiming [data-ftl-section="dps"],
+.detailsPanel .fightTimeline.isHealMode.noHealTiming [data-ftl-section="casts"] {
+  opacity: 0.35;
+  pointer-events: none;
+}
 .detailsPanel .fightTimelineScroll {
   position: relative;
   flex: 1 1 auto;

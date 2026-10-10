@@ -164,7 +164,9 @@
       "bossHp": "PV del jefe",
       "ping": "Ping"
     },
-    "hpsChart": "Curación por segundo"
+    "hpsChart": "Curación por segundo",
+    "sectionChart": "Gráfico",
+    "showSections": "Secciones visibles"
   },
   "history": {
     "title": "Historial de combates",

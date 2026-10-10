@@ -164,7 +164,9 @@
       "bossHp": "PV du boss",
       "ping": "Ping"
     },
-    "hpsChart": "Soins par seconde"
+    "hpsChart": "Soins par seconde",
+    "sectionChart": "Graphique",
+    "showSections": "Sections affichées"
   },
   "history": {
     "title": "Historique des combats",

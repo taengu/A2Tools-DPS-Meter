@@ -169,7 +169,9 @@
       "bossHp": "HP босса",
       "ping": "Пинг"
     },
-    "hpsChart": "Лечение в секунду"
+    "hpsChart": "Лечение в секунду",
+    "sectionChart": "График",
+    "showSections": "Показываемые разделы"
   },
   "history": {
     "title": "История боёв",

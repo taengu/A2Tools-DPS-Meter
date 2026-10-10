@@ -1420,6 +1420,40 @@ const createDetailsUI = ({
     try { localStorage.setItem(SPLIT_KEY, String(share)); } catch { /* not kept */ }
   });
 
+  // Which of the timeline's sections show (chart, buffs, casts): the chips at
+  // the bar's right; kept between openings.
+  const SECTIONS_KEY = "dpsMeter.timelineSections";
+  const FTL_SECTIONS = ["dps", "buffs", "casts"];
+  const ftlShown = { dps: true, buffs: true, casts: true };
+  try {
+    const saved = JSON.parse(localStorage.getItem(SECTIONS_KEY) || "null");
+    if (saved && typeof saved === "object") {
+      for (const k of FTL_SECTIONS) if (typeof saved[k] === "boolean") ftlShown[k] = saved[k];
+    }
+  } catch { /* all shown */ }
+  const sectionChips = fightTimeline?.querySelectorAll?.("[data-ftl-section]") ?? [];
+  const applyFtlSections = () => {
+    for (const k of FTL_SECTIONS) fightTimeline?.classList?.toggle?.(`hide-${k}`, !ftlShown[k]);
+    sectionChips.forEach((chip) => {
+      const on = !!ftlShown[chip.dataset.ftlSection];
+      chip.classList.toggle("isActive", on);
+      chip.setAttribute("aria-pressed", String(on));
+    });
+  };
+  applyFtlSections();
+  sectionChips.forEach((chip) => chip.addEventListener("click", () => {
+    const k = chip.dataset.ftlSection;
+    if (!FTL_SECTIONS.includes(k)) return;
+    ftlShown[k] = !ftlShown[k];
+    applyFtlSections();
+    try { localStorage.setItem(SECTIONS_KEY, JSON.stringify(ftlShown)); } catch { /* not kept */ }
+    // A canvas hidden has no width: draw it again when it shows.
+    if (ftlShown[k] && lastDetails) {
+      if (k === "dps") renderDpsChart(lastDetails);
+      if (k === "casts") renderTimeline(lastDetails);
+    }
+  }));
+
   // The canvases are drawn to their width: draw again when it changes.
   let ftlWidth = 0;
   if (typeof ResizeObserver === "function" && fightTimeline) {

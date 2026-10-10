@@ -164,7 +164,9 @@
       "bossHp": "보스 HP",
       "ping": "핑"
     },
-    "hpsChart": "초당 치유량"
+    "hpsChart": "초당 치유량",
+    "sectionChart": "차트",
+    "showSections": "표시할 영역"
   },
   "history": {
     "title": "전투 기록",

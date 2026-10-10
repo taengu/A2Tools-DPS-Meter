@@ -164,7 +164,9 @@
       "bossHp": "首领 HP",
       "ping": "延迟"
     },
-    "hpsChart": "每秒治疗"
+    "hpsChart": "每秒治疗",
+    "sectionChart": "图表",
+    "showSections": "显示的部分"
   },
   "history": {
     "title": "战斗历史",
