@@ -52,6 +52,8 @@ fn other_players_spirits_merge_into_their_owner() {
         Arc::new(PingTracker::new()),
     );
     calc.set_target_selection_mode("allTargets");
+    // The whole capture: All Targets keeps two minutes by default.
+    calc.set_all_targets_window_ms(900_000);
     let dps = calc.get_dps();
     let mut rows: Vec<_> = dps.map.iter().collect();
     rows.sort_by(|a, b| b.1.amount.total_cmp(&a.1.amount));
