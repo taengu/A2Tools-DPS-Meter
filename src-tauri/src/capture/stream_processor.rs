@@ -498,6 +498,7 @@ impl StreamProcessor {
                 skill_code,
                 amount_info.value as i64,
                 effect_type == 0x0B,
+                self.override_timestamp.unwrap_or_else(crate::clock::now_ms),
             );
             return;
         }
@@ -1736,8 +1737,13 @@ impl StreamProcessor {
                 // second_value, so `final_damage` is the correct heal amount. Recording
                 // it as healing makes the HEAL view capture instant self-heals, not just
                 // HoTs. (The cast-marker variant breaks out earlier on its and_result.)
-                self.data_storage
-                    .append_heal(actor_value, resolved_skill_code, final_damage as i64, false);
+                self.data_storage.append_heal(
+                    actor_value,
+                    resolved_skill_code,
+                    final_damage as i64,
+                    false,
+                    self.override_timestamp.unwrap_or_else(crate::clock::now_ms),
+                );
             }
 
             parsed_any = true;

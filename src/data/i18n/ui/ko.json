@@ -159,11 +159,12 @@
     "fightTimeline": "전투 타임라인",
     "casts": "시전",
     "resize": "드래그하여 크기 조절",
-    "healTimingNote": "치유 시점은 아직 기록되지 않아 차트와 시전은 DMG 모드에서만 표시됩니다.",
+    "healTimingNote": "이 전투에는 치유 시점 데이터가 없습니다(이전 버전으로 기록됨).",
     "chart": {
       "bossHp": "보스 HP",
       "ping": "핑"
-    }
+    },
+    "hpsChart": "초당 치유량"
   },
   "history": {
     "title": "전투 기록",

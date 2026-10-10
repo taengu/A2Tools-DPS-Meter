@@ -6924,7 +6924,8 @@ html.a2-offline .historyUploadBtn {
   transform: translateX(-100%);
 }
 
-/* HEAL: heals have no hit times yet, so only the buffs stay, with a note. */
+/* HEAL draws healing per second and the heal casts; a fight saved before
+   heals had times keeps only the buffs, with a note. */
 .detailsPanel .ftlHealNote {
   display: none;
   padding: 8px 12px;
@@ -6932,11 +6933,11 @@ html.a2-offline .historyUploadBtn {
   font-size: 12px;
   color: var(--hud-sub);
 }
-.detailsPanel .fightTimeline.isHealMode .ftlHealNote {
+.detailsPanel .fightTimeline.isHealMode.noHealTiming .ftlHealNote {
   display: block;
 }
-.detailsPanel .fightTimeline.isHealMode .ftlGroupDps,
-.detailsPanel .fightTimeline.isHealMode .ftlGroupCasts {
+.detailsPanel .fightTimeline.isHealMode.noHealTiming .ftlGroupDps,
+.detailsPanel .fightTimeline.isHealMode.noHealTiming .ftlGroupCasts {
   display: none;
 }
 .detailsPanel .ftlGroupDps .dpsChartLegend .legendItem span {

@@ -1509,7 +1509,14 @@ const createDetailsUI = ({
 
     // Use unfiltered skills for DPS lines + boss health; filtered details for ping + battleTime
     const unfilteredDetails = lastUnfilteredDetails || details;
-    const chartSkills = Array.isArray(unfilteredDetails?.skills) ? unfilteredDetails.skills : [];
+    // HEAL charts healing per second from the heals' own times, without the
+    // boss's HP; a fight saved before heals had times has none to draw.
+    const healMode = detailsMode === "heal";
+    const chartSource = healMode ? unfilteredDetails?.healSkills : unfilteredDetails?.skills;
+    const chartSkills = Array.isArray(chartSource) ? chartSource : [];
+    const noHealTiming = healMode
+      && !chartSkills.some((s) => Array.isArray(s?.hitTimestamps) && s.hitTimestamps.length > 0);
+    fightTimeline?.classList?.toggle?.("noHealTiming", noHealTiming);
     const battleTimeMs = Number(unfilteredDetails?.battleTimeMs) || Number(details?.battleTimeMs) || 0;
     if (battleTimeMs <= 0 || chartSkills.length === 0) {
       dpsChartCanvas.width = 0;
@@ -1672,7 +1679,7 @@ const createDetailsUI = ({
 
     // ── Boss cumulative damage (grey, dashed) ──
     const totalBossDmg = allHits.reduce((s, h) => s + h.dmg, 0) || 1;
-    if (allHits.length > 0) {
+    if (allHits.length > 0 && !healMode) {
       ctx.beginPath();
       ctx.strokeStyle = "rgba(220,60,60,0.85)";
       ctx.lineWidth = 1.5;
@@ -1765,7 +1772,9 @@ const createDetailsUI = ({
     if (allSamples.length > LEGEND_PLAYERS) {
       legendItems.push({ dash: "", color: "rgba(255,255,255,0.55)", label: `+${allSamples.length - LEGEND_PLAYERS}` });
     }
-    legendItems.push({ dash: "3,4", color: "rgba(220,60,60,0.9)", label: escapeHtml(labelText("details.chart.bossHp", "Boss HP")) });
+    if (!healMode) {
+      legendItems.push({ dash: "3,4", color: "rgba(220,60,60,0.9)", label: escapeHtml(labelText("details.chart.bossHp", "Boss HP")) });
+    }
     if (hasPing) {
       legendItems.push({ dash: "2,4", color: "rgba(255,255,255,0.9)", label: escapeHtml(labelText("details.chart.ping", "Ping")) });
     }
@@ -1803,7 +1812,8 @@ const createDetailsUI = ({
   const renderTimeline = (details) => {
     if (!timelineCanvas || !timelineViewport || !timelineLegend || !timelineXAxis) return;
 
-    const skills = Array.isArray(details?.skills) ? details.skills : [];
+    const laneSource = detailsMode === "heal" ? details?.healSkills : details?.skills;
+    const skills = Array.isArray(laneSource) ? laneSource : [];
     const battleTimeMs = Number(lastUnfilteredDetails?.battleTimeMs) || Number(details?.battleTimeMs) || 0;
     if (battleTimeMs <= 0 || skills.length === 0) {
       timelineCanvas.width = 0;
@@ -2820,6 +2830,13 @@ const createDetailsUI = ({
       heal ? "details.skills.healPctTooltip" : "details.skills.dmgPctTooltip", heal ? "Healing %" : "Damage %");
     fightTimeline?.classList?.toggle?.("isHealMode", heal);
     detailsPanel?.classList?.toggle?.("isHealMode", heal);
+    const chartTitle = fightTimeline?.querySelector?.(".ftlGroupDps .ftlGroupTitle");
+    if (chartTitle) {
+      chartTitle.dataset.i18n = heal ? "details.hpsChart" : "details.dpsChart";
+      chartTitle.textContent = heal
+        ? labelText("details.hpsChart", "Healing per second")
+        : labelText("details.dpsChart", "Damage per second");
+    }
     updateGridColumns();
   };
   const syncModeButtons = () => {
@@ -2834,6 +2851,7 @@ const createDetailsUI = ({
     renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
     renderStats(lastDetails, { compact: activeCompactMode });
     renderSkills(lastDetails, { compact: activeCompactMode });
+    renderDpsChart(lastDetails);
     renderTimeline(lastDetails);
   };
   const setDetailsMode = (mode) => {

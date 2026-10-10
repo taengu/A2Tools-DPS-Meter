@@ -159,11 +159,12 @@
     "fightTimeline": "Linha do tempo da luta",
     "casts": "Conjurações",
     "resize": "Arraste para redimensionar",
-    "healTimingNote": "O momento das curas ainda não é registrado; o gráfico e as conjurações só aparecem no modo DMG.",
+    "healTimingNote": "Esta luta não tem tempos de cura (gravada por uma versão anterior).",
     "chart": {
       "bossHp": "HP do chefe",
       "ping": "Ping"
-    }
+    },
+    "hpsChart": "Cura por segundo"
   },
   "history": {
     "title": "Histórico de combates",

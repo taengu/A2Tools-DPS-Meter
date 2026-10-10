@@ -159,11 +159,12 @@
     "fightTimeline": "Cronología del combate",
     "casts": "Lanzamientos",
     "resize": "Arrastra para cambiar el tamaño",
-    "healTimingNote": "Aún no se registra cuándo ocurren las curas; el gráfico y los lanzamientos solo se muestran en modo DMG.",
+    "healTimingNote": "Este combate no tiene tiempos de curación (registrado con una versión anterior).",
     "chart": {
       "bossHp": "PV del jefe",
       "ping": "Ping"
-    }
+    },
+    "hpsChart": "Curación por segundo"
   },
   "history": {
     "title": "Historial de combates",

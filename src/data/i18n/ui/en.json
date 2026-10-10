@@ -164,11 +164,12 @@
     "fightTimeline": "Fight timeline",
     "casts": "Casts",
     "resize": "Drag to resize",
-    "healTimingNote": "Heal timing isn't recorded yet, so the chart and casts show in DMG mode only.",
+    "healTimingNote": "No heal timing for this fight (recorded by an older version).",
     "chart": {
       "bossHp": "Boss HP",
       "ping": "Ping"
-    }
+    },
+    "hpsChart": "Healing per second"
   },
   "history": {
     "title": "Battle History",

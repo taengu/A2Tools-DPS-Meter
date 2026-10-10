@@ -159,11 +159,12 @@
     "fightTimeline": "戦闘タイムライン",
     "casts": "詠唱",
     "resize": "ドラッグでサイズ変更",
-    "healTimingNote": "回復のタイミングはまだ記録されないため、チャートと詠唱はDMGモードでのみ表示されます。",
+    "healTimingNote": "この戦闘には回復のタイミングがありません（古いバージョンで記録）。",
     "chart": {
       "bossHp": "ボスHP",
       "ping": "Ping"
-    }
+    },
+    "hpsChart": "秒間回復量"
   },
   "history": {
     "title": "戦闘履歴",

@@ -159,11 +159,12 @@
     "fightTimeline": "Chronologie du combat",
     "casts": "Lancers",
     "resize": "Faire glisser pour redimensionner",
-    "healTimingNote": "Le moment des soins n'est pas encore enregistré : le graphique et les lancers ne s'affichent qu'en mode DMG.",
+    "healTimingNote": "Pas de moments de soin pour ce combat (enregistré par une version plus ancienne).",
     "chart": {
       "bossHp": "PV du boss",
       "ping": "Ping"
-    }
+    },
+    "hpsChart": "Soins par seconde"
   },
   "history": {
     "title": "Historique des combats",

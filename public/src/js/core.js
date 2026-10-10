@@ -2138,7 +2138,9 @@ class DpsApp {
         isDot: isHot,
         crit: 0, parry: 0, back: 0, frontal: 0, perfect: 0, double: 0,
         regen: 0, multiHitCount: 0, multiHitDamage: 0, multiHitHits: 0,
-        minDmg: 0, maxDmg: 0, job: v.job ?? "", specs: null, hitTimestamps: [],
+        minDmg: 0, maxDmg: 0, job: v.job ?? "", specs: null,
+        // When each heal landed in the fight (meter 2.0.56 on): HEAL's HPS chart.
+        hitTimestamps: Array.isArray(v.hitTimestamps) ? v.hitTimestamps : [],
       });
     }
     const healBattleMs = Number.isFinite(battleTimeMsRaw) ? battleTimeMsRaw : 0;

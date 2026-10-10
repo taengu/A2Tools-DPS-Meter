@@ -159,11 +159,12 @@
     "fightTimeline": "戰鬥時間軸",
     "casts": "施放",
     "resize": "拖曳調整大小",
-    "healTimingNote": "尚未記錄治療時間，圖表和施放僅在 DMG 模式下顯示。",
+    "healTimingNote": "此戰鬥沒有治療時間資料（由舊版本記錄）。",
     "chart": {
       "bossHp": "首領 HP",
       "ping": "延遲"
-    }
+    },
+    "hpsChart": "每秒治療"
   },
   "history": {
     "title": "戰鬥歷史",

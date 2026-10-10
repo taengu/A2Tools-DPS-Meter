@@ -1585,6 +1585,12 @@ impl DpsCalculator {
                 });
                 entry.dmg = entry.dmg.saturating_add(hd.total_heal.min(i32::MAX as i64) as i32);
                 entry.time += hd.tick_count;
+                // The heals inside this fight's window, from its first hit, as
+                // damage's hit times are: HEAL's HPS chart and cast lanes.
+                let (from, to) = (target_data.first_damage_time, target_data.last_damage_time);
+                entry.hit_timestamps.extend(
+                    hd.timestamps.iter().filter(|&&t| t >= from && t <= to).map(|&t| t - from),
+                );
             }
         }
 

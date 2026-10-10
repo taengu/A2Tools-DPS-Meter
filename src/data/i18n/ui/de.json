@@ -159,11 +159,12 @@
     "fightTimeline": "Kampfverlauf",
     "casts": "Wirkungen",
     "resize": "Ziehen zum Ändern der Größe",
-    "healTimingNote": "Heilzeitpunkte werden noch nicht erfasst; Diagramm und Wirkungen gibt es nur im DMG-Modus.",
+    "healTimingNote": "Für diesen Kampf gibt es keine Heilzeitpunkte (mit einer älteren Version aufgezeichnet).",
     "chart": {
       "bossHp": "Boss-HP",
       "ping": "Ping"
-    }
+    },
+    "hpsChart": "Heilung pro Sekunde"
   },
   "history": {
     "title": "Kampfverlauf",
