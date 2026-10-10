@@ -2670,11 +2670,19 @@ class DpsApp {
     if (this.saveRawPacketsCheckbox) {
       const storedSaveRaw = this.safeGetSetting(this.storageKeys.saveRawPackets) === "true";
       this.saveRawPacketsCheckbox.checked = storedSaveRaw;
+      // Saved before the two were linked: packet logging on, debug off.
+      if (storedSaveRaw && !this.debugLoggingEnabled) {
+        this.setDebugLogging(true, { persist: true, syncBackend: true });
+      }
       this.saveRawPacketsCheckbox.addEventListener("change", (event) => {
         const isChecked = !!event.target?.checked;
         this.safeSetSetting(this.storageKeys.saveRawPackets, String(isChecked));
         window.javaBridge?.setSaveRawPackets?.(isChecked);
+        // Debug logging follows packet logging on and off.
+        this.setDebugLogging(isChecked, { persist: true, syncBackend: true });
+        this.syncLoggingLock();
       });
+      this.syncLoggingLock();
     }
     this.initSendLogs();
     if (this.pinMeToTopCheckbox) {
@@ -4038,6 +4046,27 @@ class DpsApp {
     }
   }
 
+  // A packet log is read beside the debug log of the same session, so packet
+  // logging keeps debug logging on: its switch is locked while packets are
+  // logged. Debug logging can still be on by itself.
+  syncLoggingLock() {
+    const box = this.debugLoggingCheckbox;
+    if (!box) return;
+    const locked = !!this.saveRawPacketsCheckbox?.checked;
+    if (locked && !box.checked) box.checked = true;
+    box.disabled = locked;
+    const row = box.closest(".settingsToggle");
+    if (!row) return;
+    row.classList.toggle("isLocked", locked);
+    if (locked) {
+      row.title = this.i18n?.t?.("settings.debugLoggingLocked",
+        "On while packet logging is on: packet logs need the debug log to be read.")
+        ?? "On while packet logging is on: packet logs need the debug log to be read.";
+    } else {
+      row.removeAttribute("title");
+    }
+  }
+
   setPinMeToTop(enabled, { persist = false } = {}) {
     this.pinMeToTop = !!enabled;
     if (this.pinMeToTopCheckbox && document.activeElement !== this.pinMeToTopCheckbox) {
@@ -4215,6 +4244,7 @@ class DpsApp {
       if (box) box.checked = defaultOn ? get(name) !== "false" : get(name) === "true";
     }
     this.setDebugLogging(get("debugLogging") === "true");
+    this.syncLoggingLock();
     // Refilling a form applies saved values without replaying input handlers
     // that would persist them again. A focused slider keeps its draft.
     for (const [name, value] of [
@@ -4884,7 +4914,7 @@ class DpsApp {
     };
     btn.addEventListener("click", async () => {
       const ok = window.confirm(t("settings.sendLogs.confirm",
-        "Send your 3 newest packet logs to the A2 Tools developer?\n\n" +
+        "Send your 3 most recent packet logs to the A2 Tools developer?\n\n" +
         "Packet logs are raw game traffic recorded while packet logging was on, " +
         "including character names. Only the developer can open them, and they " +
         "are deleted after 30 days."));

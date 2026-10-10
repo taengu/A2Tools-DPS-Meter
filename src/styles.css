@@ -1273,7 +1273,7 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   border-radius: 4px;
   overflow: hidden;
   background: transparent;
-  color: var(--hud-sub);
+  color: rgba(214, 224, 240, 0.8);
   font-family: inherit;
   font-variation-settings: "wght" 500, "wdth" 87.5;
   font-size: 12.5px;
@@ -1290,9 +1290,10 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   width: 15px;
   height: 15px;
   stroke-width: 2;
-  opacity: 0.85;
+  color: var(--isUser-fill);
+  opacity: 0.9;
 }
-.settingsPanel .settingsNavItem.isActive svg { opacity: 1; }
+.settingsPanel .settingsNavItem.isActive svg { color: inherit; opacity: 1; }
 .settingsPanel .settingsNavItem span {
   min-width: 0;
   overflow: hidden;
@@ -1381,6 +1382,15 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
 .settingsPanel .sendLogsRow .sendLogsStatus {
   display: block;
   max-width: 46ch;
+  text-wrap: balance;
+}
+/* Debug logging while packet logging holds it on (core.js syncLoggingLock). */
+.settingsPanel .settingsToggle.isLocked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.settingsPanel .settingsToggle.isLocked input[type="checkbox"] {
+  cursor: not-allowed;
 }
 /* Reset all settings closes Advanced, apart from its groups. */
 .settingsPanel .settingsSection > .settingsRowAction {
@@ -1461,6 +1471,15 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   flex: 0 1 300px;
   min-width: 0;
   justify-content: flex-end;
+}
+/* Capture devices have long names ("Intel(R) Ethernet Connection ..."): the
+   device row gets the most room. */
+.settingsPanel .settingsRowWide .settingsDeviceRow { flex-basis: 420px; }
+.settingsPanel .settingsRowWide .deviceDropdownWrapper { flex: 1 1 240px; }
+.settingsPanel .settingsRowWide > .settingsInfo,
+.settingsPanel .settingsRowWide > .settingsLabel {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .settingsPanel .settingsRowWide .characterNameInput {
   flex: 1 1 120px;

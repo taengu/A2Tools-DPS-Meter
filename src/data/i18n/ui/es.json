@@ -360,7 +360,8 @@
     },
     "barGap": {
       "label": "Espacio entre barras de jugadores"
-    }
+    },
+    "debugLoggingLocked": "Activado mientras el registro de paquetes esté activo: los registros de paquetes necesitan el registro de depuración."
   },
   "support": {
     "button": "Apóyame",

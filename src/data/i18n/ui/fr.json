@@ -360,7 +360,8 @@
     },
     "barGap": {
       "label": "Espacement entre les barres des joueurs"
-    }
+    },
+    "debugLoggingLocked": "Activé tant que la journalisation des paquets l'est : les journaux de paquets ont besoin du journal de débogage."
   },
   "support": {
     "button": "Me soutenir",

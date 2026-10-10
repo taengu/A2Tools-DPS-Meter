@@ -367,7 +367,8 @@
     },
     "barGap": {
       "label": "玩家条间距"
-    }
+    },
+    "debugLoggingLocked": "开启数据包日志时保持开启：分析数据包日志需要调试日志。"
   },
   "support": {
     "button": "支持我一下",

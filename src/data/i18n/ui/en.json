@@ -190,7 +190,7 @@
   "settings": {
     "title": "Settings",
     "lockedPort": "Detected device/port",
-    "resetDetection": "Reset",
+    "resetDetection": "Reset detection",
     "characterName": "Name#ID",
     "characterNamePlaceholder": "Enter your character name",
     "pinMeToTop": "Keep my row at the top",
@@ -363,16 +363,17 @@
       "autoUploadHint": "When a boss fight ends it is uploaded to your account, with the visibility you chose on a2tools.app. Other players stay masked. Training dummies are never uploaded."
     },
     "sendLogs": {
-      "hint": "Sends your 3 newest packet logs to the developer, for a bug report.",
+      "hint": "Sends your 3 most recent packet logs to the developer, for a bug report.",
       "button": "Send Logs to Dev",
-      "confirm": "Send your 3 newest packet logs to the A2 Tools developer?\n\nPacket logs are raw game traffic recorded while packet logging was on, including character names. Only the developer can open them, and they are deleted after 30 days.",
+      "confirm": "Send your 3 most recent packet logs to the A2 Tools developer?\n\nPacket logs are raw game traffic recorded while packet logging was on, including character names. Only the developer can open them, and they are deleted after 30 days.",
       "sending": "Sending...",
       "sent": "Sent. Your report code is {code}: give it to the developer on Discord.",
       "failed": "Could not send: {error}"
     },
     "barGap": {
       "label": "Spacing between player bars"
-    }
+    },
+    "debugLoggingLocked": "On while packet logging is on: packet logs need the debug log to be read."
   },
   "support": {
     "button": "Support Me",

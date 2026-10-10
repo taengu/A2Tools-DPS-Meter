@@ -360,7 +360,8 @@
     },
     "barGap": {
       "label": "Abstand zwischen Spielerbalken"
-    }
+    },
+    "debugLoggingLocked": "An, solange die Paketprotokollierung an ist: Paketprotokolle brauchen das Debug-Protokoll zur Auswertung."
   },
   "support": {
     "button": "Unterstütze mich",

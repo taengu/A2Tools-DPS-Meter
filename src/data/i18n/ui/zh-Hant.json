@@ -367,7 +367,8 @@
     },
     "barGap": {
       "label": "玩家條間距"
-    }
+    },
+    "debugLoggingLocked": "開啟封包記錄時保持開啟：分析封包記錄需要除錯記錄。"
   },
   "support": {
     "button": "支持我一下",
