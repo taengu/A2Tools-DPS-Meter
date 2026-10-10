@@ -244,6 +244,9 @@ class DpsApp {
   }
 
   safeSetSetting(key, value) {
+    // A change replayed from another window is that window's to save: writing
+    // it back sends it round again (applyRemoteSettingChange).
+    if (this._applyingRemoteSetting) return;
     try {
       window.javaBridge?.setSetting?.(key, value);
     } catch (e) {
@@ -4713,7 +4716,9 @@ class DpsApp {
     }
     if (key === this.storageKeys.barGap) {
       const next = this.applyBarGap(value, { persist: false });
-      this.syncSettingsRangeValue(this.barGapInput, this.barGapValue, next ?? this.defaultBarGap());
+      const shown = next ?? this.defaultBarGap();
+      this.syncSettingsRangeValue(this.barGapInput, null, shown);
+      if (this.barGapValue && document.activeElement !== this.barGapInput) this.barGapValue.textContent = `${shown}px`;
       return;
     }
     if (key === this.storageKeys.meterFillOpacity || key === this.storageKeys.windowOpacity) {
@@ -4767,9 +4772,9 @@ class DpsApp {
     const control = document.querySelector(selector);
     if (!control) return;
 
-    // Bail when the value already matches — this is what stops the echo. The
-    // handler below writes the setting straight back, and the backend only
-    // broadcasts real changes, so the round trip ends here.
+    // A slider being dragged here is ahead of the echoes of its own earlier
+    // values; taking one would move it back under the pointer.
+    if (control.type === "range" && document.activeElement === control) return;
     if (control.type === "checkbox") {
       const next = value !== "false";
       if (control.checked === next) return;
@@ -4778,9 +4783,18 @@ class DpsApp {
       if (String(control.value) === String(value)) return;
       control.value = value;
     }
-    control.dispatchEvent(new Event("change", { bubbles: true }));
-    if (control.type === "range") {
-      control.dispatchEvent(new Event("input", { bubbles: true }));
+    // Replay the control's handler to apply the value here, but without
+    // saving it: the handler used to write it straight back, and during a
+    // drag the Settings and meter windows then wrote each other's older
+    // values back and forth without end (Target name size, 2026-10-11).
+    this._applyingRemoteSetting = true;
+    try {
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+      if (control.type === "range") {
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    } finally {
+      this._applyingRemoteSetting = false;
     }
   }
 
