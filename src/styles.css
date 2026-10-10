@@ -3863,6 +3863,12 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 .detailsPanel.hide-col-maxdmg .detailsSkills .cell.maxdmg {
   display: none;
 }
+/* HEAL: casts, amount and share only (details.js HEAL_COLUMNS); the
+   damage columns and the note about damage over time step aside. */
+.detailsPanel.isHealMode .detailsSkills .cell:not(.name):not(.hit):not(.dmg):not(.dmgpct),
+.detailsPanel.isHealMode .detailsSkills .detailsFootnote {
+  display: none;
+}
 .detailsPanel .detailsSkills .skillHeader .cell[data-sort-key] {
   cursor: pointer;
 }
@@ -5879,11 +5885,12 @@ body.isHistoryWindow .historyPanel .historyHeader .closeX {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.75));
 }
 /* Nested inside the row cell's own 0.875em, so this multiplier compounds:
-   0.875 × 0.92 = 0.805em of the panel font. details.js measures the name
-   column with the same product — keep the two in step. */
+   0.875 x 0.84 = 0.735em of the panel font, a step under the figures
+   beside it. details.js measures the name column with the same product:
+   keep the two in step. */
 .detailsPanel .detailsSkills .cell.name .skillNameText {
   font-family: var(--hud-ident);
-  font-size: 0.92em;
+  font-size: 0.84em;
   letter-spacing: 0.01em;
   color: var(--hud-name);
 }

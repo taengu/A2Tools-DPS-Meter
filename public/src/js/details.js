@@ -918,6 +918,7 @@ const createDetailsUI = ({
     avgdmg: "minmax(6ch, 0.8fr)",
     maxdmg: "minmax(6ch, 0.8fr)",
   };
+  const HEAL_COLUMNS = new Set(["name", "hit", "dmg", "dmgpct"]);
   const GRID_COL_ORDER = ["name", "hit", "dmg", "dmgpct", "mhit", "mdmg", "crit", "parry", "perfect", "double", "back", "frontal",
     ...HIT_RESULTS.map(([col]) => col), "regen", "mindmg", "avgdmg", "maxdmg"];
 
@@ -945,7 +946,11 @@ const createDetailsUI = ({
       skillsContainer.style.setProperty("--scrollbar-w", `${scrollbarW}px`);
     }
 
-    const visibleCols = GRID_COL_ORDER.filter((col) => !detailsPanel.classList.contains(`hide-col-${col}`));
+    // HEAL shows what a heal has: its casts, its amount and its share. The
+    // damage columns (multi-hit, crit, parry, positionals, min/avg/max) are
+    // all zero for heals.
+    const visibleCols = GRID_COL_ORDER.filter((col) => !detailsPanel.classList.contains(`hide-col-${col}`)
+      && (detailsMode !== "heal" || HEAL_COLUMNS.has(col)));
     if (lastMeasuredNameWidth > 0) {
       const dataCols = visibleCols.filter((c) => c !== "name");
       // Beside the sidebar the table is narrower: the longest name takes at
@@ -1054,9 +1059,9 @@ const createDetailsUI = ({
     const namePad = 4;
     const measureCanvas = document.createElement("canvas").getContext("2d");
     // .skillRow .cell is 0.875em of the panel font and .skillNameText another
-    // 0.92em inside it, so the name renders at their product. Measuring at any
-    // other size sizes the column for text that is never drawn.
-    const fontSize = parseFloat(getComputedStyle(skillsListEl).fontSize) * 0.875 * 0.92;
+    // 0.84em inside it (styles.css), so the name renders at their product.
+    // Measuring at any other size sizes the column for text never drawn.
+    const fontSize = parseFloat(getComputedStyle(skillsListEl).fontSize) * 0.875 * 0.84;
     measureCanvas.font = `700 ${fontSize}px ${getComputedStyle(skillsListEl).fontFamily}`;
     let maxNameWidth = 0;
     topDisplay.forEach((skill) => {
@@ -2805,6 +2810,8 @@ const createDetailsUI = ({
     set("dmgpct", heal ? "details.skills.healPct" : "details.skills.dmgPct", heal ? "H%" : "D%",
       heal ? "details.skills.healPctTooltip" : "details.skills.dmgPctTooltip", heal ? "Healing %" : "Damage %");
     fightTimeline?.classList?.toggle?.("isHealMode", heal);
+    detailsPanel?.classList?.toggle?.("isHealMode", heal);
+    updateGridColumns();
   };
   const syncModeButtons = () => {
     detailsPanel?.querySelectorAll?.(".detailsModeBtn")?.forEach?.((btn) => {
