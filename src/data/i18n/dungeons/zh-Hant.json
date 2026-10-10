@@ -1,9 +1,11 @@
 {
   "600001": {
-    "name": "克勞洞穴"
+    "name": "克勞洞穴",
+    "difficulty": "normal"
   },
   "600002": {
-    "name": "克勞洞穴"
+    "name": "克勞洞穴",
+    "difficulty": "exploration"
   },
   "600003": {
     "name": "克勞洞穴"

@@ -1,9 +1,11 @@
 {
   "600001": {
-    "name": "Krao Cave"
+    "name": "Krao Cave",
+    "difficulty": "normal"
   },
   "600002": {
-    "name": "Krao Cave"
+    "name": "Krao Cave",
+    "difficulty": "exploration"
   },
   "600003": {
     "name": "Krao Cave"

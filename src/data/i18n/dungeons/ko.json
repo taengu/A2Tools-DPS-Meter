@@ -1,9 +1,11 @@
 {
   "600001": {
-    "name": "크라오 동굴"
+    "name": "크라오 동굴",
+    "difficulty": "normal"
   },
   "600002": {
-    "name": "크라오 동굴"
+    "name": "크라오 동굴",
+    "difficulty": "exploration"
   },
   "600003": {
     "name": "크라오 동굴"
