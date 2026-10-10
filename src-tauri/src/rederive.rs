@@ -267,9 +267,12 @@ fn canonicalise(record: &mut FightRecord) {
     record.actors.sort_by_key(|a| a.actor_id);
     record.jobs.sort();
     record.job_ids.sort_unstable();
-    // A slice holds no abnormal records, and the service's records do not
-    // carry buffs: whatever the replay's timeline held stays out of them.
-    record.buffs = None;
+    // Buffs come from the slice's abnormal records (meter 2.0.56 on). A slice
+    // from an older meter has none, so its timeline is empty: say "no buff
+    // data" (None) rather than "no buffs were seen". Every real fight has some.
+    if record.buffs.as_ref().is_some_and(|b| b.is_empty()) {
+        record.buffs = None;
+    }
 }
 
 /// Bumped when the service derives differently from the meter of the same
@@ -513,17 +516,24 @@ mod tests {
     }
 
     #[test]
-    fn a_derived_record_carries_no_buffs() {
-        let mut record: FightRecord = serde_json::from_value(serde_json::json!({
-            "id": "auto_1_2", "bossName": "B", "targetId": 1, "startTimeMs": 0, "durationMs": 1000,
-            "totalDamage": 1, "jobs": [],
-            "details": {"targetId": 1, "maxHp": 0, "totalTargetDamage": 1, "battleTime": 1000,
-                        "startTime": 0, "skills": [], "pingHistory": [], "healSkills": []},
-            "actors": [],
-            "buffs": [{"on": 7, "id": 1, "by": 7, "segs": "0,1000,1,1", "up": 1000}]
-        }))
-        .unwrap();
-        assert!(record.buffs.is_some());
+    fn a_derived_record_keeps_its_buffs_and_an_empty_timeline_is_no_data() {
+        let parse = |buffs: serde_json::Value| -> FightRecord {
+            serde_json::from_value(serde_json::json!({
+                "id": "auto_1_2", "bossName": "B", "targetId": 1, "startTimeMs": 0, "durationMs": 1000,
+                "totalDamage": 1, "jobs": [],
+                "details": {"targetId": 1, "maxHp": 0, "totalTargetDamage": 1, "battleTime": 1000,
+                            "startTime": 0, "skills": [], "pingHistory": [], "healSkills": []},
+                "actors": [],
+                "buffs": buffs
+            }))
+            .unwrap()
+        };
+        // A slice with abnormal records (2.0.56 on): the timeline stays.
+        let mut record = parse(serde_json::json!([{"on": 7, "id": 1, "by": 7, "segs": "0,1000,1,1", "up": 1000}]));
+        canonicalise(&mut record);
+        assert_eq!(record.buffs.as_ref().map(|b| b.len()), Some(1));
+        // An older meter's slice has none: no data, and fight.json keeps its old shape.
+        let mut record = parse(serde_json::json!([]));
         canonicalise(&mut record);
         assert!(record.buffs.is_none());
         assert!(serde_json::to_value(&record).unwrap().get("buffs").is_none(), "fight.json keeps its shape");

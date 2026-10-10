@@ -249,6 +249,11 @@ pub const ALLOWED_OPCODES: &[(&[u8; 2], &str)] = &[
     (&[0x45, 0x36], "player spawn"),
     (&[0x33, 0x36], "self identity"),
     (&[0x02, 0x97], "party roster"),
+    // Buffs and debuffs, for the log's Buffs timeline: entity ids, abnormal
+    // and skill ids, timings and a position, no names (capture/abnormal.rs).
+    (&[0x2A, 0x38], "buff/debuff added"),
+    (&[0x2B, 0x38], "buff/debuff changed"),
+    (&[0x2C, 0x38], "buff/debuff removed"),
 ];
 
 /// One captured buffer, as the packet logger recorded it.

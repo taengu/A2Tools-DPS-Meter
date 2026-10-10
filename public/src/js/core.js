@@ -3661,12 +3661,14 @@ class DpsApp {
 
 
   parseDetailsIconSize(value) {
+    // The web viewer (a2tools.app) sets a smaller default for compact rows.
+    const fallback = Number(globalThis.__A2_DETAILS_ICON_SIZE__) || 36;
     if (value === null || value === undefined || value === "") {
-      return 36;
+      return fallback;
     }
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) {
-      return 36;
+      return fallback;
     }
     return Math.min(this.DETAILS_ICON_SIZE_MAX, Math.max(this.DETAILS_ICON_SIZE_MIN, parsed));
   }

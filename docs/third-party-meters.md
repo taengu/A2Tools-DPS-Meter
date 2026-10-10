@@ -27,6 +27,10 @@ must stay compatible is the slice: the `A2ES` container, the packet allowlist an
 blinding in `src-tauri/src/capture/evidence_slice.rs`. If you change what goes into a slice,
 tell us first.
 
+Since A2Tools 2.0.56 the allowlist also keeps the buff and debuff records (`2A 38`, `2B 38`,
+`2C 38`) for a log's Buffs timeline. They are optional: a slice without them is accepted and
+derived exactly as before, and its log says it has no buff data. Add them when you are ready.
+
 Every slice is checked, whichever meter cut it:
 
 - **Names.** The service runs the blinder's second pass over every packet and counts any
