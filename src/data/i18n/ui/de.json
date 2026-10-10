@@ -183,7 +183,7 @@
     "resetDetection": "Zurücksetzen",
     "characterName": "Name#ID",
     "characterNamePlaceholder": "Charakternamen eingeben",
-    "pinMeToTop": "Mich immer oben anzeigen",
+    "pinMeToTop": "Meine Zeile oben halten",
     "slimMode": "Schlanker Modus",
     "meterLayout": {
       "label": "Meter-Layout",
@@ -193,7 +193,7 @@
       "classicSlim": "Klassisch schlank"
     },
     "detailsMonitor": {
-      "label": "Details auf Monitor anzeigen",
+      "label": "Details auf zweitem Monitor",
       "off": "Aus",
       "primary": "primär",
       "missing": "Dieser Bildschirm ist nicht angeschlossen.",
@@ -223,13 +223,13 @@
       "dps": "DPS"
     },
     "showPing": "Ping anzeigen",
-    "showTtk": "Zeit bis zum Kill (TTK) anzeigen",
-    "showTotalDps": "Gesamt-DPS/SCH anzeigen",
-    "roundDps": "DPS runden",
-    "showDpsSuffix": "/s nach DPS anzeigen",
-    "autoHideMeter": "Meter automatisch ausblenden",
-    "showSuspendBtn": "Pause-Schaltfläche anzeigen",
-    "showLockBtn": "Sperrtaste anzeigen (durchklickbar)",
+    "showTtk": "Geschätzte Kill-Zeit anzeigen",
+    "showTotalDps": "Gruppensumme anzeigen",
+    "roundDps": "DPS in Tausend kürzen (13k)",
+    "showDpsSuffix": "/s an DPS anhängen",
+    "autoHideMeter": "Ausblenden, wenn AION2 nicht im Vordergrund ist",
+    "showSuspendBtn": "Taste „Erfassung pausieren“ anzeigen",
+    "showLockBtn": "Taste für Durchklick-Sperre anzeigen",
     "playerLimit": {
       "label": "Max. angezeigte Spieler"
     },
@@ -326,7 +326,7 @@
       "lock": "Overlay sperren/entsperren"
     },
     "defaultMeterMode": {
-      "label": "Standardmodus"
+      "label": "Zielmodus beim Start"
     },
     "trainingMode": {
       "label": "Trainingsmodus-Ziel",

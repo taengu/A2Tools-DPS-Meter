@@ -188,7 +188,7 @@
     "resetDetection": "重置偵測",
     "characterName": "Name#ID",
     "characterNamePlaceholder": "輸入你的角色名稱",
-    "pinMeToTop": "將我置頂",
+    "pinMeToTop": "將我的列置頂",
     "slimMode": "精簡模式",
     "meterLayout": {
       "label": "儀表佈局",
@@ -198,7 +198,7 @@
       "classicSlim": "經典精簡"
     },
     "detailsMonitor": {
-      "label": "在螢幕上顯示詳情",
+      "label": "在副螢幕上顯示詳細資料",
       "off": "關閉",
       "primary": "主螢幕",
       "missing": "該螢幕未連接。",
@@ -228,13 +228,13 @@
       "dps": "DPS"
     },
     "showPing": "顯示延遲",
-    "showTtk": "顯示預計擊殺時間（TTK）",
-    "showTotalDps": "顯示總DPS/DMG",
-    "roundDps": "DPS取整",
-    "showDpsSuffix": "在 DPS 後顯示 /s",
-    "autoHideMeter": "自動隱藏面板",
-    "showSuspendBtn": "顯示暫停按鈕",
-    "showLockBtn": "顯示鎖定按鈕（點擊穿透）",
+    "showTtk": "顯示預估擊殺時間",
+    "showTotalDps": "顯示隊伍總計",
+    "roundDps": "DPS 以千為單位顯示 (13k)",
+    "showDpsSuffix": "DPS 後顯示 /s",
+    "autoHideMeter": "AION2 不在前景時隱藏",
+    "showSuspendBtn": "顯示暫停擷取按鈕",
+    "showLockBtn": "顯示點擊穿透鎖定按鈕",
     "playerLimit": {
       "label": "最大顯示人數"
     },
@@ -331,7 +331,7 @@
       "lock": "鎖定/解鎖懸浮視窗"
     },
     "defaultMeterMode": {
-      "label": "預設計量模式"
+      "label": "啟動時的目標模式"
     },
     "trainingMode": {
       "label": "訓練模式",

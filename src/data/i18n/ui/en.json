@@ -193,7 +193,7 @@
     "resetDetection": "Reset",
     "characterName": "Name#ID",
     "characterNamePlaceholder": "Enter your character name",
-    "pinMeToTop": "Always show me at the top",
+    "pinMeToTop": "Keep my row at the top",
     "slimMode": "Slim mode",
     "meterLayout": {
       "label": "Meter layout",
@@ -203,7 +203,7 @@
       "classicSlim": "Classic Slim"
     },
     "detailsMonitor": {
-      "label": "Show Details on monitor",
+      "label": "Details on second monitor",
       "off": "Off",
       "primary": "primary",
       "missing": "That display is not connected.",
@@ -233,13 +233,13 @@
       "dps": "DPS"
     },
     "showPing": "Show ping",
-    "showTtk": "Show time to kill (TTK)",
-    "showTotalDps": "Show total DPS/DMG",
-    "roundDps": "Round DPS",
-    "showDpsSuffix": "Show /s after DPS",
-    "autoHideMeter": "Auto-hide meter",
-    "showSuspendBtn": "Show suspend button",
-    "showLockBtn": "Show lock button (click-through)",
+    "showTtk": "Show time to kill estimate",
+    "showTotalDps": "Show party total",
+    "roundDps": "Shorten DPS to thousands (13k)",
+    "showDpsSuffix": "Add /s to DPS",
+    "autoHideMeter": "Hide when AION2 isn't focused",
+    "showSuspendBtn": "Show pause capture button",
+    "showLockBtn": "Show click-through lock button",
     "playerLimit": {
       "label": "Max players shown"
     },
@@ -336,7 +336,7 @@
       "lock": "Lock/unlock overlay"
     },
     "defaultMeterMode": {
-      "label": "Default mode"
+      "label": "Starting target mode"
     },
     "trainingMode": {
       "label": "Training Mode target",
@@ -364,7 +364,7 @@
     },
     "sendLogs": {
       "hint": "Sends your 3 newest packet logs to the developer, for a bug report.",
-      "button": "Send logs to dev",
+      "button": "Send Logs to Dev",
       "confirm": "Send your 3 newest packet logs to the A2 Tools developer?\n\nPacket logs are raw game traffic recorded while packet logging was on, including character names. Only the developer can open them, and they are deleted after 30 days.",
       "sending": "Sending...",
       "sent": "Sent. Your report code is {code}: give it to the developer on Discord.",

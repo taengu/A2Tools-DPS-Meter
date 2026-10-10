@@ -572,7 +572,7 @@
                 <div class="settingsGroupBody">
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.defaultMeterMode.label">Default mode</div>
+                      <div class="settingsLabel" data-i18n="settings.defaultMeterMode.label">Starting target mode</div>
                     </div>
                     <div class="settingsDropdownWrapper defaultMeterModeDropdownWrapper">
                       <button class="settingsDropdownBtn defaultMeterModeDropdownBtn" type="button">
@@ -595,14 +595,14 @@
                     </div>
                   </div>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.pinMeToTop">Always show me at the top</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.pinMeToTop">Keep my row at the top</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="pinMeToTopCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.autoHideMeter">Auto-hide meter</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.autoHideMeter">Hide when AION2 isn't focused</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="autoHideMeterCheckbox" checked />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
@@ -610,7 +610,7 @@
                   </label>
                   <div class="settingsRow settingsRowSelect">
                     <div class="settingsInfo">
-                      <div class="settingsLabel" data-i18n="settings.detailsMonitor.label">Show Details on monitor</div>
+                      <div class="settingsLabel" data-i18n="settings.detailsMonitor.label">Details on second monitor</div>
                       <div class="settingsHint detailsMonitorHint"></div>
                     </div>
                     <div class="settingsDropdownWrapper detailsMonitorDropdownWrapper">
@@ -629,28 +629,42 @@
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill (TTK)</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk">Show time to kill estimate</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showTtkCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show total DPS/DMG</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTotalDps">Show party total</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showTotalDpsCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show suspend button</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.roundDps">Shorten DPS to thousands (13k)</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="roundDpsCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showDpsSuffix">Add /s to DPS</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showDpsSuffixCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn">Show pause capture button</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showSuspendBtnCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
                   <label class="settingsToggle lockSetting" style="display:none">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show lock button (click-through)</span>
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn">Show click-through lock button</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showLockBtnCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
@@ -913,20 +927,9 @@
                       <div class="settingsDropdownMenu allTargetsWindowDropdownMenu" role="menu"></div>
                     </div>
                   </div>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.roundDps">Round DPS</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="roundDpsCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
-                  <label class="settingsToggle">
-                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showDpsSuffix">Show /s after DPS</span>
-                    <span class="settingsToggleControl">
-                      <input type="checkbox" class="showDpsSuffixCheckbox" />
-                      <span class="settingsToggleTrack" aria-hidden="true"></span>
-                    </span>
-                  </label>
+                </div>
+                <h3 class="settingsSubTitle" data-i18n="settings.diagnostics">Diagnostics</h3>
+                <div class="settingsGroupBody">
                   <label class="settingsToggle">
                     <span class="settingsToggleLabel settingsLabel" data-i18n="settings.debugLogging">Enable debug logging</span>
                     <span class="settingsToggleControl">
@@ -946,17 +949,17 @@
                       <div class="settingsHint sendLogsStatus" data-i18n="settings.sendLogs.hint">Sends your 3 newest packet logs to the developer, for a bug report.</div>
                     </div>
                     <div class="settingsRowEnd">
-                      <button class="settingsAction sendLogsBtn" type="button" data-i18n="settings.sendLogs.button">Send logs to dev</button>
+                      <button class="settingsAction sendLogsBtn" type="button" data-i18n="settings.sendLogs.button">Send Logs to Dev</button>
                     </div>
                   </div>
-                  <div class="settingsRow settingsRowAction">
-                    <button
-                      class="settingsAction settingsActionDanger resetAllSettingsBtn"
-                      type="button"
-                      data-i18n="settings.resetAllSettings">
-                      Reset all settings
-                    </button>
-                  </div>
+                </div>
+                <div class="settingsRow settingsRowAction">
+                  <button
+                    class="settingsAction settingsActionDanger resetAllSettingsBtn"
+                    type="button"
+                    data-i18n="settings.resetAllSettings">
+                    Reset all settings
+                  </button>
                 </div>
               </section>
             </div>

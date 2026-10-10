@@ -188,7 +188,7 @@
     "resetDetection": "감지 초기화",
     "characterName": "Name#ID",
     "characterNamePlaceholder": "캐릭터 이름 입력",
-    "pinMeToTop": "내 캐릭터를 맨 위에 고정",
+    "pinMeToTop": "내 행을 맨 위에 고정",
     "slimMode": "슬림 모드",
     "meterLayout": {
       "label": "미터 레이아웃",
@@ -198,7 +198,7 @@
       "classicSlim": "클래식 슬림"
     },
     "detailsMonitor": {
-      "label": "상세 정보를 표시할 모니터",
+      "label": "보조 모니터에 상세 정보 표시",
       "off": "끕",
       "primary": "기본",
       "missing": "해당 디스플레이가 연결되어 있지 않습니다.",
@@ -228,13 +228,13 @@
       "dps": "DPS"
     },
     "showPing": "핑 표시",
-    "showTtk": "처치 예상 시간(TTK) 표시",
-    "showTotalDps": "총 DPS/DMG 표시",
-    "roundDps": "DPS 반올림",
-    "showDpsSuffix": "DPS 뒤에 /s 표시",
-    "autoHideMeter": "미터 자동 숨기기",
-    "showSuspendBtn": "일시정지 버튼 표시",
-    "showLockBtn": "잠금 버튼 표시 (클릭 통과)",
+    "showTtk": "예상 처치 시간 표시",
+    "showTotalDps": "파티 합계 표시",
+    "roundDps": "DPS를 천 단위로 줄이기 (13k)",
+    "showDpsSuffix": "DPS에 /s 붙이기",
+    "autoHideMeter": "AION2가 활성 창이 아닐 때 숨기기",
+    "showSuspendBtn": "수집 일시정지 버튼 표시",
+    "showLockBtn": "클릭 통과 잠금 버튼 표시",
     "playerLimit": {
       "label": "최대 표시 인원"
     },
@@ -331,7 +331,7 @@
       "lock": "오버레이 잠금/해제"
     },
     "defaultMeterMode": {
-      "label": "기본 미터 모드"
+      "label": "시작 대상 모드"
     },
     "trainingMode": {
       "label": "훈련 모드",

@@ -183,7 +183,7 @@
     "resetDetection": "リセット",
     "characterName": "名前#ID",
     "characterNamePlaceholder": "キャラクター名を入力",
-    "pinMeToTop": "常に自分を一番上に表示",
+    "pinMeToTop": "自分の行を常に一番上に",
     "slimMode": "スリムモード",
     "meterLayout": {
       "label": "メーターのレイアウト",
@@ -193,7 +193,7 @@
       "classicSlim": "クラシック スリム"
     },
     "detailsMonitor": {
-      "label": "詳細を表示するモニター",
+      "label": "詳細をサブモニターに表示",
       "off": "オフ",
       "primary": "プライマリ",
       "missing": "そのディスプレイは接続されていません。",
@@ -223,13 +223,13 @@
       "dps": "DPS"
     },
     "showPing": "pingを表示",
-    "showTtk": "撃破予測時間（TTK）を表示",
-    "showTotalDps": "合計DPS/ダメージを表示",
-    "roundDps": "DPSを丸める",
-    "showDpsSuffix": "DPSの後に/sを表示",
-    "autoHideMeter": "メーターを自動的に隠す",
-    "showSuspendBtn": "一時停止ボタンを表示",
-    "showLockBtn": "ロックボタンを表示（クリック透過）",
+    "showTtk": "撃破時間の予測を表示",
+    "showTotalDps": "パーティ合計を表示",
+    "roundDps": "DPSを千単位で表示 (13k)",
+    "showDpsSuffix": "DPSに /s を付ける",
+    "autoHideMeter": "AION2が非アクティブのとき隠す",
+    "showSuspendBtn": "キャプチャ一時停止ボタンを表示",
+    "showLockBtn": "クリック透過ロックボタンを表示",
     "playerLimit": {
       "label": "表示する最大プレイヤー数"
     },
@@ -326,7 +326,7 @@
       "lock": "オーバーレイのロック/解除"
     },
     "defaultMeterMode": {
-      "label": "デフォルトのモード"
+      "label": "起動時のターゲットモード"
     },
     "trainingMode": {
       "label": "訓練モードの対象",

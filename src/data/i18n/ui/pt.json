@@ -183,7 +183,7 @@
     "resetDetection": "Redefinir",
     "characterName": "Nome#ID",
     "characterNamePlaceholder": "Digite o nome do seu personagem",
-    "pinMeToTop": "Sempre me mostrar no topo",
+    "pinMeToTop": "Manter minha linha no topo",
     "slimMode": "Modo compacto",
     "meterLayout": {
       "label": "Layout do medidor",
@@ -193,7 +193,7 @@
       "classicSlim": "Clássica compacta"
     },
     "detailsMonitor": {
-      "label": "Mostrar detalhes no monitor",
+      "label": "Detalhes no segundo monitor",
       "off": "Desligado",
       "primary": "principal",
       "missing": "Esse monitor não está conectado.",
@@ -223,13 +223,13 @@
       "dps": "DPS"
     },
     "showPing": "Mostrar ping",
-    "showTtk": "Mostrar tempo até a morte (TTK)",
-    "showTotalDps": "Mostrar DPS/DAN total",
-    "roundDps": "Arredondar DPS",
-    "showDpsSuffix": "Mostrar /s após o DPS",
-    "autoHideMeter": "Ocultar o medidor automaticamente",
-    "showSuspendBtn": "Mostrar botão de pausa",
-    "showLockBtn": "Mostrar botão de bloqueio (clicar através)",
+    "showTtk": "Mostrar tempo estimado para matar",
+    "showTotalDps": "Mostrar total do grupo",
+    "roundDps": "Abreviar DPS em milhares (13k)",
+    "showDpsSuffix": "Adicionar /s ao DPS",
+    "autoHideMeter": "Ocultar quando o AION2 não estiver em foco",
+    "showSuspendBtn": "Mostrar botão de pausar captura",
+    "showLockBtn": "Mostrar botão de bloqueio (clique através)",
     "playerLimit": {
       "label": "Máx. de jogadores exibidos"
     },
@@ -326,7 +326,7 @@
       "lock": "Bloquear/desbloquear sobreposição"
     },
     "defaultMeterMode": {
-      "label": "Modo padrão"
+      "label": "Modo de alvo ao iniciar"
     },
     "trainingMode": {
       "label": "Alvo do modo treino",

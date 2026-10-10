@@ -183,7 +183,7 @@
     "resetDetection": "Réinitialiser",
     "characterName": "Nom#ID",
     "characterNamePlaceholder": "Saisissez le nom de votre personnage",
-    "pinMeToTop": "Toujours m'afficher en haut",
+    "pinMeToTop": "Garder ma ligne en haut",
     "slimMode": "Mode compact",
     "meterLayout": {
       "label": "Disposition du meter",
@@ -193,7 +193,7 @@
       "classicSlim": "Classique compact"
     },
     "detailsMonitor": {
-      "label": "Afficher les détails sur l'écran",
+      "label": "Détails sur le second écran",
       "off": "Désactivé",
       "primary": "principal",
       "missing": "Cet écran n'est pas connecté.",
@@ -223,13 +223,13 @@
       "dps": "DPS"
     },
     "showPing": "Afficher le ping",
-    "showTtk": "Afficher le temps avant la mort (TTK)",
-    "showTotalDps": "Afficher DPS/DGT total",
-    "roundDps": "Arrondir les DPS",
-    "showDpsSuffix": "Afficher /s après le DPS",
-    "autoHideMeter": "Masquer le meter automatiquement",
-    "showSuspendBtn": "Afficher le bouton pause",
-    "showLockBtn": "Afficher le bouton de verrouillage (clics traversants)",
+    "showTtk": "Afficher le temps de kill estimé",
+    "showTotalDps": "Afficher le total du groupe",
+    "roundDps": "Abréger le DPS en milliers (13k)",
+    "showDpsSuffix": "Ajouter /s au DPS",
+    "autoHideMeter": "Masquer quand AION2 n'est pas au premier plan",
+    "showSuspendBtn": "Afficher le bouton de pause de capture",
+    "showLockBtn": "Afficher le bouton de verrouillage (clic au travers)",
     "playerLimit": {
       "label": "Joueurs affichés max."
     },
@@ -326,7 +326,7 @@
       "lock": "Verrouiller/déverrouiller l'overlay"
     },
     "defaultMeterMode": {
-      "label": "Mode par défaut"
+      "label": "Mode de cible au démarrage"
     },
     "trainingMode": {
       "label": "Cible du mode entraînement",

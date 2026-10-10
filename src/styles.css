@@ -1345,6 +1345,34 @@ body.mainPlayerDpsBold .meter .item .content .dps > p {
   color: var(--title);
 }
 
+/* A group's heading inside a section (Advanced: Diagnostics). */
+.settingsPanel .settingsSubTitle {
+  margin: 14px 0 2px;
+  font-variation-settings: "wght" 650, "wdth" 87.5;
+  font-size: 13px;
+  font-weight: normal;
+  line-height: 1.2;
+  color: var(--hud-sub);
+}
+/* Send Logs to Dev: what it sends, then the button, centred under the
+   logging switches. The line also reports the result (core.js
+   initSendLogs), which the hidden-by-default hint never showed. */
+.settingsPanel .sendLogsRow {
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0 6px;
+  text-align: center;
+}
+.settingsPanel .sendLogsRow .settingsInfo { align-items: center; }
+.settingsPanel .sendLogsRow .sendLogsStatus {
+  display: block;
+  max-width: 46ch;
+}
+/* Reset all settings closes Advanced, apart from its groups. */
+.settingsPanel .settingsSection > .settingsRowAction {
+  margin-top: 12px;
+}
 .settingsPanel .settingsGroupBody {
   display: flex;
   flex-direction: column;
