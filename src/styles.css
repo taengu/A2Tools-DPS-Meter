@@ -6917,6 +6917,28 @@ html.a2-offline .historyUploadBtn {
   transform: translateX(-100%);
 }
 
+/* HEAL: heals have no hit times yet, so only the buffs stay, with a note. */
+.detailsPanel .ftlHealNote {
+  display: none;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--hud-hairline);
+  font-size: 12px;
+  color: var(--hud-sub);
+}
+.detailsPanel .fightTimeline.isHealMode .ftlHealNote {
+  display: block;
+}
+.detailsPanel .fightTimeline.isHealMode .ftlGroupDps,
+.detailsPanel .fightTimeline.isHealMode .ftlGroupCasts {
+  display: none;
+}
+.detailsPanel .ftlGroupDps .dpsChartLegend .legendItem span {
+  max-width: calc(var(--ftl-gutter) - 120px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The time cursor through the lanes, and its time on the axis. */
 .detailsPanel .fightTimelineCursor {
   position: absolute;

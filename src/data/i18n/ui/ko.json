@@ -86,7 +86,11 @@
       "avgDmg": "평균",
       "avgDmgTooltip": "평균 피해",
       "maxDmg": "최대",
-      "maxDmgTooltip": "최대 피해"
+      "maxDmgTooltip": "최대 피해",
+      "heal": "치유",
+      "healTooltip": "치유량",
+      "healPct": "치유%",
+      "healPctTooltip": "치유량 %"
     },
     "stats": {
       "totalDamage": "총 피해",
@@ -110,7 +114,7 @@
     "history": {
       "allPlayers": "전체 플레이어"
     },
-    "dpsChart": "DPS 차트",
+    "dpsChart": "초당 피해량",
     "historyBtn": "기록",
     "timeline": "타임라인",
     "buffs": {
@@ -154,7 +158,12 @@
     },
     "fightTimeline": "전투 타임라인",
     "casts": "시전",
-    "resize": "드래그하여 크기 조절"
+    "resize": "드래그하여 크기 조절",
+    "healTimingNote": "치유 시점은 아직 기록되지 않아 차트와 시전은 DMG 모드에서만 표시됩니다.",
+    "chart": {
+      "bossHp": "보스 HP",
+      "ping": "핑"
+    }
   },
   "history": {
     "title": "전투 기록",

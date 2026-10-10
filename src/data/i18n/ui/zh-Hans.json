@@ -86,7 +86,11 @@
       "avgDmg": "平均",
       "avgDmgTooltip": "平均伤害",
       "maxDmg": "最大",
-      "maxDmgTooltip": "最大伤害"
+      "maxDmgTooltip": "最大伤害",
+      "heal": "治疗",
+      "healTooltip": "治疗量",
+      "healPct": "治疗%",
+      "healPctTooltip": "治疗占比"
     },
     "stats": {
       "totalDamage": "总伤害",
@@ -110,7 +114,7 @@
     "history": {
       "allPlayers": "全体玩家"
     },
-    "dpsChart": "DPS 图表",
+    "dpsChart": "每秒伤害",
     "historyBtn": "历史",
     "timeline": "时间轴",
     "buffs": {
@@ -154,7 +158,12 @@
     },
     "fightTimeline": "战斗时间线",
     "casts": "施放",
-    "resize": "拖动调整大小"
+    "resize": "拖动调整大小",
+    "healTimingNote": "尚未记录治疗时间，图表和施放仅在 DMG 模式下显示。",
+    "chart": {
+      "bossHp": "首领 HP",
+      "ping": "延迟"
+    }
   },
   "history": {
     "title": "战斗历史",

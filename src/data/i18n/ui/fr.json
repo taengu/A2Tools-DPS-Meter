@@ -86,7 +86,11 @@
       "avgDmg": "Moy",
       "avgDmgTooltip": "Dégâts moyens",
       "maxDmg": "Max",
-      "maxDmgTooltip": "Dégâts max."
+      "maxDmgTooltip": "Dégâts max.",
+      "heal": "Soin",
+      "healTooltip": "Soins",
+      "healPct": "S%",
+      "healPctTooltip": "Soins %"
     },
     "stats": {
       "totalDamage": "Dégâts totaux",
@@ -110,7 +114,7 @@
     "history": {
       "allPlayers": "Tous les joueurs"
     },
-    "dpsChart": "Graphique DPS",
+    "dpsChart": "Dégâts par seconde",
     "historyBtn": "Historique",
     "timeline": "Chronologie",
     "buffs": {
@@ -154,7 +158,12 @@
     },
     "fightTimeline": "Chronologie du combat",
     "casts": "Lancers",
-    "resize": "Faire glisser pour redimensionner"
+    "resize": "Faire glisser pour redimensionner",
+    "healTimingNote": "Le moment des soins n'est pas encore enregistré : le graphique et les lancers ne s'affichent qu'en mode DMG.",
+    "chart": {
+      "bossHp": "PV du boss",
+      "ping": "Ping"
+    }
   },
   "history": {
     "title": "Historique des combats",

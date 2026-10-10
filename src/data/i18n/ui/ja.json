@@ -86,7 +86,11 @@
       "avgDmg": "平均",
       "avgDmgTooltip": "平均ダメージ",
       "maxDmg": "最大",
-      "maxDmgTooltip": "最大ダメージ"
+      "maxDmgTooltip": "最大ダメージ",
+      "heal": "回復",
+      "healTooltip": "回復量",
+      "healPct": "回復%",
+      "healPctTooltip": "回復量 %"
     },
     "stats": {
       "totalDamage": "総ダメージ",
@@ -110,7 +114,7 @@
     "history": {
       "allPlayers": "全プレイヤー"
     },
-    "dpsChart": "DPSチャート",
+    "dpsChart": "秒間ダメージ",
     "historyBtn": "履歴",
     "timeline": "タイムライン",
     "buffs": {
@@ -154,7 +158,12 @@
     },
     "fightTimeline": "戦闘タイムライン",
     "casts": "詠唱",
-    "resize": "ドラッグでサイズ変更"
+    "resize": "ドラッグでサイズ変更",
+    "healTimingNote": "回復のタイミングはまだ記録されないため、チャートと詠唱はDMGモードでのみ表示されます。",
+    "chart": {
+      "bossHp": "ボスHP",
+      "ping": "Ping"
+    }
   },
   "history": {
     "title": "戦闘履歴",

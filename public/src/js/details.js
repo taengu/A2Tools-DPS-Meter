@@ -354,6 +354,7 @@ const createDetailsUI = ({
     }
     updateHeaderText();
     updateGridColumns();
+    syncSkillHeaderMode?.();
   };
 
   const resolveStatValue = (statKey, data) => {
@@ -1737,15 +1738,26 @@ const createDetailsUI = ({
       ctx.setLineDash([]);
     }
 
-    // ── Legend (HTML, above chart, right-aligned) ──
-    const legendItems = [
-      { dash: "none",    color: "rgba(255,255,255,0.9)",  label: "DPS" },
-      { dash: "3,4",     color: "rgba(220,60,60,0.9)",    label: "Boss HP" },
-    ];
+    // ── Legend: a line per player, in the colour it is drawn in (the one
+    // selected solid, the rest dashed), then the boss's HP and the ping. ──
+    const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const LEGEND_PLAYERS = 6;
+    const legendItems = allSamples.slice(0, LEGEND_PLAYERS).map(({ actor }) => {
+      const fallbackColor = LANE_COLORS[actorList.indexOf(actor) % LANE_COLORS.length];
+      const color = getJobColor(actor.job) || fallbackColor;
+      const info = detailsActors.get(actor.actorId);
+      const name = info?.nickname && info.nickname !== String(actor.actorId) ? info.nickname : `#${actor.actorId}`;
+      return { dash: isSelectedActor(actor.actorId) ? "none" : "5,3", color, label: escapeHtml(name) };
+    });
+    if (allSamples.length > LEGEND_PLAYERS) {
+      legendItems.push({ dash: "", color: "rgba(255,255,255,0.55)", label: `+${allSamples.length - LEGEND_PLAYERS}` });
+    }
+    legendItems.push({ dash: "3,4", color: "rgba(220,60,60,0.9)", label: escapeHtml(labelText("details.chart.bossHp", "Boss HP")) });
     if (hasPing) {
-      legendItems.push({ dash: "2,4", color: "rgba(255,255,255,0.9)", label: "Ping" });
+      legendItems.push({ dash: "2,4", color: "rgba(255,255,255,0.9)", label: escapeHtml(labelText("details.chart.ping", "Ping")) });
     }
     dpsChartLegend.innerHTML = legendItems.map(({ dash, color, label }) => {
+      if (!dash) return `<span class="legendItem legendMore" style="color:${color}">${label}</span>`;
       const svgLine = dash === "none"
         ? `<line x1="0" y1="6" x2="22" y2="6" stroke="${color}" stroke-width="2"/>`
         : `<line x1="0" y1="6" x2="22" y2="6" stroke="${color}" stroke-width="2" stroke-dasharray="${dash}"/>`;
@@ -2775,10 +2787,30 @@ const createDetailsUI = ({
 
   const isPinned = () => pinnedRowId !== null;
 
+  // In HEAL the amount and share columns are healing, and the timeline keeps
+  // only the buffs: heals carry no hit times yet, so there is no HPS chart or
+  // heal cast lane to draw, and the damage ones would be the wrong fight.
+  const syncSkillHeaderMode = () => {
+    const heal = detailsMode === "heal";
+    const set = (col, key, fallback, tipKey, tipFallback) => {
+      const el = detailsPanel?.querySelector?.(`.detailsSkills .skillHeader .cell.${col}`);
+      if (!el) return;
+      el.dataset.i18n = key;
+      el.dataset.i18nTip = tipKey;
+      el.textContent = labelText(key, fallback);
+      el.dataset.tip = labelText(tipKey, tipFallback);
+    };
+    set("dmg", heal ? "details.skills.heal" : "details.skills.dmg", heal ? "Heal" : "Dmg",
+      heal ? "details.skills.healTooltip" : "details.skills.dmgTooltip", heal ? "Healing" : "Damage");
+    set("dmgpct", heal ? "details.skills.healPct" : "details.skills.dmgPct", heal ? "H%" : "D%",
+      heal ? "details.skills.healPctTooltip" : "details.skills.dmgPctTooltip", heal ? "Healing %" : "Damage %");
+    fightTimeline?.classList?.toggle?.("isHealMode", heal);
+  };
   const syncModeButtons = () => {
     detailsPanel?.querySelectorAll?.(".detailsModeBtn")?.forEach?.((btn) => {
       btn.classList.toggle("isActive", btn?.dataset?.mode === detailsMode);
     });
+    syncSkillHeaderMode();
   };
   const rerenderForMode = () => {
     if (!lastDetails) return;

@@ -86,7 +86,11 @@
       "avgDmg": "Méd",
       "avgDmgTooltip": "Dano médio",
       "maxDmg": "Máx",
-      "maxDmgTooltip": "Dano máximo"
+      "maxDmgTooltip": "Dano máximo",
+      "heal": "Cura",
+      "healTooltip": "Cura",
+      "healPct": "C%",
+      "healPctTooltip": "Cura %"
     },
     "stats": {
       "totalDamage": "Dano total",
@@ -110,7 +114,7 @@
     "history": {
       "allPlayers": "Todos os jogadores"
     },
-    "dpsChart": "Gráfico de DPS",
+    "dpsChart": "Dano por segundo",
     "historyBtn": "Histórico",
     "timeline": "Linha do tempo",
     "buffs": {
@@ -154,7 +158,12 @@
     },
     "fightTimeline": "Linha do tempo da luta",
     "casts": "Conjurações",
-    "resize": "Arraste para redimensionar"
+    "resize": "Arraste para redimensionar",
+    "healTimingNote": "O momento das curas ainda não é registrado; o gráfico e as conjurações só aparecem no modo DMG.",
+    "chart": {
+      "bossHp": "HP do chefe",
+      "ping": "Ping"
+    }
   },
   "history": {
     "title": "Histórico de combates",

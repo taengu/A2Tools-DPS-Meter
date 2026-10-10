@@ -86,7 +86,11 @@
       "avgDmg": "Ø",
       "avgDmgTooltip": "Durchschnittlicher Schaden",
       "maxDmg": "Max",
-      "maxDmgTooltip": "Maximaler Schaden"
+      "maxDmgTooltip": "Maximaler Schaden",
+      "heal": "Heilung",
+      "healTooltip": "Heilung",
+      "healPct": "H%",
+      "healPctTooltip": "Heilung %"
     },
     "stats": {
       "totalDamage": "Gesamtschaden",
@@ -110,7 +114,7 @@
     "history": {
       "allPlayers": "Alle Spieler"
     },
-    "dpsChart": "DPS-Diagramm",
+    "dpsChart": "Schaden pro Sekunde",
     "historyBtn": "Verlauf",
     "timeline": "Zeitleiste",
     "buffs": {
@@ -154,7 +158,12 @@
     },
     "fightTimeline": "Kampfverlauf",
     "casts": "Wirkungen",
-    "resize": "Ziehen zum Ändern der Größe"
+    "resize": "Ziehen zum Ändern der Größe",
+    "healTimingNote": "Heilzeitpunkte werden noch nicht erfasst; Diagramm und Wirkungen gibt es nur im DMG-Modus.",
+    "chart": {
+      "bossHp": "Boss-HP",
+      "ping": "Ping"
+    }
   },
   "history": {
     "title": "Kampfverlauf",

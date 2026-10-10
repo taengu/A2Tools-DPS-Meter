@@ -91,7 +91,11 @@
       "avgDmg": "Срд",
       "avgDmgTooltip": "Средний урон",
       "maxDmg": "Макс",
-      "maxDmgTooltip": "Максимальный урон"
+      "maxDmgTooltip": "Максимальный урон",
+      "heal": "Лечение",
+      "healTooltip": "Лечение",
+      "healPct": "Л%",
+      "healPctTooltip": "Лечение %"
     },
     "stats": {
       "totalDamage": "Общий урон",
@@ -115,7 +119,7 @@
     "history": {
       "allPlayers": "Все игроки"
     },
-    "dpsChart": "График DPS",
+    "dpsChart": "Урон в секунду",
     "historyBtn": "История",
     "timeline": "Хронология",
     "buffs": {
@@ -159,7 +163,12 @@
     },
     "fightTimeline": "Хронология боя",
     "casts": "Применения",
-    "resize": "Перетащите, чтобы изменить размер"
+    "resize": "Перетащите, чтобы изменить размер",
+    "healTimingNote": "Время лечения пока не записывается, поэтому график и применения видны только в режиме DMG.",
+    "chart": {
+      "bossHp": "HP босса",
+      "ping": "Пинг"
+    }
   },
   "history": {
     "title": "История боёв",
