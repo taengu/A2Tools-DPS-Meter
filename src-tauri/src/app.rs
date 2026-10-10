@@ -70,6 +70,7 @@ pub struct AppState {
     /// One client, reused. The update check and the MSI download each used a
     /// one-shot `reqwest::get`, which builds a fresh client and TLS stack per
     /// call; anything periodic wants a pool rather than a handshake every time.
+    #[cfg(feature = "online")]
     pub http: reqwest::Client,
     /// The header's suspend button: while set, the capture dispatcher drops
     /// every packet. Shared with it (`CaptureDispatcher::use_suspend_flag`).
@@ -79,8 +80,10 @@ pub struct AppState {
     /// What the last account check found: `None` until one has run, then
     /// `Some(None)` signed out or `Some(Some(_))` signed in. Settings shows it
     /// at once instead of "checking" for as long as the server takes.
+    #[cfg(feature = "online")]
     pub account_seen: Mutex<Option<Option<crate::account::AccountSummary>>>,
     /// The LAN stream overlay for OBS on another PC; off unless enabled.
+    #[cfg(feature = "online")]
     pub stream_overlay: crate::stream_overlay::Manager,
 }
 
@@ -261,6 +264,7 @@ async fn delete_fight(app: tauri::AppHandle, id: String) -> Result<(), String> {
     }).await?
 }
 
+#[cfg(feature = "online")]
 /// Upload a saved fight to a2tools.app as a log, and return its link.
 #[tauri::command]
 async fn upload_fight(
@@ -271,6 +275,7 @@ async fn upload_fight(
     share::upload(&state.http, &state.app_data_dir, &record, &state.settings).await
 }
 
+#[cfg(feature = "online")]
 /// Upload a finished fight in the background, and tell every window.
 ///
 /// Failure is quiet on purpose: not being signed in, or being offline, is not
@@ -307,6 +312,7 @@ fn auto_upload(app: tauri::AppHandle, record: FightRecord) {
 /// Save fights to History, with the packets behind each so it can be uploaded
 /// and verified later (training dummies are not logs), and auto-upload the
 /// finished ones when that is on.
+#[cfg_attr(not(feature = "online"), allow(unused_variables))]
 fn save_fight_records(app: &tauri::AppHandle, state: &AppState, records: Vec<FightRecord>) {
     for record in &records {
         let _ = state.fight_history.save_fight(record);
@@ -325,6 +331,7 @@ fn save_fight_records(app: &tauri::AppHandle, state: &AppState, records: Vec<Fig
     if !records.is_empty() {
         share::prune_slices(&state.app_data_dir);
     }
+    #[cfg(feature = "online")]
     if state.settings.get(share::AUTO_UPLOAD_KEY).as_deref() == Some("true") {
         let now = crate::clock::now_ms();
         for record in records.into_iter()
@@ -352,21 +359,25 @@ fn save_fights_before_reset(app: &tauri::AppHandle) {
     save_fight_records(app, &state, records);
 }
 
+#[cfg(feature = "online")]
 /// Fights with an automatic upload running. One upload of a fight at a time:
 /// a retry must not start while the first try is still waiting on the network.
 static IN_FLIGHT: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
+#[cfg(feature = "online")]
 /// A fight's place in `IN_FLIGHT`, given up on drop: every way out of the
 /// upload task clears it, a panic included.
 struct InFlight(String);
 
+#[cfg(feature = "online")]
 impl InFlight {
     fn start(id: &str) -> Option<Self> {
         IN_FLIGHT.lock().insert(id.to_string()).then(|| Self(id.to_string()))
     }
 }
 
+#[cfg(feature = "online")]
 impl Drop for InFlight {
     fn drop(&mut self) {
         IN_FLIGHT.lock().remove(&self.0);
@@ -415,6 +426,7 @@ async fn preview_share(
     .map_err(|e| format!("preview task failed: {e}"))?
 }
 
+#[cfg(feature = "online")]
 /// Who, if anyone, this meter is signed in as.
 ///
 /// Returns `None` when there is no token, or when the server says the one we
@@ -433,6 +445,7 @@ async fn account_status(
     Ok(who)
 }
 
+#[cfg(feature = "online")]
 /// Whether this build can show a Discord activity (it has a Discord
 /// application configured). The Settings toggle is hidden when it cannot.
 #[tauri::command]
@@ -440,6 +453,7 @@ fn discord_activity_available() -> bool {
     crate::presence::available()
 }
 
+#[cfg(feature = "online")]
 /// What the last `account_status` found, without asking the server again.
 /// `None` when nothing has been checked yet this session.
 #[tauri::command]
@@ -449,6 +463,7 @@ fn account_status_cached(
     state.account_seen.lock().clone()
 }
 
+#[cfg(feature = "online")]
 /// Begin signing in, and return the code to show the player.
 ///
 /// The meter has no browser and cannot hold a client secret, so this is the
@@ -487,6 +502,7 @@ async fn account_begin_link(
     Ok(prompt)
 }
 
+#[cfg(feature = "online")]
 /// Forget the token on this machine.
 ///
 /// Local only, deliberately. Revoking it everywhere is a decision to make on the
@@ -500,12 +516,14 @@ fn account_sign_out(state: tauri::State<'_, AppState>) {
     tracing::info!("Account signed out on this machine");
 }
 
+#[cfg(feature = "online")]
 /// The stream overlay as Settings shows it: on or off, the port, the URLs.
 #[tauri::command]
 fn stream_overlay_status(state: tauri::State<'_, AppState>) -> crate::stream_overlay::Status {
     state.stream_overlay.status(&state.settings)
 }
 
+#[cfg(feature = "online")]
 /// Turn the stream overlay on or off, or move it to another port. Async so a
 /// restart, which waits for the old port to close, never holds the UI thread.
 #[tauri::command]
@@ -525,6 +543,7 @@ async fn stream_overlay_configure(
     Ok(crate::stream_overlay::sync(&app))
 }
 
+#[cfg(feature = "online")]
 /// A fresh overlay key: every URL handed out before stops working.
 #[tauri::command]
 async fn stream_overlay_new_key(app: tauri::AppHandle) -> Result<crate::stream_overlay::Status, String> {
@@ -565,6 +584,7 @@ fn update_settings(
             apply_all_targets_window(&state, &value);
         }
         let _ = app.emit("setting-changed", serde_json::json!({ "key": key, "value": value }));
+        #[cfg(feature = "online")]
         if key.starts_with(crate::stream_overlay::ENABLED_KEY) {
             crate::stream_overlay::sync(&app);
         }
@@ -572,8 +592,10 @@ fn update_settings(
 }
 
 #[tauri::command]
+#[cfg_attr(not(feature = "online"), allow(unused_variables))]
 fn clear_settings(app: tauri::AppHandle, state: tauri::State<'_, AppState>) {
     state.settings.clear();
+    #[cfg(feature = "online")]
     crate::stream_overlay::sync(&app);
 }
 
@@ -746,6 +768,7 @@ fn set_packet_logging(state: tauri::State<'_, AppState>, enabled: bool) {
     state.settings.set("dpsMeter.saveRawPackets", if enabled { "true" } else { "false" });
 }
 
+#[cfg(feature = "online")]
 /// Send the newest packet captures to the developer (Settings, beside packet
 /// logging). Returns the report code the player passes on.
 #[tauri::command]
@@ -858,6 +881,7 @@ fn write_cached_icon(state: tauri::State<'_, AppState>, key: String, data: Strin
 }
 
 
+#[cfg(feature = "online")]
 #[tauri::command]
 async fn show_update_window(
     app: tauri::AppHandle,
@@ -921,6 +945,7 @@ async fn show_update_window(
     Ok(accepted)
 }
 
+#[cfg(feature = "online")]
 /// Whether a downloaded package is the one the manifest names: its SHA-256,
 /// in hex, equals the manifest's. A manifest without a hash matches nothing.
 fn package_hash_matches(expected: &str, actual_hex: &str) -> bool {
@@ -930,6 +955,7 @@ fn package_hash_matches(expected: &str, actual_hex: &str) -> bool {
         && expected.eq_ignore_ascii_case(actual_hex)
 }
 
+#[cfg(feature = "online")]
 async fn download_and_install_update(app: &tauri::AppHandle, url: &str, expected_sha256: &str) -> Result<(), String> {
     use tokio::io::AsyncWriteExt;
     use futures_util::StreamExt;
@@ -1012,6 +1038,7 @@ async fn download_and_install_update(app: &tauri::AppHandle, url: &str, expected
     Ok(())
 }
 
+#[cfg(feature = "online")]
 #[tauri::command]
 async fn fetch_url(state: tauri::State<'_, AppState>, url: String) -> Result<String, String> {
     state
@@ -1026,6 +1053,7 @@ async fn fetch_url(state: tauri::State<'_, AppState>, url: String) -> Result<Str
         .map_err(|e| e.to_string())
 }
 
+#[cfg(feature = "online")]
 /// Where the supporter roster lives. The same bucket the installer is served
 /// from, so it costs no new infrastructure and is already cached at the edge.
 const SUPPORTER_ROSTER_URL: &str = "https://cdn.a2tools.app/patrons-v1.bin";
@@ -1048,6 +1076,7 @@ const SUPPORTER_ROSTER_OVERRIDE: &str = "patrons-local.bin";
 /// in shows up while you are still looking at the meter; the published roster
 /// changes rarely enough that six hours is generous.
 const ROSTER_POLL_OVERRIDE: Duration = Duration::from_secs(15);
+#[cfg(feature = "online")]
 const ROSTER_POLL_PUBLISHED: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// Read the local override, if one is there.
@@ -1077,6 +1106,7 @@ fn load_supporter_override(app_data_dir: &std::path::Path) -> Option<crate::supp
     }
 }
 
+#[cfg(feature = "online")]
 /// Download and parse the supporter roster.
 ///
 /// Every failure is `None` and nobody renders gold. That is deliberate: this is
@@ -1099,6 +1129,111 @@ async fn fetch_supporter_roster(client: &reqwest::Client) -> Option<crate::suppo
         return None;
     }
     crate::supporters::Roster::parse(&bytes)
+}
+
+// ── the private build ──────────────────────────────────────────────────────
+// Built without the `online` feature (`npm run build:offline`), the meter links
+// no network client and none of the code above that reaches a service: the
+// A2 Tools account and uploads, Discord activity, the stream overlay, Send Logs
+// to Dev, update checks and the updater. The pages still invoke these commands
+// by name, so each keeps its name here and says it is not in this build; the
+// pages ask `build_features` first and hide what is missing.
+
+#[cfg(not(feature = "online"))]
+const NOT_IN_THIS_BUILD: &str = "not in this build: it was built without online features";
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+async fn upload_fight(fight_id: String) -> Result<serde_json::Value, String> {
+    let _ = fight_id;
+    Err(NOT_IN_THIS_BUILD.into())
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+async fn account_status() -> Result<Option<serde_json::Value>, String> {
+    Err(NOT_IN_THIS_BUILD.into())
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+fn account_status_cached() -> Option<Option<serde_json::Value>> {
+    None
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+fn discord_activity_available() -> bool {
+    false
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+async fn account_begin_link() -> Result<serde_json::Value, String> {
+    Err(NOT_IN_THIS_BUILD.into())
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+fn account_sign_out() {}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+fn stream_overlay_status() -> Result<serde_json::Value, String> {
+    Err(NOT_IN_THIS_BUILD.into())
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+async fn stream_overlay_configure(enabled: bool, port: u16) -> Result<serde_json::Value, String> {
+    let _ = (enabled, port);
+    Err(NOT_IN_THIS_BUILD.into())
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+async fn stream_overlay_new_key() -> Result<serde_json::Value, String> {
+    Err(NOT_IN_THIS_BUILD.into())
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+async fn send_logs_to_dev() -> Result<serde_json::Value, String> {
+    Err(NOT_IN_THIS_BUILD.into())
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn show_update_window(
+    current: String,
+    latest: String,
+    msi_url: String,
+    arch_url: Option<String>,
+    deb_url: Option<String>,
+    rpm_url: Option<String>,
+    msi_sha256: Option<String>,
+    arch_sha256: Option<String>,
+    deb_sha256: Option<String>,
+    rpm_sha256: Option<String>,
+) -> Result<bool, String> {
+    let _ = (current, latest, msi_url, arch_url, deb_url, rpm_url, msi_sha256, arch_sha256, deb_sha256, rpm_sha256);
+    Ok(false)
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+async fn fetch_url(url: String) -> Result<String, String> {
+    let _ = url;
+    Err(NOT_IN_THIS_BUILD.into())
+}
+
+/// Which optional parts this build has. `online` is false in the private
+/// build: the pages hide the account, uploads, Streaming, Discord activity,
+/// Send Logs to Dev and the update prompt.
+#[tauri::command]
+fn build_features() -> serde_json::Value {
+    serde_json::json!({ "online": cfg!(feature = "online") })
 }
 
 #[tauri::command]
@@ -2395,6 +2530,7 @@ pub fn run() {
                 npc_lookup: npc_lookup.clone(),
                 app_data_dir: app_data_dir.clone(),
                 i18n_data_dir: found_data_dir.clone(),
+                #[cfg(feature = "online")]
                 http: reqwest::Client::builder()
                     .user_agent(concat!("A2Tools-DPS-Meter/", env!("CARGO_PKG_VERSION")))
                     .connect_timeout(Duration::from_secs(10))
@@ -2403,7 +2539,9 @@ pub fn run() {
                     .unwrap_or_default(),
                 capture_suspended: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 overlay_lock: Arc::new(OverlayLock::default()),
+                #[cfg(feature = "online")]
                 account_seen: Mutex::new(None),
+                #[cfg(feature = "online")]
                 stream_overlay: crate::stream_overlay::Manager::default(),
             };
             let capture_suspended = state.capture_suspended.clone();
@@ -2433,7 +2571,9 @@ pub fn run() {
                 app.state::<AppState>().data_storage
                     .set_before_reset(move || save_fights_before_reset(&handle));
             }
+            #[cfg(feature = "online")]
             crate::presence::spawn(app.handle().clone());
+            #[cfg(feature = "online")]
             crate::stream_overlay::sync(app.handle());
 
             // Reopen the Details window if it was left enabled. Done here rather
@@ -2743,6 +2883,7 @@ pub fn run() {
                         // Automatic uploads that failed and are due again,
                         // fighting or not: a meter left open after the
                         // connection came back catches up on its own.
+                        #[cfg(feature = "online")]
                         if state.settings.get(share::AUTO_UPLOAD_KEY).as_deref() == Some("true") {
                             let now = crate::clock::now_ms();
                             for id in share::auto_upload_retries_due(&state.app_data_dir, now) {
@@ -2759,12 +2900,16 @@ pub fn run() {
 
             // Supporter roster: fetched, never queried. See `crate::supporters`
             // — asking the server "is this player a supporter?" would hand it a
-            // list of who you play with, every fight, for a cosmetic.
+            // list of who you play with, every fight, for a cosmetic. The
+            // private build fetches nothing: only a local override counts.
             let handle_roster = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let mut had_override = false;
                 loop {
+                    #[cfg(feature = "online")]
                     let mut wait = ROSTER_POLL_PUBLISHED;
+                    #[cfg(not(feature = "online"))]
+                    let mut wait = ROSTER_POLL_OVERRIDE;
                     if let Some(state) = handle_roster.try_state::<AppState>() {
                         // The override wins when present, and is re-read every
                         // pass so editing it takes effect without a restart.
@@ -2780,6 +2925,11 @@ pub fn run() {
                                     tracing::info!("Supporter roster override removed");
                                     had_override = false;
                                 }
+                                #[cfg(not(feature = "online"))]
+                                if just_lost_override {
+                                    state.data_storage.set_supporters(Default::default());
+                                }
+                                #[cfg(feature = "online")]
                                 match fetch_supporter_roster(&state.http).await {
                                     Some(roster) => {
                                         tracing::info!(
@@ -2893,6 +3043,7 @@ pub fn run() {
             test_auto_hide,
             fetch_url,
             show_update_window,
+            build_features,
         ])
         .run(context)
         .expect("error while running tauri application");
@@ -2900,8 +3051,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[cfg_attr(not(feature = "online"), allow(unused_imports))]
     use super::*;
 
+    #[cfg(feature = "online")]
     #[test]
     fn a_panicking_upload_still_frees_its_fight() {
         let held = InFlight::start("in-flight-test").unwrap();
@@ -2915,6 +3068,7 @@ mod tests {
         assert!(InFlight::start("in-flight-test").is_some());
     }
 
+    #[cfg(feature = "online")]
     #[test]
     fn only_a_package_with_the_manifest_hash_is_installed() {
         let actual = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";

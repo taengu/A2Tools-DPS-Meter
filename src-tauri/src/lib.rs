@@ -22,7 +22,7 @@ pub mod rederive;
 pub mod supporters;
 
 // ── desktop only ───────────────────────────────────────────────────────────
-#[cfg(feature = "desktop")]
+#[cfg(feature = "online")]
 pub mod account;
 #[cfg(feature = "desktop")]
 pub mod config;
@@ -32,11 +32,11 @@ pub mod history;
 pub mod logging;
 #[cfg(feature = "desktop")]
 pub mod platform;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "online")]
 mod presence;
 #[cfg(feature = "desktop")]
 pub mod share;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "online")]
 pub mod stream_overlay;
 #[cfg(feature = "desktop")]
 mod npcap_setup;

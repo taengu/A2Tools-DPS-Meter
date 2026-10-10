@@ -3,16 +3,23 @@
 //! npcap.com, run it, and start capturing as soon as it loads, with no
 //! restart. Elsewhere the page is told, as before.
 
+#[cfg(feature = "online")]
 use std::path::{Path, PathBuf};
 
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
+#[cfg(feature = "online")]
+use tauri::Manager;
 
+#[cfg(feature = "online")]
 use crate::app::AppState;
 use crate::capture::pcap_capturer::PcapCapturer;
+#[cfg(feature = "online")]
 use crate::platform;
 
+#[cfg(feature = "online")]
 const SITE: &str = "https://npcap.com/";
 
+#[cfg(feature = "online")]
 /// The prompt's words, in the meter's language.
 struct Texts {
     title: String,
@@ -21,8 +28,10 @@ struct Texts {
     still_missing: String,
 }
 
+#[cfg(feature = "online")]
 const LANGUAGES: [&str; 10] = ["de", "en", "es", "fr", "ja", "ko", "pt", "ru", "zh-Hans", "zh-Hant"];
 
+#[cfg(feature = "online")]
 fn texts(data_dir: Option<&Path>, lang: &str) -> Texts {
     let load = |lang: &str| -> Option<serde_json::Value> {
         let path = data_dir?.join("i18n").join("ui").join(format!("{lang}.json"));
@@ -59,6 +68,7 @@ fn texts(data_dir: Option<&Path>, lang: &str) -> Texts {
     }
 }
 
+#[cfg(feature = "online")]
 /// The installer's file name in npcap.com's page (`dist/npcap-1.89.exe`),
 /// the newest if it lists more than one.
 fn installer_name(page: &str) -> Option<String> {
@@ -76,6 +86,7 @@ fn installer_name(page: &str) -> Option<String> {
         .max_by_key(|name| version(name))
 }
 
+#[cfg(feature = "online")]
 async fn fetch_installer(http: &reqwest::Client) -> Result<PathBuf, String> {
     let page = http.get(SITE).send().await.and_then(|r| r.error_for_status()).map_err(|e| e.to_string())?;
     let page = page.text().await.map_err(|e| e.to_string())?;
@@ -97,16 +108,29 @@ async fn fetch_installer(http: &reqwest::Client) -> Result<PathBuf, String> {
 }
 
 /// Called at startup when the capture library did not load.
+///
+/// Where the meter can install Npcap (Windows, online build) it offers to
+/// download the installer. Otherwise the page shows the help: on Linux libpcap
+/// comes from the packages, and the private build downloads nothing, so it
+/// says where to get Npcap and leaves the installing to the player.
 pub fn offer(app: tauri::AppHandle, capturer: PcapCapturer) {
-    if !platform::pcap::OFFERS_INSTALL {
-        // The page shows the help (Linux: libpcap comes from the packages).
-        tauri::async_runtime::spawn(async move {
-            // Small delay so the page is listening.
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            let _ = app.emit("npcap-missing", ());
-        });
+    #[cfg(feature = "online")]
+    if platform::pcap::OFFERS_INSTALL {
+        offer_download(app, capturer);
         return;
     }
+    #[cfg(not(feature = "online"))]
+    drop(capturer);
+    tauri::async_runtime::spawn(async move {
+        // Small delay so the page is listening.
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        let _ = app.emit("npcap-missing", ());
+    });
+}
+
+/// Ask, download Npcap's installer from npcap.com, run it and start capturing.
+#[cfg(feature = "online")]
+fn offer_download(app: tauri::AppHandle, capturer: PcapCapturer) {
     tauri::async_runtime::spawn(async move {
         let Some(state) = app.try_state::<AppState>() else { return };
         let lang = state.settings.get("dpsMeter.language").unwrap_or_else(|| "en".into());
@@ -154,6 +178,7 @@ pub fn offer(app: tauri::AppHandle, capturer: PcapCapturer) {
     });
 }
 
+#[cfg(feature = "online")]
 #[cfg(test)]
 mod tests {
     use super::*;

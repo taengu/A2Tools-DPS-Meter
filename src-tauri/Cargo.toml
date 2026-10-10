@@ -22,7 +22,23 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 #   cargo check --no-default-features --target wasm32-unknown-unknown
 #
 # is the check that enforces it.
-default = ["desktop"]
+default = ["desktop", "online"]
+# Everything that talks to a service outside this computer: the A2 Tools
+# account and uploads, the supporter roster, update checks and the updater,
+# Send Logs to Dev, Discord activity, the OBS stream overlay and the Npcap
+# installer download. A build without it (the private build, see README)
+# links none of that code and none of these crates:
+#
+#   npm run build:offline
+#
+online = [
+    "desktop",
+    "dep:reqwest",
+    "dep:futures-util",
+    "dep:urlencoding",
+    "dep:discord-rich-presence",
+    "dep:getrandom",
+]
 desktop = [
     "dep:tauri",
     "dep:tauri-build",
@@ -31,12 +47,7 @@ desktop = [
     "dep:libloading",
     "dep:tokio",
     "dep:tracing-subscriber",
-    "dep:reqwest",
-    "dep:futures-util",
-    "dep:urlencoding",
     "dep:flate2",
-    "dep:discord-rich-presence",
-    "dep:getrandom",
     # Linux only (see the target section below); ignored elsewhere.
     "dep:secret-service",
     "dep:gtk",
