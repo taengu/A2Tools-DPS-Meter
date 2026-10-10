@@ -156,7 +156,10 @@
         "stillOn": "Still on at the end of the fight",
         "replaced": "Replaced by a new level"
       }
-    }
+    },
+    "fightTimeline": "Fight timeline",
+    "casts": "Casts",
+    "resize": "Drag to resize"
   },
   "history": {
     "title": "Battle History",

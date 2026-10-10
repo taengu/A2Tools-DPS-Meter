@@ -151,7 +151,10 @@
         "stillOn": "전투 종료 시 유지 중",
         "replaced": "새 레벨로 교체됨"
       }
-    }
+    },
+    "fightTimeline": "전투 타임라인",
+    "casts": "시전",
+    "resize": "드래그하여 크기 조절"
   },
   "history": {
     "title": "전투 기록",

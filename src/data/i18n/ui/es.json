@@ -151,7 +151,10 @@
         "stillOn": "Activo al terminar el combate",
         "replaced": "Sustituido por un nivel nuevo"
       }
-    }
+    },
+    "fightTimeline": "Cronología del combate",
+    "casts": "Lanzamientos",
+    "resize": "Arrastra para cambiar el tamaño"
   },
   "history": {
     "title": "Historial de combates",

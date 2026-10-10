@@ -337,12 +337,7 @@
               <div class="detailsPartyList"></div>
               <div class="detailsStats"></div>
             </div>
-
             <div class="detailsSection skillsSection isExpanded">
-              <div class="detailsSectionHeader" data-section="skills">
-                <span class="detailsSectionArrow"></span>
-                <span class="detailsSectionTitle" data-i18n="details.skills.skill">Skills</span>
-              </div>
               <div class="detailsSectionContent">
                 <div class="detailsSkills">
                   <div class="skillHeader">
@@ -378,58 +373,50 @@
                 </div>
               </div>
             </div>
-            <div class="detailsSection buffsSection">
-              <div class="detailsSectionHeader" data-section="buffs">
-                <span class="detailsSectionArrow"></span>
-                <span class="detailsSectionTitle" data-i18n="details.buffs.title">Buffs</span>
-              </div>
-              <div class="detailsSectionContent">
-                <div class="buffTimeline">
-                  <div class="buffToolbar">
-                    <div class="buffSegmented" role="group" aria-label="Cast by" data-i18n-aria-label="details.buffs.castByLabel">
-                      <button class="buffChip" type="button" data-buff-caster="all" data-i18n="details.buffs.casterAll">All</button>
-                      <button class="buffChip" type="button" data-buff-caster="party" data-i18n="details.buffs.casterParty">Party</button>
-                      <button class="buffChip" type="button" data-buff-caster="self" data-i18n="details.buffs.casterSelf">Self</button>
-                    </div>
-                    <div class="buffSegmented" role="group" aria-label="Sort" data-i18n-aria-label="details.buffs.sortLabel">
-                      <button class="buffChip" type="button" data-buff-sort="uptime" data-i18n="details.buffs.sortUptime">Uptime</button>
-                      <button class="buffChip" type="button" data-buff-sort="first" data-i18n="details.buffs.sortFirst">First applied</button>
-                    </div>
-                    <button class="buffChip buffPassivesBtn" type="button" aria-pressed="false" data-i18n="details.buffs.showPassives">Passives</button>
+            <div class="detailsSplitter" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="Resize" data-i18n-aria-label="details.resize"></div>
+            <section class="fightTimeline buffTimeline">
+              <div class="fightTimelineBar">
+                <span class="fightTimelineTitle" data-i18n="details.fightTimeline">Fight timeline</span>
+                <div class="buffToolbar">
+                  <div class="buffSegmented" role="group" aria-label="Cast by" data-i18n-aria-label="details.buffs.castByLabel">
+                    <button class="buffChip" type="button" data-buff-caster="all" data-i18n="details.buffs.casterAll">All</button>
+                    <button class="buffChip" type="button" data-buff-caster="party" data-i18n="details.buffs.casterParty">Party</button>
+                    <button class="buffChip" type="button" data-buff-caster="self" data-i18n="details.buffs.casterSelf">Self</button>
                   </div>
+                  <div class="buffSegmented" role="group" aria-label="Sort" data-i18n-aria-label="details.buffs.sortLabel">
+                    <button class="buffChip" type="button" data-buff-sort="uptime" data-i18n="details.buffs.sortUptime">Uptime</button>
+                    <button class="buffChip" type="button" data-buff-sort="first" data-i18n="details.buffs.sortFirst">First applied</button>
+                  </div>
+                  <button class="buffChip buffPassivesBtn" type="button" aria-pressed="false" data-i18n="details.buffs.showPassives">Passives</button>
+                </div>
+              </div>
+              <div class="fightTimelineScroll">
+                <div class="ftlGroup ftlGroupDps">
+                  <div class="ftlGroupTitle" data-i18n="details.dpsChart">DPS Chart</div>
+                  <div class="dpsChartWrap">
+                    <div class="dpsChartLegend"></div>
+                    <canvas class="dpsChartCanvas"></canvas>
+                    <div class="dpsChartXAxis"></div>
+                  </div>
+                </div>
+                <div class="ftlGroup ftlGroupBuffs">
                   <div class="buffBody"></div>
-                  <div class="buffTooltip" hidden></div>
                 </div>
-              </div>
-            </div>
-            <div class="detailsSection dpsChartSection">
-              <div class="detailsSectionHeader" data-section="dpsChart">
-                <span class="detailsSectionArrow"></span>
-                <span class="detailsSectionTitle" data-i18n="details.dpsChart">DPS Chart</span>
-              </div>
-              <div class="detailsSectionContent">
-                <div class="dpsChartWrap">
-                  <div class="dpsChartLegend"></div>
-                  <canvas class="dpsChartCanvas"></canvas>
-                  <div class="dpsChartXAxis"></div>
-                </div>
-              </div>
-            </div>
-            <div class="detailsSection timelineSection">
-              <div class="detailsSectionHeader" data-section="timeline">
-                <span class="detailsSectionArrow"></span>
-                <span class="detailsSectionTitle" data-i18n="details.timeline">Timeline</span>
-              </div>
-              <div class="detailsSectionContent">
-                <div class="timelineChart">
-                  <div class="timelineLegend"></div>
-                  <div class="timelineViewport">
-                    <canvas class="timelineCanvas"></canvas>
+                <div class="ftlGroup ftlGroupCasts">
+                  <div class="ftlGroupTitle" data-i18n="details.casts">Casts</div>
+                  <div class="timelineChart">
+                    <div class="timelineLegend"></div>
+                    <div class="timelineViewport">
+                      <canvas class="timelineCanvas"></canvas>
+                    </div>
+                    <div class="timelineXAxis"></div>
                   </div>
-                  <div class="timelineXAxis"></div>
                 </div>
+                <div class="fightTimelineCursor" hidden></div>
               </div>
-            </div>
+              <div class="fightTimelineAxis"><div class="fightTimelineAxisLane"></div></div>
+              <div class="buffTooltip" hidden></div>
+            </section>
           </div>
         </div>
         <div

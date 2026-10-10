@@ -151,7 +151,10 @@
         "stillOn": "Ainda ativo no fim da luta",
         "replaced": "Substituído por um novo nível"
       }
-    }
+    },
+    "fightTimeline": "Linha do tempo da luta",
+    "casts": "Conjurações",
+    "resize": "Arraste para redimensionar"
   },
   "history": {
     "title": "Histórico de combates",

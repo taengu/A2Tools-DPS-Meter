@@ -151,7 +151,10 @@
         "stillOn": "戦闘終了時も継続",
         "replaced": "新しいレベルに置き換え"
       }
-    }
+    },
+    "fightTimeline": "戦闘タイムライン",
+    "casts": "詠唱",
+    "resize": "ドラッグでサイズ変更"
   },
   "history": {
     "title": "戦闘履歴",

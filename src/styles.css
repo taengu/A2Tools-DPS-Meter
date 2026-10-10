@@ -6663,3 +6663,323 @@ html.a2-offline .discordPromo,
 html.a2-offline .historyUploadBtn {
   display: none !important;
 }
+
+/* ============================================================
+   DETAILS LAYOUT
+   ------------------------------------------------------------
+   Party and stats in a sidebar beside the skill table; under
+   both, one fight timeline where the DPS chart, the buffs and
+   the casts share a time axis. Nothing collapses, so no section
+   squeezes another; a bar between the halves sets the split.
+   The sidebar's width is the timeline's label gutter, so the
+   page has one vertical line from top to bottom.
+   ============================================================ */
+.detailsPanel {
+  --details-sidebar-w: 300px;
+}
+.detailsPanel .detailsBody {
+  display: grid;
+  grid-template-columns: var(--details-sidebar-w) minmax(0, 1fr);
+  grid-template-rows: minmax(0, var(--details-top, 0.52fr)) 8px minmax(0, var(--details-bottom, 0.48fr));
+  overflow: hidden;
+}
+
+/* Sidebar: the party, then the fight's figures as tiles. */
+.detailsPanel .detailsBody > .detailsStatsRow {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  border-bottom: 0;
+  border-right: 1px solid var(--hud-hairline);
+  scrollbar-width: thin;
+}
+.detailsPanel .detailsBody > .detailsStatsRow .detailsPartyList {
+  flex: none;
+  width: auto;
+  border-right: 0;
+  border-bottom: 1px solid var(--hud-hairline);
+}
+.detailsPanel .detailsBody > .detailsStatsRow .detailsStats {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+  padding: 6px 12px 10px;
+}
+.detailsPanel .detailsBody > .detailsStatsRow .detailsStats .stat {
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 1px;
+  min-height: 0;
+  padding: 4px 0;
+}
+.detailsPanel .detailsBody > .detailsStatsRow .detailsStats .stat .value {
+  font-size: 15px;
+}
+.detailsPanel .detailsBody > .detailsStatsRow .detailsStats .stat .label {
+  max-width: 100%;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+/* Skills: the whole top right, every column, scrolling on its own. */
+.detailsPanel .detailsBody > .skillsSection {
+  grid-column: 2;
+  grid-row: 1;
+  flex: none;
+  min-height: 0;
+}
+.detailsPanel .detailsBody > .skillsSection > .detailsSectionContent {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.detailsPanel .detailsBody > .skillsSection .detailsSkills .skills {
+  max-height: none;
+}
+
+/* Wider than its column (a large font): the rows scroll sideways and the
+   header follows; every row is as wide as its columns need. */
+.detailsPanel .detailsBody > .skillsSection .detailsSkills .skills {
+  overflow-x: auto;
+}
+.detailsPanel .detailsBody > .skillsSection .detailsSkills .skillHeader {
+  overflow-x: hidden;
+}
+.detailsPanel .detailsBody > .skillsSection .detailsSkills .skillHeader,
+.detailsPanel .detailsBody > .skillsSection .detailsSkills .skillRow {
+  min-width: min-content;
+}
+
+/* The bar between the halves. */
+.detailsPanel .detailsSplitter {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  position: relative;
+  cursor: row-resize;
+  touch-action: none;
+  border-top: 1px solid var(--hud-hairline);
+  border-bottom: 1px solid var(--hud-hairline);
+  background: rgba(255, 255, 255, 0.025);
+}
+.detailsPanel .detailsSplitter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 3px;
+  margin: -1.5px 0 0 -22px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.28);
+  transition: background 120ms ease;
+}
+.detailsPanel .detailsSplitter:hover::after,
+.detailsPanel .detailsSplitter.isDragging::after,
+.detailsPanel .detailsSplitter:focus-visible::after {
+  background: var(--isUser-fill);
+}
+.detailsPanel .detailsSplitter:focus-visible {
+  outline: none;
+}
+
+/* The fight timeline: one gutter, one margin, one axis. */
+.detailsPanel .fightTimeline {
+  --ftl-gutter: var(--details-sidebar-w);
+  --ftl-right: 52px;
+  --ftl-chart-h: 150px;
+  --buff-label-w: calc(var(--ftl-gutter) - 20px);
+  --buff-up-w: calc(var(--ftl-right) - 8px);
+  grid-column: 1 / -1;
+  grid-row: 3;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+}
+.detailsPanel .fightTimelineBar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--hud-hairline);
+}
+.detailsPanel .fightTimelineTitle {
+  width: calc(var(--ftl-gutter) - 24px);
+  font-family: var(--hud-tech);
+  font-variation-settings: "wght" 700, "wdth" 87.5;
+  font-size: 13px;
+  color: var(--title, #fff);
+}
+.detailsPanel .fightTimelineBar .buffToolbar {
+  padding: 0;
+}
+.detailsPanel .fightTimelineScroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.detailsPanel .ftlGroup {
+  position: relative;
+  border-bottom: 1px solid var(--hud-hairline);
+}
+.detailsPanel .ftlGroupTitle {
+  padding: 7px 12px 2px;
+  font-family: var(--hud-tech);
+  font-variation-settings: "wght" 650, "wdth" 87.5;
+  font-size: 11.5px;
+  color: var(--hud-sub);
+}
+/* DPS: the chart spans the width; its legend sits in the gutter. */
+.detailsPanel .ftlGroupDps .dpsChartWrap {
+  position: relative;
+  padding: 0 0 6px;
+}
+.detailsPanel .ftlGroupDps .dpsChartLegend {
+  position: absolute;
+  left: 12px;
+  top: 4px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+.detailsPanel .ftlGroupDps .dpsChartXAxis,
+.detailsPanel .ftlGroupCasts .timelineXAxis,
+.detailsPanel .ftlGroupCasts .timelineLegend,
+.detailsPanel .ftlGroupBuffs .buffAxis {
+  display: none;
+}
+/* Buffs: no scroll of their own; the label column is the gutter. */
+.detailsPanel .ftlGroupBuffs .buffBody {
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
+  padding: 0 0 6px;
+}
+.detailsPanel .ftlGroupBuffs .buffRow {
+  padding: 0 0 0 12px;
+}
+.detailsPanel .ftlGroupBuffs .buffNote,
+.detailsPanel .ftlGroupBuffs .buffGroupHeader,
+.detailsPanel .ftlGroupBuffs .buffPassives {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+/* Casts: drawn to the width, labels in the gutter, no sideways scroll. */
+.detailsPanel .ftlGroupCasts .timelineChart {
+  padding: 0;
+}
+.detailsPanel .ftlGroupCasts .timelineViewport {
+  max-height: none;
+  min-height: 0;
+  padding: 0 0 6px;
+  overflow: visible;
+}
+.detailsPanel .fightTimelineAxis {
+  position: relative;
+  flex: none;
+  display: grid;
+  grid-template-columns: var(--ftl-gutter) minmax(0, 1fr) calc(var(--ftl-right) + var(--ftl-sb, 0px));
+  height: 22px;
+  border-top: 1px solid var(--hud-hairline);
+}
+.detailsPanel .fightTimelineAxisLane {
+  grid-column: 2;
+  position: relative;
+  font-family: var(--hud-tech);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--hud-sub);
+}
+.detailsPanel .fightTimelineAxisLane span {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.detailsPanel .fightTimelineAxisLane span:first-child {
+  transform: none;
+}
+.detailsPanel .fightTimelineAxisLane span.isEnd {
+  transform: translateX(-100%);
+}
+
+/* The time cursor through the lanes, and its time on the axis. */
+.detailsPanel .fightTimelineCursor {
+  position: absolute;
+  top: 0;
+  width: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+  z-index: 30;
+}
+.detailsPanel .fightTimelineCursor[hidden],
+.detailsPanel .fightTimelineAxisTag[hidden] {
+  display: none;
+}
+.detailsPanel .fightTimelineAxisTag {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--isUser-fill);
+  color: #fff;
+  font-family: var(--hud-tech);
+  font-variation-settings: "wght" 650, "wdth" 87.5;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* Narrow (a phone on the web, a small window): one column that scrolls,
+   the party and stats on top as before, a narrower gutter. */
+@media (max-width: 999px) {
+  .detailsPanel {
+    --details-sidebar-w: 150px;
+  }
+  .detailsPanel .detailsBody {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .detailsPanel .detailsBody > .detailsStatsRow {
+    flex: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--hud-hairline);
+  }
+  .detailsPanel .detailsBody > .detailsStatsRow .detailsPartyList,
+  .detailsPanel .detailsBody > .detailsStatsRow .detailsStats {
+    flex: 1 1 260px;
+  }
+  .detailsPanel .detailsBody > .skillsSection,
+  .detailsPanel .fightTimeline {
+    flex: none;
+  }
+  .detailsPanel .detailsBody > .skillsSection .detailsSkills .skills {
+    max-height: 60vh;
+  }
+  .detailsPanel .detailsSplitter {
+    display: none;
+  }
+  .detailsPanel .fightTimelineScroll {
+    overflow: visible;
+  }
+}

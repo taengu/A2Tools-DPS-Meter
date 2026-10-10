@@ -151,7 +151,10 @@
         "stillOn": "戰鬥結束時仍生效",
         "replaced": "被新等級取代"
       }
-    }
+    },
+    "fightTimeline": "戰鬥時間軸",
+    "casts": "施放",
+    "resize": "拖曳調整大小"
   },
   "history": {
     "title": "戰鬥歷史",

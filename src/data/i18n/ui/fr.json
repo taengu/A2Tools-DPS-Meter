@@ -151,7 +151,10 @@
         "stillOn": "Encore actif à la fin du combat",
         "replaced": "Remplacé par un nouveau niveau"
       }
-    }
+    },
+    "fightTimeline": "Chronologie du combat",
+    "casts": "Lancers",
+    "resize": "Faire glisser pour redimensionner"
   },
   "history": {
     "title": "Historique des combats",

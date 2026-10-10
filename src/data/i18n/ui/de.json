@@ -151,7 +151,10 @@
         "stillOn": "Bei Kampfende noch aktiv",
         "replaced": "Durch neue Stufe ersetzt"
       }
-    }
+    },
+    "fightTimeline": "Kampfverlauf",
+    "casts": "Wirkungen",
+    "resize": "Ziehen zum Ändern der Größe"
   },
   "history": {
     "title": "Kampfverlauf",
