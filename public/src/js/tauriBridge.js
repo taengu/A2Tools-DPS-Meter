@@ -614,7 +614,6 @@
       invoke("bind_local_nickname", { actorId: id, nickname }).catch(() => {});
     },
     setAllTargetsWindowMs() {},
-    setTargetSelectionWindowMs() {},
     setTrainSelectionMode() {},
 
     // --- Window ---

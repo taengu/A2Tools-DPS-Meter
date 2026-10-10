@@ -287,16 +287,6 @@
     "bossNameSize": {
       "label": "タイトルの大きさ"
     },
-    "targetWindow": {
-      "label": "ターゲットの時間範囲",
-      "options": {
-        "5s": "5秒",
-        "10s": "10秒",
-        "15s": "15秒",
-        "20s": "20秒",
-        "30s": "30秒"
-      }
-    },
     "targetSelection": {
       "label": "ターゲット選択（実験的）",
       "options": {

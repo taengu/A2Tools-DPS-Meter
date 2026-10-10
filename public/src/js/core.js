@@ -1,7 +1,6 @@
 const SETTING_CHOICES = {
   defaultMeterMode: { allowed: ["bossTargets", "lastHitByMe", "allTargets", "trainTargets"], fallback: "bossTargets" },
   allTargetsWindowMs: { allowed: ["30000", "60000", "120000", "180000", "300000"], fallback: "120000" },
-  targetSelectionWindowMs: { allowed: ["5000", "10000", "15000", "20000", "30000"], fallback: "5000" },
   trainSelectionMode: { allowed: ["all", "highestDamage"], fallback: "all" },
 };
 const pickSettingChoice = (name, value) => {
@@ -50,7 +49,6 @@ class DpsApp {
       onlyShowUser: "dpsMeter.onlyShowUser",
       allTargetsWindowMs: "dpsMeter.allTargetsWindowMs",
       trainSelectionMode: "dpsMeter.trainSelectionMode",
-      targetSelectionWindowMs: "dpsMeter.targetSelectionWindowMs",
       meterFillOpacity: "dpsMeter.meterFillOpacity",
       barGap: "dpsMeter.barGap",
       detailsBackgroundOpacity: "dpsMeter.detailsBackgroundOpacity",
@@ -2357,8 +2355,6 @@ class DpsApp {
     this.localActorIdInput = document.querySelector(".localActorIdInput");
     this.allTargetsWindowDropdownBtn = document.querySelector(".allTargetsWindowDropdownBtn");
     this.allTargetsWindowDropdownMenu = document.querySelector(".allTargetsWindowDropdownMenu");
-    this.targetWindowDropdownBtn = document.querySelector(".targetWindowDropdownBtn");
-    this.targetWindowDropdownMenu = document.querySelector(".targetWindowDropdownMenu");
     this.trainSelectionModeDropdownBtn = document.querySelector(".trainSelectionModeDropdownBtn");
     this.trainSelectionModeDropdownMenu = document.querySelector(".trainSelectionModeDropdownMenu");
     this.defaultMeterModeDropdownBtn = document.querySelector(".defaultMeterModeDropdownBtn");
@@ -2422,7 +2418,6 @@ class DpsApp {
       defaultMeterMode: "bossTargets",
       allTargetsWindowMs: "120000",
       trainSelectionMode: "all",
-      targetSelectionWindowMs: "5000",
     };
 
     // The meter already applied these settings. Opening a form must not change
@@ -2435,9 +2430,6 @@ class DpsApp {
     const storedTrainSelectionMode = this.safeGetSetting(this.storageKeys.trainSelectionMode) ||
       this.safeGetStorage(this.storageKeys.trainSelectionMode) ||
       "all";
-    const storedTargetSelectionWindowMs = this.safeGetSetting(this.storageKeys.targetSelectionWindowMs) ||
-      this.safeGetStorage(this.storageKeys.targetSelectionWindowMs) ||
-      "5000";
     let storedMeterOpacity = this.safeGetSetting(this.storageKeys.meterFillOpacity) ||
       this.safeGetStorage(this.storageKeys.meterFillOpacity);
     if (syncBackend && this.safeGetSetting("dpsMeter.migration.opacityReset1") !== "done") {
@@ -2559,13 +2551,6 @@ class DpsApp {
     if (syncBackend) {
       this.safeSetSetting(this.storageKeys.allTargetsWindowMs, selectedWindow);
       window.javaBridge?.setAllTargetsWindowMs?.(selectedWindow);
-    }
-
-    const selectedTargetWindow = pickSettingChoice("targetSelectionWindowMs", storedTargetSelectionWindowMs);
-    this.settingsSelections.targetSelectionWindowMs = selectedTargetWindow;
-    if (syncBackend) {
-      this.safeSetSetting(this.storageKeys.targetSelectionWindowMs, selectedTargetWindow);
-      window.javaBridge?.setTargetSelectionWindowMs?.(selectedTargetWindow);
     }
 
     const selectedMode = pickSettingChoice("trainSelectionMode", storedTrainSelectionMode);
@@ -3245,14 +3230,6 @@ class DpsApp {
 
     themeOptions.sort((a, b) => a.label.localeCompare(b.label));
 
-    const targetWindowOptions = [
-      { value: "5000", label: this.i18n?.t("settings.targetWindow.options.5s", "5 seconds") },
-      { value: "10000", label: this.i18n?.t("settings.targetWindow.options.10s", "10 seconds") },
-      { value: "15000", label: this.i18n?.t("settings.targetWindow.options.15s", "15 seconds") },
-      { value: "20000", label: this.i18n?.t("settings.targetWindow.options.20s", "20 seconds") },
-      { value: "30000", label: this.i18n?.t("settings.targetWindow.options.30s", "30 seconds") },
-    ];
-
     const allTargetsWindowOptions = [
       { value: "30000", label: this.i18n?.t("settings.allTargetsWindow.options.30s", "30 seconds") },
       { value: "60000", label: this.i18n?.t("settings.allTargetsWindow.options.1m", "1 minute") },
@@ -3320,20 +3297,6 @@ class DpsApp {
             textEl.style.textShadow = colors.nameShadow;
           }
         },
-      }
-    );
-
-    setupDropdown(
-      this.targetWindowDropdownBtn,
-      this.targetWindowDropdownMenu,
-      targetWindowOptions,
-      this.settingsSelections.targetSelectionWindowMs,
-      (value) => {
-        if (!value) return;
-        this.settingsSelections.targetSelectionWindowMs = value;
-        this.safeSetSetting(this.storageKeys.targetSelectionWindowMs, value);
-        window.javaBridge?.setTargetSelectionWindowMs?.(value);
-        if (!this.isCollapse) this.fetchDps();
       }
     );
 
@@ -4781,7 +4744,6 @@ class DpsApp {
       defaultMeterMode: "defaultMeterMode",
       trainSelectionMode: "trainSelectionMode",
       allTargetsWindowMs: "allTargetsWindow",
-      targetSelectionWindowMs: "targetWindow",
     };
     for (const [name, control] of Object.entries(choices)) {
       if (key !== this.storageKeys[name]) continue;

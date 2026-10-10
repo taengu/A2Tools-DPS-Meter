@@ -292,16 +292,6 @@
     "bossNameSize": {
       "label": "标题大小"
     },
-    "targetWindow": {
-      "label": "目标时间范围",
-      "options": {
-        "5s": "5秒",
-        "10s": "10秒",
-        "15s": "15秒",
-        "20s": "20秒",
-        "30s": "30秒"
-      }
-    },
     "targetSelection": {
       "label": "目标选择（实验性）",
       "options": {
