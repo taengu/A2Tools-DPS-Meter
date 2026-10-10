@@ -12,6 +12,9 @@ const createI18n = ({
   let uiStrings = {};
   let skillStrings = {};
   let npcStrings = {};
+  // Instances whose bosses carry levels of their own (getNpcLevel); built on
+  // first use from the NPC table.
+  let multiTierDungeons = null;
   let dungeonStrings = {};
   const listeners = new Set();
 
@@ -168,6 +171,25 @@ const createI18n = ({
     return fallback;
   };
 
+  // A boss's own level, in the table's language ("Level 2", "2단계"), when
+  // its instance has several: Nightmare is one instance whose bosses come in
+  // ten levels, a code each (Gatekeeper Pinopi 2980040-2980049). Elsewhere a
+  // boss's tier is the instance's, which the dungeon label already says.
+  const getNpcLevel = (id) => {
+    const npc = npcStrings?.[String(id)];
+    if (!npc || typeof npc !== "object" || !npc.tier || !npc.dungeonId) return "";
+    if (!multiTierDungeons) {
+      const tiers = new Map();
+      for (const value of Object.values(npcStrings || {})) {
+        if (!value || typeof value !== "object" || !value.tier || !value.dungeonId) continue;
+        if (!tiers.has(value.dungeonId)) tiers.set(value.dungeonId, new Set());
+        tiers.get(value.dungeonId).add(value.tier);
+      }
+      multiTierDungeons = new Set([...tiers].filter(([, set]) => set.size > 1).map(([d]) => d));
+    }
+    return multiTierDungeons.has(npc.dungeonId) ? String(npc.tier) : "";
+  };
+
   const applyTranslations = () => {
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       const key = el.dataset.i18n;
@@ -245,6 +267,7 @@ const createI18n = ({
       uiStrings = ui || {};
       skillStrings = skills || {};
       npcStrings = npcs || {};
+      multiTierDungeons = null;
       dungeonStrings = dungeons || {};
       applyLanguage();
     }, (error) => {
@@ -321,6 +344,7 @@ const createI18n = ({
     format,
     getSkillName,
     getNpcName,
+    getNpcLevel,
     loadAbnormalNames,
     getDungeonLabel,
     getDungeonDifficulty,

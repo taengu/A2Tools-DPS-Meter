@@ -1159,6 +1159,7 @@ class DpsApp {
       targetCurrentHp,
       targetIsBoss,
       dungeonId,
+      targetMobCode,
     } = this.buildRowsFromPayload(raw);
     // Boss mode with no boss engaged: say what it is waiting for. The rows of
     // the last fight can still be on screen (the meter keeps them), so this
@@ -1289,7 +1290,7 @@ class DpsApp {
     }
     // render
     this.lastDungeonId = dungeonId;
-    let nextTargetLabel = this.getTargetLabel({ targetId, targetName, targetMode, dungeonId });
+    let nextTargetLabel = this.getTargetLabel({ targetId, targetName, targetMode, dungeonId, targetMobCode });
     // The title names the fight the bars below are from. After a zone change
     // or leaving a dungeon the backend has no target, and the title fell back
     // to the mode ("BOSS TARGETS") while the last fight's bars stayed up: keep
@@ -1376,6 +1377,7 @@ class DpsApp {
       ? Number(payload.targetCurrentHp)
       : -1;
     const targetIsBoss = payload?.targetIsBoss === true;
+    const targetMobCode = Math.trunc(Number(payload?.targetMobCode)) || 0;
 
     return {
       rows,
@@ -1389,6 +1391,7 @@ class DpsApp {
       targetCurrentHp,
       targetIsBoss,
       dungeonId,
+      targetMobCode,
     };
   }
 
@@ -5222,7 +5225,14 @@ class DpsApp {
     return this.i18n?.t("header.title", "A2Tools DPS Meter") ?? "A2Tools DPS Meter";
   }
 
-  getTargetLabel({ targetId = 0, targetName = "", targetMode = "", dungeonId = 0 } = {}) {
+  // "Gatekeeper Pinopi · Level 2": a Nightmare boss's level is its own, and
+  // the name alone does not say which of its ten it is (i18n getNpcLevel).
+  withNpcLevel(id, name) {
+    const level = this.i18n?.getNpcLevel?.(id) ?? "";
+    return level ? `${name} · ${level}` : name;
+  }
+
+  getTargetLabel({ targetId = 0, targetName = "", targetMode = "", dungeonId = 0, targetMobCode = 0 } = {}) {
     // In a party instance the title is the boss being fought, and the dungeon
     // between pulls. It used to stay on the dungeon throughout, so a whole run
     // read "Urugugu Canyon" past every boss. The modes that track no single
@@ -5235,8 +5245,10 @@ class DpsApp {
       const numericId = Number(targetId);
       if (tracksOne && Number.isFinite(numericId) && numericId > 0) {
         const cleanName = typeof targetName === "string" ? targetName.trim() : "";
-        const bossName = this.i18n?.getNpcName?.(numericId, cleanName) ?? cleanName;
-        if (bossName) return bossName;
+        // By NPC code where the backend gave one: targetId is the entity.
+        const code = Number(targetMobCode) > 0 ? Number(targetMobCode) : numericId;
+        const bossName = this.i18n?.getNpcName?.(code, cleanName) ?? cleanName;
+        if (bossName) return this.withNpcLevel(code, bossName);
       }
       return dungeonLabel;
     }
@@ -5261,8 +5273,9 @@ class DpsApp {
     const numericTargetId = Number(targetId);
     const cleanTargetName = typeof targetName === "string" ? targetName.trim() : "";
     if (Number.isFinite(numericTargetId) && numericTargetId > 0) {
-      const localizedName = this.i18n?.getNpcName?.(numericTargetId, cleanTargetName) ?? cleanTargetName;
-      return localizedName || `Mob #${numericTargetId}`;
+      const code = Number(targetMobCode) > 0 ? Number(targetMobCode) : numericTargetId;
+      const localizedName = this.i18n?.getNpcName?.(code, cleanTargetName) ?? cleanTargetName;
+      return localizedName ? this.withNpcLevel(code, localizedName) : `Mob #${numericTargetId}`;
     }
     if (cleanTargetName) {
       return cleanTargetName;
