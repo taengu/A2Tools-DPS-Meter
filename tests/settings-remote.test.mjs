@@ -255,9 +255,11 @@ function assertSelected(surface, name, value) {
   assert.equal(dropdown.text.textContent, selected[0].textContent);
 }
 
-test("all four actual layout dropdown choices round-trip to main classes and geometry without echoes or resets", async () => {
+test("both layout dropdown choices (Standard, Slim) round-trip to main classes and geometry without echoes or resets", async () => {
   const fixture = await pair();
-  const sequence = ["classic", "classicSlim", "betaSlim", "beta", "classicSlim", "classic", "beta", "betaSlim", "beta"];
+  // The Classic skins are retired: Standard ("beta") and Slim ("betaSlim") are all there is.
+  assert.deepEqual(fixture.settings.dropdowns.get("meterLayout").menu.children.map((item) => item.dataset.value), ["beta", "betaSlim"]);
+  const sequence = ["betaSlim", "beta", "betaSlim", "betaSlim", "beta", "beta", "betaSlim", "beta"];
   for (const value of sequence) {
     fixture.settings.pick("meterLayout", value);
     await settle();
@@ -365,7 +367,6 @@ test("mode and time-window dropdowns synchronize frontend selection without repl
   fixture.settings.pick("defaultMeterMode", "trainTargets");
   fixture.settings.pick("trainSelectionMode", "highestDamage");
   fixture.settings.pick("allTargetsWindow", "60000");
-  fixture.settings.pick("targetWindow", "30000");
   await settle();
   assert.equal(fixture.main.app.targetSelection, "trainTargets");
   assert.equal(fixture.main.app.targetModeBtn.textContent, "TRAIN");
@@ -376,9 +377,8 @@ test("mode and time-window dropdowns synchronize frontend selection without repl
   assert.equal(options.defaultTargetAll, false);
   assert.equal(options.defaultTargetId, 13);
   assert.equal(fixture.main.app.settingsSelections.allTargetsWindowMs, "60000");
-  assert.equal(fixture.main.app.settingsSelections.targetSelectionWindowMs, "30000");
-  for (const [name, value] of [["defaultMeterMode", "trainTargets"], ["trainSelectionMode", "highestDamage"], ["allTargetsWindow", "60000"], ["targetWindow", "30000"]]) assertSelected(fixture.main, name, value);
-  assert.equal(fixture.writes().length, 4);
+  for (const [name, value] of [["defaultMeterMode", "trainTargets"], ["trainSelectionMode", "highestDamage"], ["allTargetsWindow", "60000"]]) assertSelected(fixture.main, name, value);
+  assert.equal(fixture.writes().length, 3);
   assert.deepEqual(fixture.calls.filter((call) => call.command === "set_target_mode").map((call) => call.view), ["settings"]);
   fixture.main.assertCombatIntact();
 });

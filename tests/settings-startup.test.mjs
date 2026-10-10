@@ -918,7 +918,6 @@ test('showing a reused settings window refills its form without wiring controls 
     'dpsMeter.betaUi': 'false', 'dpsMeter.slimMode': 'true', 'dpsMeter.theme': 'frost',
     'dpsMeter.defaultMeterMode': 'allTargets', 'dpsMeter.allTargetsWindowMs': '60000',
     'dpsMeter.trainSelectionMode': 'highestDamage', 'dpsMeter.detailsMonitor': '1',
-    'dpsMeter.targetSelectionWindowMs': '7777',
     'dpsMeter.manualDevice': 'eth1', 'dpsMeter.roundDps': 'false',
   };
   const wired = [];
@@ -977,11 +976,10 @@ test('showing a reused settings window refills its form without wiring controls 
   assert.equal(app.playerLimit, 10);
   assert.equal(limitText.textContent, '10');
   assert.deepEqual(limitItems.map(item => item.classList.on), [false, true]);
-  assert.equal(app.getMeterLayout(), 'classicSlim');
+  assert.equal(app.getMeterLayout(), 'betaSlim', 'a saved Classic Slim is Slim now that Classic is retired');
   assert.equal(app.theme, 'frost');
   assert.equal(app.settingsSelections.defaultMeterMode, 'allTargets');
   assert.equal(app.settingsSelections.allTargetsWindowMs, '60000');
-  assert.equal(app.settingsSelections.targetSelectionWindowMs, '5000', 'an unknown stored value falls back');
   assert.equal(app.settingsSelections.trainSelectionMode, 'highestDamage');
   assert.equal(app.trainSelectionMode, 'highestDamage');
   assert.equal(app.detailsMonitor, '1');

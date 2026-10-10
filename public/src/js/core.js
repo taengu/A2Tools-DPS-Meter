@@ -4026,7 +4026,7 @@ class DpsApp {
     const locked = !!this.saveRawPacketsCheckbox?.checked;
     if (locked && !box.checked) box.checked = true;
     box.disabled = locked;
-    const row = box.closest(".settingsToggle");
+    const row = box.closest?.(".settingsToggle");
     if (!row) return;
     row.classList.toggle("isLocked", locked);
     if (locked) {

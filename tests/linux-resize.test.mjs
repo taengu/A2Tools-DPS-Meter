@@ -30,6 +30,8 @@ function setup({ userAgent = "Linux", supported = false, view = "main", detect }
     A2_VIEW: view, devicePixelRatio: 1,
     __TAURI__: {
       core: { invoke: (command, args) => {
+        // Every page asks which optional parts the build has; not a window call.
+        if (command === "build_features") return Promise.resolve({ online: true });
         calls.push({ command, args });
         return command === "compositor_resize_supported" && detect
           ? detect : Promise.resolve(command === "compositor_resize_supported" ? supported : null);
