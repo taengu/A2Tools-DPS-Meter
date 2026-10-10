@@ -179,9 +179,9 @@
   },
   "settings": {
     "title": "設定",
-    "lockedPort": "検出されたデバイス/ポート",
-    "resetDetection": "リセット",
-    "characterName": "名前#ID",
+    "lockedPort": "検出された接続",
+    "resetDetection": "再検出",
+    "characterName": "自分のキャラクター",
     "characterNamePlaceholder": "キャラクター名を入力",
     "pinMeToTop": "自分の行を常に一番上に",
     "slimMode": "スリムモード",
@@ -210,12 +210,12 @@
     "connection": "接続",
     "diagnostics": "診断",
     "device": {
-      "label": "キャプチャデバイス",
+      "label": "ネットワークアダプター",
       "autoDetect": "自動検出"
     },
     "advanced": "詳細設定",
     "bossLogs": "ボスごとのログを有効にする",
-    "saveRawPackets": "パケットログを有効にする",
+    "saveRawPackets": "パケットログ",
     "resetAllSettings": "すべての設定をリセット",
     "bold": {
       "label": "太字",
@@ -233,7 +233,7 @@
     "playerLimit": {
       "label": "表示する最大プレイヤー数"
     },
-    "debugLogging": "デバッグログを有効にする",
+    "debugLogging": "デバッグログ",
     "quit": "終了",
     "discord": {
       "title": "Discord",
@@ -307,7 +307,7 @@
       }
     },
     "allTargetsWindow": {
-      "label": "全ターゲットの時間範囲",
+      "label": "全ターゲットの集計時間",
       "options": {
         "30s": "30秒",
         "1m": "1分",
@@ -329,7 +329,7 @@
       "label": "起動時のターゲットモード"
     },
     "trainingMode": {
-      "label": "訓練モードの対象",
+      "label": "トレーニングモードの詳細",
       "options": {
         "all": "すべて",
         "highestDamage": "最大ダメージ"

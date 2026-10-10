@@ -189,9 +189,9 @@
   },
   "settings": {
     "title": "Settings",
-    "lockedPort": "Detected device/port",
-    "resetDetection": "Reset detection",
-    "characterName": "Name#ID",
+    "lockedPort": "Detected connection",
+    "resetDetection": "Detect again",
+    "characterName": "Your character",
     "characterNamePlaceholder": "Enter your character name",
     "pinMeToTop": "Keep my row at the top",
     "slimMode": "Slim mode",
@@ -220,12 +220,12 @@
     "connection": "Connection",
     "diagnostics": "Diagnostics",
     "device": {
-      "label": "Capture device",
+      "label": "Network adapter",
       "autoDetect": "Auto-detect"
     },
     "advanced": "Advanced",
     "bossLogs": "Enable per-boss logs",
-    "saveRawPackets": "Enable packet logging",
+    "saveRawPackets": "Packet logging",
     "resetAllSettings": "Reset all settings",
     "bold": {
       "label": "Bold text",
@@ -243,7 +243,7 @@
     "playerLimit": {
       "label": "Max players shown"
     },
-    "debugLogging": "Enable debug logging",
+    "debugLogging": "Debug logging",
     "quit": "Quit",
     "discord": {
       "title": "Discord",
@@ -317,7 +317,7 @@
       }
     },
     "allTargetsWindow": {
-      "label": "All Targets time range",
+      "label": "All Targets time window",
       "options": {
         "30s": "30 seconds",
         "1m": "1 minute",
@@ -339,7 +339,7 @@
       "label": "Starting target mode"
     },
     "trainingMode": {
-      "label": "Training Mode target",
+      "label": "Details in Train mode",
       "options": {
         "all": "All",
         "highestDamage": "Highest Damage"

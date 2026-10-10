@@ -184,9 +184,9 @@
   },
   "settings": {
     "title": "设置",
-    "lockedPort": "检测到的设备/端口",
-    "resetDetection": "重置检测",
-    "characterName": "Name#ID",
+    "lockedPort": "检测到的连接",
+    "resetDetection": "重新检测",
+    "characterName": "我的角色",
     "characterNamePlaceholder": "输入你的角色名称",
     "pinMeToTop": "将我的行置顶",
     "slimMode": "精简模式",
@@ -215,12 +215,12 @@
     "connection": "连接",
     "diagnostics": "诊断",
     "device": {
-      "label": "抓包网卡",
+      "label": "网络适配器",
       "autoDetect": "自动检测"
     },
     "advanced": "高级",
     "bossLogs": "启用每场Boss日志",
-    "saveRawPackets": "启用数据包日志",
+    "saveRawPackets": "数据包日志",
     "resetAllSettings": "重置所有设置",
     "bold": {
       "label": "粗体文字",
@@ -238,7 +238,7 @@
     "playerLimit": {
       "label": "最大显示人数"
     },
-    "debugLogging": "启用调试日志",
+    "debugLogging": "调试日志",
     "quit": "退出",
     "discord": {
       "title": "Discord",
@@ -312,7 +312,7 @@
       }
     },
     "allTargetsWindow": {
-      "label": "所有目标时间窗口",
+      "label": "全部目标时间窗口",
       "options": {
         "30s": "30秒",
         "1m": "1分钟",
@@ -334,7 +334,7 @@
       "label": "启动时的目标模式"
     },
     "trainingMode": {
-      "label": "训练模式",
+      "label": "训练模式下的详情",
       "options": {
         "all": "全部",
         "highestDamage": "最高伤害"

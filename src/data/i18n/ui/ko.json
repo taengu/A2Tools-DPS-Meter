@@ -184,9 +184,9 @@
   },
   "settings": {
     "title": "설정",
-    "lockedPort": "감지된 장치/포트",
-    "resetDetection": "감지 초기화",
-    "characterName": "Name#ID",
+    "lockedPort": "감지된 연결",
+    "resetDetection": "다시 감지",
+    "characterName": "내 캐릭터",
     "characterNamePlaceholder": "캐릭터 이름 입력",
     "pinMeToTop": "내 행을 맨 위에 고정",
     "slimMode": "슬림 모드",
@@ -215,12 +215,12 @@
     "connection": "연결",
     "diagnostics": "진단",
     "device": {
-      "label": "캡처 장치",
+      "label": "네트워크 어댑터",
       "autoDetect": "자동 감지"
     },
     "advanced": "고급",
     "bossLogs": "보스별 로그 활성화",
-    "saveRawPackets": "패킷 로깅 활성화",
+    "saveRawPackets": "패킷 로그",
     "resetAllSettings": "모든 설정 초기화",
     "bold": {
       "label": "굵은 글씨",
@@ -238,7 +238,7 @@
     "playerLimit": {
       "label": "최대 표시 인원"
     },
-    "debugLogging": "디버그 로그 활성화",
+    "debugLogging": "디버그 로그",
     "quit": "종료",
     "discord": {
       "title": "디스코드",
@@ -312,7 +312,7 @@
       }
     },
     "allTargetsWindow": {
-      "label": "모든 대상 집계 시간",
+      "label": "전체 대상 시간 범위",
       "options": {
         "30s": "30초",
         "1m": "1분",
@@ -334,7 +334,7 @@
       "label": "시작 대상 모드"
     },
     "trainingMode": {
-      "label": "훈련 모드",
+      "label": "훈련 모드의 상세 정보",
       "options": {
         "all": "전체",
         "highestDamage": "최대 피해"

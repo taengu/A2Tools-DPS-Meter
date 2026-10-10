@@ -179,9 +179,9 @@
   },
   "settings": {
     "title": "Ajustes",
-    "lockedPort": "Dispositivo/puerto detectado",
-    "resetDetection": "Restablecer",
-    "characterName": "Nombre#ID",
+    "lockedPort": "Conexión detectada",
+    "resetDetection": "Detectar de nuevo",
+    "characterName": "Tu personaje",
     "characterNamePlaceholder": "Introduce el nombre de tu personaje",
     "pinMeToTop": "Mantener mi fila arriba",
     "slimMode": "Modo compacto",
@@ -210,12 +210,12 @@
     "connection": "Conexión",
     "diagnostics": "Diagnóstico",
     "device": {
-      "label": "Dispositivo de captura",
+      "label": "Adaptador de red",
       "autoDetect": "Detección automática"
     },
     "advanced": "Avanzado",
     "bossLogs": "Activar registros por jefe",
-    "saveRawPackets": "Activar registro de paquetes",
+    "saveRawPackets": "Registro de paquetes",
     "resetAllSettings": "Restablecer todos los ajustes",
     "bold": {
       "label": "Texto en negrita",
@@ -233,7 +233,7 @@
     "playerLimit": {
       "label": "Máx. jugadores mostrados"
     },
-    "debugLogging": "Activar registro de depuración",
+    "debugLogging": "Registro de depuración",
     "quit": "Salir",
     "discord": {
       "title": "Discord",
@@ -307,7 +307,7 @@
       }
     },
     "allTargetsWindow": {
-      "label": "Intervalo de todos los objetivos",
+      "label": "Ventana de todos los objetivos",
       "options": {
         "30s": "30 segundos",
         "1m": "1 minuto",
@@ -329,7 +329,7 @@
       "label": "Modo de objetivo al iniciar"
     },
     "trainingMode": {
-      "label": "Objetivo del modo entrenamiento",
+      "label": "Detalles en modo entrenamiento",
       "options": {
         "all": "Todos",
         "highestDamage": "Mayor daño"

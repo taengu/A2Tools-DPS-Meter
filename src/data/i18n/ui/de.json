@@ -179,9 +179,9 @@
   },
   "settings": {
     "title": "Einstellungen",
-    "lockedPort": "Erkanntes Gerät/Port",
-    "resetDetection": "Zurücksetzen",
-    "characterName": "Name#ID",
+    "lockedPort": "Erkannte Verbindung",
+    "resetDetection": "Erneut erkennen",
+    "characterName": "Dein Charakter",
     "characterNamePlaceholder": "Charakternamen eingeben",
     "pinMeToTop": "Meine Zeile oben halten",
     "slimMode": "Schlanker Modus",
@@ -210,12 +210,12 @@
     "connection": "Verbindung",
     "diagnostics": "Diagnose",
     "device": {
-      "label": "Aufzeichnungsgerät",
+      "label": "Netzwerkadapter",
       "autoDetect": "Automatisch"
     },
     "advanced": "Erweitert",
     "bossLogs": "Logs pro Boss aktivieren",
-    "saveRawPackets": "Paket-Logging aktivieren",
+    "saveRawPackets": "Paketprotokoll",
     "resetAllSettings": "Alle Einstellungen zurücksetzen",
     "bold": {
       "label": "Fettschrift",
@@ -233,7 +233,7 @@
     "playerLimit": {
       "label": "Max. angezeigte Spieler"
     },
-    "debugLogging": "Debug-Logging aktivieren",
+    "debugLogging": "Debug-Protokoll",
     "quit": "Beenden",
     "discord": {
       "title": "Discord",
@@ -329,7 +329,7 @@
       "label": "Zielmodus beim Start"
     },
     "trainingMode": {
-      "label": "Trainingsmodus-Ziel",
+      "label": "Details im Trainingsmodus",
       "options": {
         "all": "Alle",
         "highestDamage": "Höchster Schaden"

@@ -184,9 +184,9 @@
   },
   "settings": {
     "title": "Настройки",
-    "lockedPort": "Обнаруженное устройство/порт",
-    "resetDetection": "Сбросить",
-    "characterName": "Имя#ID",
+    "lockedPort": "Обнаруженное подключение",
+    "resetDetection": "Определить заново",
+    "characterName": "Ваш персонаж",
     "characterNamePlaceholder": "Введите имя персонажа",
     "pinMeToTop": "Моя строка всегда сверху",
     "slimMode": "Компактный режим",
@@ -215,12 +215,12 @@
     "connection": "Подключение",
     "diagnostics": "Диагностика",
     "device": {
-      "label": "Устройство захвата",
+      "label": "Сетевой адаптер",
       "autoDetect": "Автоопределение"
     },
     "advanced": "Дополнительно",
     "bossLogs": "Включить журналы по боссам",
-    "saveRawPackets": "Включить журнал пакетов",
+    "saveRawPackets": "Журнал пакетов",
     "resetAllSettings": "Сбросить все настройки",
     "bold": {
       "label": "Жирный текст",
@@ -238,7 +238,7 @@
     "playerLimit": {
       "label": "Макс. игроков на экране"
     },
-    "debugLogging": "Включить отладочный журнал",
+    "debugLogging": "Журнал отладки",
     "quit": "Выход",
     "discord": {
       "title": "Discord",
@@ -312,7 +312,7 @@
       }
     },
     "allTargetsWindow": {
-      "label": "Временное окно для всех целей",
+      "label": "Окно для всех целей",
       "options": {
         "30s": "30 секунд",
         "1m": "1 минута",
@@ -334,7 +334,7 @@
       "label": "Режим цели при запуске"
     },
     "trainingMode": {
-      "label": "Цель режима тренировки",
+      "label": "Детали в режиме тренировки",
       "options": {
         "all": "Все",
         "highestDamage": "Наибольший урон"

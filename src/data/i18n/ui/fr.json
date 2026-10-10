@@ -179,9 +179,9 @@
   },
   "settings": {
     "title": "Paramètres",
-    "lockedPort": "Périphérique/port détecté",
-    "resetDetection": "Réinitialiser",
-    "characterName": "Nom#ID",
+    "lockedPort": "Connexion détectée",
+    "resetDetection": "Détecter à nouveau",
+    "characterName": "Ton personnage",
     "characterNamePlaceholder": "Saisissez le nom de votre personnage",
     "pinMeToTop": "Garder ma ligne en haut",
     "slimMode": "Mode compact",
@@ -210,12 +210,12 @@
     "connection": "Connexion",
     "diagnostics": "Diagnostics",
     "device": {
-      "label": "Périphérique de capture",
+      "label": "Carte réseau",
       "autoDetect": "Détection auto"
     },
     "advanced": "Avancé",
     "bossLogs": "Activer les journaux par boss",
-    "saveRawPackets": "Activer la journalisation des paquets",
+    "saveRawPackets": "Journal des paquets",
     "resetAllSettings": "Réinitialiser tous les paramètres",
     "bold": {
       "label": "Texte en gras",
@@ -233,7 +233,7 @@
     "playerLimit": {
       "label": "Joueurs affichés max."
     },
-    "debugLogging": "Activer la journalisation de débogage",
+    "debugLogging": "Journal de débogage",
     "quit": "Quitter",
     "discord": {
       "title": "Discord",
@@ -307,7 +307,7 @@
       }
     },
     "allTargetsWindow": {
-      "label": "Plage de temps toutes cibles",
+      "label": "Fenêtre de toutes les cibles",
       "options": {
         "30s": "30 secondes",
         "1m": "1 minute",
@@ -329,7 +329,7 @@
       "label": "Mode de cible au démarrage"
     },
     "trainingMode": {
-      "label": "Cible du mode entraînement",
+      "label": "Détails en mode entraînement",
       "options": {
         "all": "Toutes",
         "highestDamage": "Dégâts les plus élevés"
