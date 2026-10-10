@@ -369,6 +369,9 @@
       "sending": "Sending...",
       "sent": "Sent. Your report code is {code}: give it to the developer on Discord.",
       "failed": "Could not send: {error}"
+    },
+    "barGap": {
+      "label": "Spacing between player bars"
     }
   },
   "support": {

@@ -52,6 +52,7 @@ class DpsApp {
       trainSelectionMode: "dpsMeter.trainSelectionMode",
       targetSelectionWindowMs: "dpsMeter.targetSelectionWindowMs",
       meterFillOpacity: "dpsMeter.meterFillOpacity",
+      barGap: "dpsMeter.barGap",
       detailsBackgroundOpacity: "dpsMeter.detailsBackgroundOpacity",
       detailsFontSize: "dpsMeter.detailsFontSize",
       detailsIconSize: "dpsMeter.detailsIconSize",
@@ -403,6 +404,8 @@ class DpsApp {
     });
     this.battleTime.setVisible(false);
     this.updateConnectionStatusUi();
+
+    this.applyBarGap(this.safeGetSetting(this.storageKeys.barGap), { persist: false });
 
     this.pingEl = document.querySelector(".pingDisplay");
     this.showPing = this.safeGetSetting(this.storageKeys.showPing) !== "false";
@@ -1523,6 +1526,35 @@ class DpsApp {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return fallback;
     return Math.min(100, Math.max(10, Math.round(numeric)));
+  }
+
+  /** Pixels between player bars, 0-16, or null for the skin's own spacing. */
+  normalizeBarGap(value) {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return null;
+    return Math.min(16, Math.max(0, Math.round(numeric)));
+  }
+
+  /** The skin's spacing between bars, for the slider before it is first moved. */
+  defaultBarGap() {
+    if (document.body.classList.contains("legacyUi")) return 4;
+    return this.slimMode ? 2 : 3;
+  }
+
+  // "Spacing between player bars" (a user asked for it). Unset, the skin's
+  // own spacing stands; set, it applies to every skin. The window fits its
+  // rows, so it is resized after.
+  applyBarGap(value, { persist } = {}) {
+    const normalized = this.normalizeBarGap(value);
+    const root = document.documentElement.style;
+    if (normalized === null) root.removeProperty("--meter-bar-gap");
+    else root.setProperty("--meter-bar-gap", `${normalized}px`);
+    if (persist && normalized !== null) {
+      this.safeSetSetting(this.storageKeys.barGap, String(normalized));
+    }
+    if (window.A2_VIEW === "main") window.javaBridge?.updateOverlaySize?.();
+    return normalized;
   }
 
   applyMeterFillOpacity(percent, { persist } = {}) {
@@ -2718,6 +2750,23 @@ class DpsApp {
         const next = this.normalizeMeterOpacity(value, defaultOpacity);
         this.meterOpacityValue.textContent = `${next}%`;
         this.applyMeterFillOpacity(next, { persist: true });
+      });
+    }
+
+    const barGapInput = document.querySelector(".barGapInput");
+    const barGapValue = document.querySelector(".barGapValue");
+    if (barGapInput && barGapValue) {
+      this.barGapInput = barGapInput;
+      this.barGapValue = barGapValue;
+      const shown = this.normalizeBarGap(this.safeGetSetting(this.storageKeys.barGap)) ?? this.defaultBarGap();
+      barGapInput.value = String(shown);
+      barGapValue.textContent = `${shown}px`;
+      const stopDrag = (event) => event.stopPropagation();
+      barGapInput.addEventListener("mousedown", stopDrag);
+      barGapInput.addEventListener("touchstart", stopDrag, { passive: true });
+      barGapInput.addEventListener("input", (event) => {
+        const next = this.applyBarGap(event.target?.value, { persist: true });
+        if (next !== null) barGapValue.textContent = `${next}px`;
       });
     }
 
@@ -4136,6 +4185,7 @@ class DpsApp {
     for (const [name, value] of [
       ["meterFillOpacity", get("meterFillOpacity")],
       ["windowOpacity", get("windowOpacity")],
+      ["barGap", get("barGap")],
     ]) {
       if (isSet(value)) this.applyRemoteSettingChange(this.storageKeys[name], value);
     }
@@ -4627,6 +4677,11 @@ class DpsApp {
     }
     if (key === this.storageKeys.playerLimit) {
       this.setPlayerLimit(value, { persist: false });
+      return;
+    }
+    if (key === this.storageKeys.barGap) {
+      const next = this.applyBarGap(value, { persist: false });
+      this.syncSettingsRangeValue(this.barGapInput, this.barGapValue, next ?? this.defaultBarGap());
       return;
     }
     if (key === this.storageKeys.meterFillOpacity || key === this.storageKeys.windowOpacity) {

@@ -357,6 +357,9 @@
       "sending": "Wird gesendet...",
       "sent": "Gesendet. Dein Berichtscode ist {code}: gib ihn dem Entwickler auf Discord.",
       "failed": "Senden fehlgeschlagen: {error}"
+    },
+    "barGap": {
+      "label": "Abstand zwischen Spielerbalken"
     }
   },
   "support": {

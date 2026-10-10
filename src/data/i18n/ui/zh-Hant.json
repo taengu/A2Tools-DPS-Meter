@@ -364,6 +364,9 @@
       "sending": "傳送中...",
       "sent": "已傳送。你的回報代碼是 {code}，請在 Discord 上告訴開發者。",
       "failed": "無法傳送：{error}"
+    },
+    "barGap": {
+      "label": "玩家條間距"
     }
   },
   "support": {

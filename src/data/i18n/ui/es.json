@@ -357,6 +357,9 @@
       "sending": "Enviando...",
       "sent": "Enviado. Tu código de informe es {code}: dáselo al desarrollador en Discord.",
       "failed": "No se pudo enviar: {error}"
+    },
+    "barGap": {
+      "label": "Espacio entre barras de jugadores"
     }
   },
   "support": {

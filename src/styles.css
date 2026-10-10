@@ -608,7 +608,9 @@ body.linuxOverlay .meter {
 
 .list {
   display: grid;
-  gap: var(--hud-gap);
+  /* --meter-bar-gap: "Spacing between player bars" in Settings; unset, each
+     skin keeps its own (3px, 2px slim, 4px legacy). */
+  gap: var(--meter-bar-gap, var(--hud-gap));
   padding: 0 8px;
 }
 .list.hasRows { padding: 7px 8px; }
@@ -4880,7 +4882,7 @@ body.legacyUi .meterTotalBar .meterTotalSep {
 }
 body.legacyUi .list {
   display: grid;
-  gap: 4px;
+  gap: var(--meter-bar-gap, 4px);
   padding: 0 12px;
   &:has(.item:not([style*="display: none"])) {
     padding: 4px 12px 16px;

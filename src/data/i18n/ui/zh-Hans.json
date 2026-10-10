@@ -364,6 +364,9 @@
       "sending": "发送中...",
       "sent": "已发送。你的反馈代码是 {code}，请在 Discord 上告诉开发者。",
       "failed": "无法发送：{error}"
+    },
+    "barGap": {
+      "label": "玩家条间距"
     }
   },
   "support": {

@@ -364,6 +364,9 @@
       "sending": "보내는 중...",
       "sent": "보냈습니다. 신고 코드는 {code}입니다. Discord에서 개발자에게 알려주세요.",
       "failed": "보내지 못했습니다: {error}"
+    },
+    "barGap": {
+      "label": "플레이어 막대 간격"
     }
   },
   "support": {

@@ -357,6 +357,9 @@
       "sending": "送信中...",
       "sent": "送信しました。報告コードは {code} です。Discord で開発者に伝えてください。",
       "failed": "送信できませんでした: {error}"
+    },
+    "barGap": {
+      "label": "プレイヤーバーの間隔"
     }
   },
   "support": {
