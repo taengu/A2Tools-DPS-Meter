@@ -776,7 +776,9 @@ impl StreamProcessor {
         for record in masked_records(data) {
             let id = record.id;
             let Some(sanitized) = record.name else {
-                // A tutorial character's placeholder: still you, with no name.
+                // A tutorial character's placeholder: still you, with no name,
+                // and on no server the record states.
+                self.data_storage.note_self_server(0);
                 if self.data_storage.set_local_identity_from_game(id as i64, None) {
                     tracing::info!("self record: unnamed tutorial character -> entity {}", id);
                 }
@@ -799,6 +801,7 @@ impl StreamProcessor {
                     tracing::info!("self record: local player '{}' -> entity {}", sanitized, id);
                 }
                 self.data_storage.note_player_server(&sanitized, server);
+                self.data_storage.note_self_server(server);
                 // A byte, then level (u32). Confirmed by a level-up, 28
                 // then 29 (Naicha, 2026-10-04), and against the roster's
                 // levels for three other players. Only in the layout whose

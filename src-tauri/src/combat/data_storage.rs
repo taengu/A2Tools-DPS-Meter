@@ -536,6 +536,12 @@ struct Inner {
     /// Each character's home server, by name, from the records that state it:
     /// the self record and loot records. See `fight_server_id`.
     player_servers: HashMap<String, u16>,
+    /// The server your last self record stated (0 when none, or when the
+    /// last one was a tutorial character's). Outlives the local name, which
+    /// is dropped while the game moves you to a new entity (`note_self_stats`)
+    /// and comes back with the next self record: a fight saved in between is
+    /// still yours, on your server. See `fight_server_id`.
+    self_server: u16,
     /// The class and level your own self record last stated, with the name it
     /// was for, so a character switch does not carry the last one's over.
     self_profile: Option<(String, Option<JobClass>, Option<u32>)>,
@@ -613,6 +619,7 @@ impl DataStorage {
                 local_identity_from_game: false,
                 loot_identity: LootIdentity::default(),
                 player_servers: HashMap::new(),
+                self_server: 0,
                 self_profile: None,
             }),
             damage_generation: AtomicI64::new(0),
@@ -973,6 +980,14 @@ impl DataStorage {
         }
     }
 
+    /// Your home server, as your own self record states it; 0 for a record
+    /// that states none (a tutorial character), which forgets the last one.
+    pub fn note_self_server(&self, server_id: u16) {
+        if server_id == 0 || (1000..3000).contains(&server_id) {
+            self.inner.write().self_server = server_id;
+        }
+    }
+
     /// Your class and level, as your own self record states them.
     ///
     /// A record whose level did not read (a partial copy, the scan having met
@@ -1007,8 +1022,12 @@ impl DataStorage {
         LocalProfile { name, server_id: server, class, level }
     }
 
-    /// The server the fights being recorded are on: the local player's, else
-    /// the party's. 0 when nothing has said.
+    /// The server the fights being recorded are on: the local player's home
+    /// server, else the party's. 0 when nothing has said.
+    ///
+    /// The local player's is the uploader's: the site files the log under it
+    /// (server filter, region). It is not the instance's: a dungeon party can
+    /// be cross-server, every member keeping their own id.
     ///
     /// A server id names its region (`1304` is Europe), which is what this is
     /// for: uploaded logs are grouped by region. The local player's own server
@@ -1020,6 +1039,14 @@ impl DataStorage {
         let local = inner.local_character_name.as_deref().map(str::trim);
         if let Some(&server) = local.and_then(|n| inner.player_servers.get(n)) {
             return server;
+        }
+        // No name in force, or one no record has placed: the last self
+        // record's. Between a server move's own-stats records (which drop
+        // the name) and the next self record, the fight just ended was saved
+        // with no local name, and the roster majority filed it under a party
+        // member's server (1014 for a 2014 player, 2026-08-15).
+        if inner.self_server != 0 {
+            return inner.self_server;
         }
         if let Some(member) = local.and_then(|n| inner.party_members.get(n)) {
             if member.server_id != 0 {
@@ -2584,6 +2611,32 @@ mod tests {
         assert_eq!(s.fight_server_id(), 1304, "what your own record says");
         s.note_player_server("C", 99);
         assert_eq!(s.fight_server_id(), 1304, "a value no server has is not taken");
+    }
+
+    #[test]
+    fn a_fight_saved_while_the_game_moves_you_stays_on_your_server() {
+        // A cross-server party: you on 2014, two members on 1014. The game
+        // moves you (a server change after the boss), own-stats records name
+        // a new entity, which drops the local name until the next self record.
+        let s = DataStorage::new();
+        let on = |server: u16| PartyMember { server_id: server, ..member(1) };
+        s.set_party_roster(
+            vec![("Me".into(), on(2014)), ("P1".into(), on(1014)), ("P2".into(), on(1014)), ("P3".into(), on(1013))],
+            true,
+        );
+        s.set_local_identity_from_game(4099, Some("Me".into()));
+        s.note_player_server("Me", 2014);
+        s.note_self_server(2014);
+        assert_eq!(s.fight_server_id(), 2014);
+        for _ in 0..3 {
+            s.note_self_stats(5120);
+        }
+        assert_eq!(s.local_character_name(), None, "the move drops the name");
+        assert_eq!(s.fight_server_id(), 2014, "still your server, not the party's majority");
+        s.note_self_server(99);
+        assert_eq!(s.fight_server_id(), 2014, "a value no server has is not taken");
+        s.note_self_server(0);
+        assert_eq!(s.fight_server_id(), 1014, "a tutorial character's record forgets it");
     }
 
     #[test]
