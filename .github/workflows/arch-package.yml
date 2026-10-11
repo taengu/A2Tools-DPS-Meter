@@ -271,12 +271,11 @@ jobs:
   steamos-distrobox:
     name: SteamOS route (rootful distrobox)
     needs: package
-    # Not yet confirmed: distrobox would not create a rootful box here without
-    # its interactive password prompt, because the skip flag was misread as a
-    # box name (a literal "\n" where a line continuation belonged, fixed in
-    # 2.0.56). It still does not hold up a release; the route is marked
-    # unconfirmed in docs/linux.md.
-    continue-on-error: true
+    # Required, like the other install tests: a failure here fails the run.
+    # It used to be allowed to fail, while distrobox could not create a rootful
+    # box without its interactive password prompt (the skip flag was misread
+    # as a box name: a literal "\n" where a line continuation belonged, fixed
+    # in 2.0.56). A real Steam Deck is still unconfirmed (docs/linux.md).
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
