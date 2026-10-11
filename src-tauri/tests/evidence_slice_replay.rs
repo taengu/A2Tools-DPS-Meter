@@ -181,7 +181,7 @@ fn build_whole_capture_slice(
     let start = lines.first().map(|l| l.at_ms).unwrap_or(0);
     let end = lines.last().map(|l| l.at_ms).unwrap_or(0);
 
-    let slice = evidence_slice::build(&packets, start, end, &names).expect("slice builds");
+    let slice = evidence_slice::build(&packets, start, end, &names, [7; 32]).expect("slice builds");
     (slice, plaintext, start)
 }
 

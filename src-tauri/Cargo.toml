@@ -37,7 +37,6 @@ online = [
     "dep:futures-util",
     "dep:urlencoding",
     "dep:discord-rich-presence",
-    "dep:getrandom",
 ]
 desktop = [
     "dep:tauri",
@@ -48,6 +47,7 @@ desktop = [
     "dep:tokio",
     "dep:tracing-subscriber",
     "dep:flate2",
+    "dep:getrandom",
     # Linux only (see the target section below); ignored elsewhere.
     "dep:secret-service",
     "dep:gtk",
@@ -108,8 +108,8 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # local Discord client's IPC socket. Opt-in; see presence.rs.
 discord-rich-presence = { version = "1.1", optional = true }
 futures-util = { version = "0.3", optional = true }
-# The stream overlay's key (see stream_overlay/). Already in the tree through
-# Tauri; named here for the OS random source it wraps.
+# The stream overlay's key (see stream_overlay/) and each Evidence Slice's key.
+# Already in the tree through Tauri; named here for the OS random source it wraps.
 getrandom = { version = "0.3", optional = true }
 urlencoding = { version = "2", optional = true }
 sha2 = "0.11.0"

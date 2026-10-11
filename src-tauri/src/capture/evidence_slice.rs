@@ -324,14 +324,20 @@ impl std::fmt::Display for SliceError {
     }
 }
 
+/// A random key, one per slice: mixed into every token, then dropped. Never
+/// stored or sent, so nobody can hash a list of names or roster ids and look
+/// them up in a slice, or match one person's tokens across slices.
+pub type SliceKey = [u8; 32];
+
 /// A token of exactly `len` bytes, derived from the roster id when we have one
-/// and from the name otherwise.
+/// and from the name otherwise, under the slice's key.
 ///
 /// Hex, so it is always ASCII and always valid UTF-8 at any truncation — a name
 /// is `<u8 len><utf8>`, and emitting a token that split a multi-byte character
 /// would leave the parser reading invalid UTF-8 where it used to read a name.
-fn token_for(name: &str, dbid: u64, len: usize) -> String {
+fn token_for(key: &SliceKey, name: &str, dbid: u64, len: usize) -> String {
     let mut hasher = Sha256::new();
+    hasher.update(key);
     if dbid != 0 {
         hasher.update(b"a2es-dbid\x00");
         hasher.update(dbid.to_le_bytes());
@@ -381,6 +387,8 @@ const MAX_NAME_BYTES: usize = 40;
 /// Pass one leaves one-byte names to the name fields, and looks for a name
 /// under `SHORT_NAME_BYTES` only after its length byte, as the verifier does.
 struct Blinder {
+    /// The slice's key (see `SliceKey`).
+    key: SliceKey,
     /// Pass one: name bytes -> token bytes, longest first, for names of
     /// `MIN_NAME_BYTES` or more.
     known: Vec<(Vec<u8>, Vec<u8>)>,
@@ -398,8 +406,9 @@ struct Blinder {
 }
 
 impl Blinder {
-    fn new(ordered: &[(&String, &u64)]) -> Self {
+    fn new(key: SliceKey, ordered: &[(&String, &u64)]) -> Self {
         let mut blinder = Self::exempting(HashSet::new());
+        blinder.key = key;
         blinder.one_byte_taken = ordered.iter().filter(|(n, _)| n.len() == 1).map(|(n, _)| n.as_bytes()[0]).collect();
         for (name, dbid) in ordered {
             let raw = name.as_bytes();
@@ -420,6 +429,8 @@ impl Blinder {
     /// A blinder that knows no names and leaves `tokens` alone.
     fn exempting(tokens: HashSet<Vec<u8>>) -> Self {
         Self {
+            // Only counts: the tokens it would mint are never written.
+            key: [0; 32],
             known: Vec::new(),
             tokens: HashMap::new(),
             known_tokens: tokens,
@@ -444,7 +455,7 @@ impl Blinder {
             {
                 return token.clone();
             }
-            let token = one_byte_token(name, dbid, salt, &self.one_byte_taken);
+            let token = one_byte_token(&self.key, name, dbid, salt, &self.one_byte_taken);
             self.one_byte_taken.insert(token.as_bytes()[0]);
             if salt == 0 {
                 self.one_byte_given.insert(key, token.clone());
@@ -452,8 +463,8 @@ impl Blinder {
             return token;
         }
         match salt {
-            0 => token_for(name, dbid, len),
-            _ => token_for(&format!("{name}\0{salt}"), 0, len),
+            0 => token_for(&self.key, name, dbid, len),
+            _ => token_for(&self.key, &format!("{name}\0{salt}"), 0, len),
         }
     }
 
@@ -606,9 +617,10 @@ fn is_event(packet: &[u8]) -> bool {
 /// joins the player's records by it (a hex digit is no name to it). Never
 /// the name itself, another one-byte name, or a token already given, so two
 /// players never share one.
-fn one_byte_token(name: &str, dbid: u64, salt: u32, taken: &HashSet<u8>) -> String {
+fn one_byte_token(key: &SliceKey, name: &str, dbid: u64, salt: u32, taken: &HashSet<u8>) -> String {
     const LETTERS: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     let mut hasher = Sha256::new();
+    hasher.update(key);
     hasher.update(b"a2es-one\x00");
     match dbid {
         0 => hasher.update(name.as_bytes()),
@@ -961,11 +973,14 @@ fn filter_stream(
 /// `names` should carry every character name the meter resolved during the
 /// fight, roster members and otherwise — anything absent from it is a name the
 /// blinder cannot see, and the verifier cannot catch either.
+///
+/// `key` must be fresh random bytes for each slice (see `SliceKey`).
 pub fn build(
     packets: &[CapturedPacket],
     fight_start_ms: i64,
     fight_end_ms: i64,
     names: &NameMap,
+    key: SliceKey,
 ) -> Result<EvidenceSlice, SliceError> {
     let from = fight_start_ms - LEAD_IN_MS;
     let to = fight_end_ms + TAIL_MS;
@@ -976,7 +991,7 @@ pub fn build(
     let mut ordered: Vec<(&String, &u64)> = names.iter().collect();
     ordered.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then_with(|| a.0.cmp(b.0)));
 
-    let mut blinder = Blinder::new(&ordered);
+    let mut blinder = Blinder::new(key, &ordered);
     let mut blind_map: HashMap<String, u64> = HashMap::new();
     for (name, dbid) in ordered.iter().copied() {
         if let Some(token) = blinder.token_of(name) {
@@ -1197,6 +1212,9 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
+    /// A fixed key, so tests see the same tokens every run.
+    const KEY: SliceKey = [7; 32];
+
     fn host_with(records_at: &[usize], len: usize) -> Vec<u8> {
         // A non-allowlisted host: <len> 0x99 0x36 ... with `04 38` at the given offsets.
         let mut body = vec![0x99, 0x36];
@@ -1286,7 +1304,7 @@ mod tests {
         body.resize(304, 0x00);
         let mut packet = frame_packet(&body).unwrap();
         assert_eq!(packet[1], 0x02, "a length ending in 02");
-        let mut blinder = Blinder::new(&[]);
+        let mut blinder = Blinder::new(KEY, &[]);
         blinder.blind(&mut packet);
         assert_eq!(&packet[2..7], &[0x40, 0x36, 0xc9, 0x8f, 0x07]);
 
@@ -1303,7 +1321,7 @@ mod tests {
         let mut body = vec![0x45, 0x36, 0x05, 0x00, 0x02, b'M', b'7', 0x00];
         body.resize(32, 0x00);
         let mut packet = frame_packet(&body).unwrap();
-        Blinder::new(&[]).blind(&mut packet);
+        Blinder::new(KEY, &[]).blind(&mut packet);
         assert!(!packet.windows(2).any(|w| w == b"M7"));
     }
 
@@ -1314,7 +1332,7 @@ mod tests {
         let mut body = vec![0x04, 0x38, 0xfe, 0x9e, 0x02, 0x04, 0x00, 0x9e, 0x9b, 0x01, 0x02, 0xd3, 0x86, 0x01, 0x00];
         body.resize(40, 0x00);
         let mut packet = frame_packet(&body).unwrap();
-        Blinder::new(&[]).blind(&mut packet);
+        Blinder::new(KEY, &[]).blind(&mut packet);
         assert!(packet.windows(4).any(|w| w == [0xd3, 0x86, 0x01, 0x00]));
     }
 
@@ -1324,7 +1342,7 @@ mod tests {
         let mut body = vec![0x44, 0x36, 0x9e, 0x9b, 0x01, 0x03, 0xe3, 0x81, 0x82];
         body.resize(40, 0x00);
         let mut packet = frame_packet(&body).unwrap();
-        Blinder::new(&[]).blind(&mut packet);
+        Blinder::new(KEY, &[]).blind(&mut packet);
         assert!(!packet.windows(3).any(|w| w == [0xe3, 0x81, 0x82]));
     }
 
@@ -1335,7 +1353,7 @@ mod tests {
         let mut body = vec![0x04, 0x38, 0xfe, 0x9e, 0x02, 0x04, 0x00, 0x95, 0xfa, 0x02, 0x50, 0x77, 0xf6, 0x00];
         body.resize(40, 0x00);
         let mut packet = frame_packet(&body).unwrap();
-        Blinder::new(&[]).blind(&mut packet);
+        Blinder::new(KEY, &[]).blind(&mut packet);
         assert!(packet.windows(4).any(|w| w == [0x50, 0x77, 0xf6, 0x00]));
     }
 
@@ -1345,7 +1363,7 @@ mod tests {
         let mut body = vec![0x04, 0x38, 0xfe, 0x9e, 0x02, 0x04, 0x00, 0x9e, 0x9b, 0x01, 0x02, 0x51, 0x28, 0xf4, 0x00];
         body.resize(40, 0x00);
         let mut packet = frame_packet(&body).unwrap();
-        Blinder::new(&[]).blind(&mut packet);
+        Blinder::new(KEY, &[]).blind(&mut packet);
         assert!(packet.windows(4).any(|w| w == [0x51, 0x28, 0xf4, 0x00]));
     }
 
@@ -1359,7 +1377,7 @@ mod tests {
         let mut packet = frame_packet(&body).unwrap();
         let before = packet.clone();
         let name = "8D".to_string();
-        Blinder::new(&[(&name, &0)]).blind(&mut packet);
+        Blinder::new(KEY, &[(&name, &0)]).blind(&mut packet);
         assert!(!packet.windows(2).any(|w| w == b"8D"));
         // Still blinded, and nothing but the run changed.
         let at = before.windows(3).position(|w| w == [0xde, 0x02, 0x0c]).unwrap() + 3;
@@ -1423,7 +1441,7 @@ mod tests {
 
     fn slice_of(packets: &[Vec<u8>], names: &NameMap) -> EvidenceSlice {
         let at = CapturedPacket { captured_at_ms: 0, stream: "Client:1".into(), bytes: packets.concat() };
-        build(&[at], 0, 10, names).unwrap()
+        build(&[at], 0, 10, names, KEY).unwrap()
     }
 
     /// `blinded` is `source` but for its names: the name fields given, and
@@ -1432,7 +1450,7 @@ mod tests {
     fn only_names_changed(source: &[u8], blinded: &[u8], fields: &[std::ops::Range<usize>]) {
         assert_eq!(blinded.len(), source.len());
         let mut shaped = source.to_vec();
-        Blinder::new(&[]).blind_name_shaped(&mut shaped);
+        Blinder::new(KEY, &[]).blind_name_shaped(&mut shaped);
         for (i, (b, s)) in blinded.iter().zip(source).enumerate() {
             if !fields.iter().any(|f| f.contains(&i)) && shaped[i] == *s {
                 assert_eq!(b, s, "byte {i} of {source:02x?}");
@@ -1500,10 +1518,10 @@ mod tests {
         let name = "Jo".to_string();
         let mut chance = frame_packet(&[0x41, 0x36, 0x9e, 0x9b, 0x01, 0x10, b'J', b'o', 0x22, 0x00, 0x00]).unwrap();
         let before = chance.clone();
-        Blinder::new(&[(&name, &0)]).blind_known(&mut chance);
+        Blinder::new(KEY, &[(&name, &0)]).blind_known(&mut chance);
         assert_eq!(chance, before);
         let mut named = frame_packet(&[0x41, 0x36, 0x9e, 0x9b, 0x01, 0x02, b'J', b'o', 0x22, 0x00, 0x00]).unwrap();
-        Blinder::new(&[(&name, &0)]).blind_known(&mut named);
+        Blinder::new(KEY, &[(&name, &0)]).blind_known(&mut named);
         assert!(!named.windows(2).any(|w| w == b"Jo"));
     }
 
@@ -1536,7 +1554,7 @@ mod tests {
                 at(101_000, new.clone(), world.clone()),
                 at(101_000, new, world.clone()),
             ];
-            build(&packets, 100_000, 110_000, &HashMap::new()).map(|s| s.records.len()).unwrap_or(0)
+            build(&packets, 100_000, 110_000, &HashMap::new(), KEY).map(|s| s.records.len()).unwrap_or(0)
         };
         assert_eq!(cut(stream_key(7777, 50000), stream_key(7777, 50001)), 3, "every whole packet kept");
         assert!(cut("Client:7777".into(), "Client:7777".into()) < 3, "one stream per server port loses the new connection");
@@ -1552,7 +1570,7 @@ mod tests {
         let at = |ms, bytes: &Vec<u8>| CapturedPacket { captured_at_ms: ms, stream: "Client:1".into(), bytes: bytes.clone() };
         // The first two in the prelude, the rest in the fight window.
         let packets = vec![at(0, &scope), at(0, &world), at(100_000, &cutscene), at(100_000, &scope)];
-        let slice = build(&packets, 100_000, 110_000, &HashMap::new()).unwrap();
+        let slice = build(&packets, 100_000, 110_000, &HashMap::new(), KEY).unwrap();
         // Party scope only feeds the loot owner, which a derivation never
         // reads, and it made slices 30-50 % larger (2026-10-07, three bosses).
         assert_eq!(slice.records.len(), 2);
@@ -1600,7 +1618,7 @@ mod tests {
     #[test]
     fn the_server_finds_names_a_client_left_in_the_clear() {
         // A slice cut by this meter: nothing left to blind.
-        let slice = build(&[cap(500, &spawn_named("Grandine")[1..])], 0, 1_000, &HashMap::new()).unwrap();
+        let slice = build(&[cap(500, &spawn_named("Grandine")[1..])], 0, 1_000, &HashMap::new(), KEY).unwrap();
         assert_eq!(unblinded_names(&slice.records, &slice.blind_map), 0);
         assert_eq!(leaked_names(&slice.records, &["Grandine".to_string()]), 0);
 
@@ -1613,7 +1631,7 @@ mod tests {
     #[test]
     fn token_is_always_the_same_byte_length() {
         for name in ["Misti", "丨Mamepoko丨", "九州依然在", "a", "Grandine"] {
-            let t = token_for(name, 0x03f6_0000_0001_4b85, name.len());
+            let t = token_for(&KEY, name, 0x03f6_0000_0001_4b85, name.len());
             assert_eq!(t.len(), name.len(), "{name}");
             assert!(t.is_ascii());
         }
@@ -1621,13 +1639,45 @@ mod tests {
 
     #[test]
     fn token_is_stable_per_roster_id_not_per_name() {
-        let a = token_for("Misti", 7, 5);
-        let b = token_for("Other", 7, 5);
+        let a = token_for(&KEY, "Misti", 7, 5);
+        let b = token_for(&KEY, "Other", 7, 5);
         assert_eq!(
             a, b,
             "same dbid must blind to the same token regardless of name"
         );
-        assert_ne!(a, token_for("Misti", 8, 5));
+        assert_ne!(a, token_for(&KEY, "Misti", 8, 5));
+    }
+
+    #[test]
+    fn another_key_gives_other_tokens() {
+        let other: SliceKey = [8; 32];
+        assert_ne!(token_for(&KEY, "Velkora", 0, 7), token_for(&other, "Velkora", 0, 7));
+        assert_ne!(token_for(&KEY, "Velkora", 7, 7), token_for(&other, "Velkora", 7, 7));
+
+        let mut payload = vec![0x45, 0x36, 0x07];
+        payload.extend_from_slice(b"Velkora");
+        let mut names = NameMap::new();
+        names.insert("Velkora".into(), 42);
+        let a = build(&[cap(0, &payload)], 0, 10, &names, KEY).unwrap();
+        let b = build(&[cap(0, &payload)], 0, 10, &names, other).unwrap();
+        assert_ne!(a.blind_map.keys().collect::<Vec<_>>(), b.blind_map.keys().collect::<Vec<_>>());
+        assert_ne!(encode(&a), encode(&b));
+    }
+
+    #[test]
+    fn a_name_gets_one_token_throughout_a_slice() {
+        let mut payload = vec![0x45, 0x36, 0x07];
+        payload.extend_from_slice(b"Velkora");
+        let mut names = NameMap::new();
+        names.insert("Velkora".into(), 42);
+        let slice = build(&[cap(0, &payload), cap(5, &payload)], 0, 10, &names, KEY).unwrap();
+
+        assert_eq!(slice.blind_map.len(), 1);
+        let token = slice.blind_map.keys().next().unwrap().as_bytes();
+        assert_eq!(slice.records.len(), 2);
+        for (_, record) in &slice.records {
+            assert!(record.windows(token.len()).any(|w| w == token));
+        }
     }
 
     #[test]
@@ -1636,7 +1686,7 @@ mod tests {
             cap(1_000, &[0x04, 0x38, 0x01, 0x02]),
             cap(1_000, &[0xAB, 0xCD, b'c', b'h', b'a', b't']),
         ];
-        let slice = build(&packets, 1_000, 2_000, &HashMap::new()).unwrap();
+        let slice = build(&packets, 1_000, 2_000, &HashMap::new(), KEY).unwrap();
         assert_eq!(slice.records.len(), 1);
         assert_eq!(slice.stats.packets_seen, 2);
         assert_eq!(slice.stats.packets_kept, 1);
@@ -1650,7 +1700,7 @@ mod tests {
 
         let mut names = NameMap::new();
         names.insert("Misti".into(), 42);
-        let slice = build(&[cap(0, &payload)], 0, 10, &names).unwrap();
+        let slice = build(&[cap(0, &payload)], 0, 10, &names, KEY).unwrap();
 
         assert_eq!(slice.records.len(), 1);
         assert_eq!(
@@ -1674,7 +1724,7 @@ mod tests {
         names.insert("Misti".into(), 1);
         names.insert("Mistifix2".into(), 2);
 
-        let slice = build(&[cap(0, &payload)], 0, 10, &names).unwrap();
+        let slice = build(&[cap(0, &payload)], 0, 10, &names, KEY).unwrap();
         let out = &slice.records[0].1;
         assert!(!out.windows(9).any(|w| w == b"Mistifix2"));
         assert!(!out.windows(5).any(|w| w == b"Misti"));
@@ -1687,7 +1737,7 @@ mod tests {
         let mut names = NameMap::new();
         names.insert("九州依然在".into(), 3);
 
-        let slice = build(&[cap(0, &payload)], 0, 10, &names).unwrap();
+        let slice = build(&[cap(0, &payload)], 0, 10, &names, KEY).unwrap();
         let out = &slice.records[0].1;
         assert!(!out
             .windows("九州依然在".len())
@@ -1706,7 +1756,7 @@ mod tests {
             cap(100_000, &payload),                  // during
             cap(200_000 + TAIL_MS + 1, &payload),    // past the tail
         ];
-        let slice = build(&packets, 100_000, 200_000, &HashMap::new()).unwrap();
+        let slice = build(&packets, 100_000, 200_000, &HashMap::new(), KEY).unwrap();
         assert_eq!(slice.records.len(), 2);
     }
 
@@ -1718,6 +1768,7 @@ mod tests {
             1_700_000_000_000,
             1_700_000_010_000,
             &HashMap::new(),
+            KEY,
         )
         .unwrap();
         assert_eq!(slice.records[0].0, 5_000);
@@ -1730,7 +1781,7 @@ mod tests {
         let mut names = NameMap::new();
         names.insert("Grandine".into(), 0x03f5_0000_0001_b9c0);
 
-        let slice = build(&[cap(500, &payload)], 0, 1_000, &names).unwrap();
+        let slice = build(&[cap(500, &payload)], 0, 1_000, &names, KEY).unwrap();
         let bytes = encode(&slice);
         let (records, blind_map) = decode(&bytes).expect("decodes");
 
@@ -1751,8 +1802,8 @@ mod tests {
         let mut names = NameMap::new();
         names.insert("Misti".into(), 1);
         names.insert("Grandine".into(), 2);
-        let a = encode(&build(&[cap(0, &payload)], 0, 10, &names).unwrap());
-        let b = encode(&build(&[cap(0, &payload)], 0, 10, &names).unwrap());
+        let a = encode(&build(&[cap(0, &payload)], 0, 10, &names, KEY).unwrap());
+        let b = encode(&build(&[cap(0, &payload)], 0, 10, &names, KEY).unwrap());
         assert_eq!(a, b);
     }
 
@@ -1760,7 +1811,7 @@ mod tests {
     fn a_capture_with_nothing_in_the_window_is_an_error() {
         let packets = vec![cap(0, &[0x04, 0x38, 0x01])];
         assert!(matches!(
-            build(&packets, 10_000_000, 10_001_000, &HashMap::new()),
+            build(&packets, 10_000_000, 10_001_000, &HashMap::new(), KEY),
             Err(SliceError::Empty)
         ));
     }

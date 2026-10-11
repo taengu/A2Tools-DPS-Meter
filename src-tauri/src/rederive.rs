@@ -565,6 +565,7 @@ mod tests {
             0,
             1_000,
             &Default::default(),
+            [7; 32],
         )
         .expect("builds");
         assert_eq!(

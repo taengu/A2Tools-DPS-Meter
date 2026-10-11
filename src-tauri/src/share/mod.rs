@@ -366,10 +366,18 @@ pub fn slice_for(
     packets.sort_by_key(|p| p.captured_at_ms);
 
     let names = resolve_names(&packets);
-    let mut slice = evidence_slice::build(&packets, start, end, &names).map_err(|e| e.to_string())?;
+    let mut slice = evidence_slice::build(&packets, start, end, &names, slice_key()?).map_err(|e| e.to_string())?;
     without_roster_ids(&mut slice);
     let encoded = evidence_slice::encode(&slice);
     Ok((encoded, slice, sources))
+}
+
+/// A fresh key for one slice's tokens, from the OS random source. No fallback:
+/// a guessable key would bring back the name test it is there to stop.
+fn slice_key() -> Result<evidence_slice::SliceKey, String> {
+    let mut key = [0u8; 32];
+    getrandom::fill(&mut key).map_err(|e| format!("no random key for the slice: {e}"))?;
+    Ok(key)
 }
 
 /// Blank the roster ids in a slice's blind table before it is written or sent.
@@ -634,8 +642,9 @@ pub fn save_slice(
     if !covers(&packets, start, start + record.duration_ms) {
         return Err("no packets in memory for this fight".into());
     }
-    let mut slice = evidence_slice::build(&packets, start, start + record.duration_ms, &names_from(storage))
-        .map_err(|e| e.to_string())?;
+    let mut slice =
+        evidence_slice::build(&packets, start, start + record.duration_ms, &names_from(storage), slice_key()?)
+            .map_err(|e| e.to_string())?;
     without_roster_ids(&mut slice);
     let compressed = gzip(&evidence_slice::encode(&slice))?;
 
