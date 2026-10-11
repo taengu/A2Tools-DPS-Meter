@@ -279,7 +279,7 @@ fn canonicalise(record: &mut FightRecord) {
 /// version, so a2tools.app re-derives its logs: it re-derives every log whose
 /// parser version is older than the service's. `2.0.48.1` sorts after
 /// `2.0.48` and before `2.0.49`.
-const SERVICE_REVISION: u32 = 1;
+const SERVICE_REVISION: u32 = 2;
 
 pub fn parser_version() -> String {
     format!("{}.{}", crate::entity::fight_record::APP_VERSION, SERVICE_REVISION)
