@@ -171,8 +171,11 @@ appears in it. `no_readable_text_from_the_capture_survives_into_the_slice`
 asserts the same for every length-prefixed string in the capture, which is what
 catches chat and bystanders.
 
-**Names.** The slice contains no names. Separately, the upload sends the names
-the saved fight already holds: **yours in full, everyone else masked** the way
+**Names.** The slice contains no names. Each token is made with a random key
+that belongs to that one slice and is thrown away once it is cut, so a token
+cannot be worked out from a name or a roster id, or matched between slices.
+Separately, the upload sends the names the saved fight already holds: **yours
+in full, everyone else masked** the way
 the meter shows them (`Ta****x`: first two characters, last character, at most
 four stars). The service applies that masking again itself, so a modified client
 cannot publish another player's full name. An earlier version of this document

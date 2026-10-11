@@ -347,7 +347,7 @@ fn check(packets: &[CapturedPacket], storage: &DataStorage, w: &FightRecord, t: 
     for name in storage.get_nicknames().values() {
         names.entry(name.clone()).or_insert(0);
     }
-    let slice = match evidence_slice::build(packets, w.start_time_ms, w.start_time_ms + w.duration_ms, &names) {
+    let slice = match evidence_slice::build(packets, w.start_time_ms, w.start_time_ms + w.duration_ms, &names, [7; 32]) {
         Ok(s) => evidence_slice::encode(&s),
         Err(e) => {
             println!("   slice failed: {e:?}");
