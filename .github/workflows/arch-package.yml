@@ -30,6 +30,10 @@ jobs:
     name: makepkg
     runs-on: ubuntu-latest
     container: archlinux:base-devel
+    env:
+      # Where rust-cache restores and saves the registry; the builder user
+      # below builds with it (su keeps the variable).
+      CARGO_HOME: /github/home/.cargo
     steps:
       # git first, so checkout keeps the history pkgver() reads.
       - name: Build dependencies
@@ -40,11 +44,19 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
+      # Compiled dependencies from the last run (src-tauri/target and the
+      # registry). The cache lives on the branch the workflow runs from, so a
+      # release tag build reuses what the previous release built.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: makepkg
       # makepkg refuses to run as root.
       - name: makepkg
         run: |
           useradd -m builder
-          chown -R builder "$GITHUB_WORKSPACE"
+          mkdir -p "$CARGO_HOME"
+          chown -R builder "$GITHUB_WORKSPACE" "$CARGO_HOME"
           su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --noconfirm"
       - name: What it links against
         run: |
@@ -64,9 +76,14 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: deb-rpm
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
       - name: Build dependencies
         run: |
           sudo apt-get update
@@ -207,11 +224,23 @@ jobs:
     needs: rpm-repo
     runs-on: ubuntu-latest
     steps:
-      # The image is large; the runner needs the room.
+      # The image is large; the runner needs the room. The runner's scratch
+      # disk (/mnt) usually has plenty, so the image goes there; deleting
+      # preinstalled toolchains from / (over a minute) is the fallback.
       - name: Disk space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+          avail=$(df --output=avail -k /mnt 2>/dev/null | tail -1 | tr -d " ")
+          if [ "${avail:-0}" -gt 31457280 ]; then
+            sudo mkdir -p /mnt/containers
+            echo "PODMAN_ROOT=--root=/mnt/containers" >> "$GITHUB_ENV"
+            df -h /mnt
+          else
+            for d in /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL; do
+              sudo rm -rf "$d" &
+            done
+            wait
+            df -h /
+          fi
       - uses: actions/download-artifact@v4
         with:
           name: rpm-repo
@@ -220,7 +249,7 @@ jobs:
         run: |
           # Podman, not Docker: the image has more layers than Docker allows
           # ("max depth exceeded").
-          sudo podman run --rm -v "$PWD/repo:/repo:ro" ghcr.io/ublue-os/bazzite:stable bash -euc '
+          sudo podman $PODMAN_ROOT run --rm -v "$PWD/repo:/repo:ro" ghcr.io/ublue-os/bazzite:stable bash -euc '
             cat /etc/os-release | grep -E "^(NAME|VERSION)="
             printf "[a2tools]\nname=A2Tools DPS Meter (test)\nbaseurl=file:///repo/rpm/\ngpgcheck=0\n" > /etc/yum.repos.d/a2tools.repo
             if rpm-ostree install a2-tools-dps-meter; then
@@ -242,10 +271,11 @@ jobs:
   steamos-distrobox:
     name: SteamOS route (rootful distrobox)
     needs: package
-    # Not yet working: distrobox will not create a rootful box here without
-    # its interactive password prompt (the skip flag is misread as a box
-    # name). Kept to finish, but it does not hold up a release; the route is
-    # marked unconfirmed in docs/linux.md.
+    # Not yet confirmed: distrobox would not create a rootful box here without
+    # its interactive password prompt, because the skip flag was misread as a
+    # box name (a literal "\n" where a line continuation belonged, fixed in
+    # 2.0.56). It still does not hold up a release; the route is marked
+    # unconfirmed in docs/linux.md.
     continue-on-error: true
     runs-on: ubuntu-24.04
     steps:
@@ -256,15 +286,16 @@ jobs:
       - name: Create the box and install
         run: |
           # Ubuntu's distrobox (1.7) is older than SteamOS's; use a current one.
-          sudo apt-get update
-          sudo apt-get install -y podman
+          # The runner image ships podman; install it only if that changes.
+          command -v podman || { sudo apt-get update && sudo apt-get install -y podman; }
           curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.local/bin:$PATH"
           distrobox version
           # A rootful box asks for a password for the user inside it on first
           # entry; a player types one, CI cannot.
-          distrobox create --root --yes --name a2tools --image docker.io/library/archlinux:latest \n            --absolutely-disable-root-password-i-am-really-positively-sure
+          distrobox create --root --yes --name a2tools --image docker.io/library/archlinux:latest \
+            --absolutely-disable-root-password-i-am-really-positively-sure
           distrobox enter --root a2tools -- sudo pacman -Syu --noconfirm
           distrobox enter --root a2tools -- sudo pacman -U --noconfirm "$PWD"/pkg/*.pkg.tar.zst
       - name: Capture permission
