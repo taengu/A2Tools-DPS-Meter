@@ -222,16 +222,20 @@ fn hidden_in_place() -> &'static std::sync::Mutex<std::collections::HashSet<Stri
 /// plugin window up, 2026-10-16), and Wayland lets no client move its own
 /// window back, so a window that stays mapped is the only one that stays where
 /// it was left. Without a compositor nothing can be transparent, and it is
-/// hidden as before.
+/// hidden as before. A window not showing (a plugin started hidden has no GDK
+/// surface yet) is left hidden: tao's `set_ignore_cursor_events` unwraps that
+/// surface and aborts the meter, so the input region is set here instead.
 pub fn hide_in_place(window: &tauri::WebviewWindow) {
-    use gtk::prelude::*;
+    use gtk::{cairo, prelude::*};
     let target = window.clone();
     let concealed = super::dialog::on_gtk_thread(move || {
         let gtk_window = target.gtk_window().ok()?;
-        if !WidgetExt::screen(&gtk_window)?.is_composited() {
+        if !gtk_window.is_visible() || !WidgetExt::screen(&gtk_window)?.is_composited() {
             return None;
         }
+        let surface = gtk_window.window()?;
         gtk_window.set_opacity(0.0);
+        surface.input_shape_combine_region(&cairo::Region::create_rectangle(&cairo::RectangleInt::new(0, 0, 1, 1)), 0, 0);
         Some(())
     })
     .flatten()
@@ -240,7 +244,6 @@ pub fn hide_in_place(window: &tauri::WebviewWindow) {
         hide_without_focus(window);
         return;
     }
-    let _ = window.set_ignore_cursor_events(true);
     let _ = window.set_skip_taskbar(true);
     hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string());
 }
