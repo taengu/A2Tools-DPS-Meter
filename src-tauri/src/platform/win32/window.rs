@@ -67,7 +67,10 @@ pub fn minimize_off_top(window: &tauri::WebviewWindow) {
             0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
         );
-        let _ = ShowWindow(hwnd, SW_MINIMIZE);
+        // SW_MINIMIZE activates the next window in the Z order: the game, even
+        // with an overlay (NVIDIA's) in front, and the game then locks the
+        // mouse to the middle of the screen.
+        let _ = ShowWindow(hwnd, SW_SHOWMINNOACTIVE);
     }
 }
 
