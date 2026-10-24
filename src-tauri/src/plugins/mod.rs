@@ -428,14 +428,37 @@ fn boss_map_event(map: &crate::capture::boss_map::BossMap) -> Value {
 }
 
 /// Who is playing, as plugins with `events:character` see it.
+///
+/// With it, what the game says of them: combat power and gear score, and the
+/// Odyle energy once the game has said it is theirs (`odyle_owner`: a login's
+/// list comes before the record naming who logged in). Each is null until
+/// known, and a change sends the event again.
 fn character(app: &tauri::AppHandle) -> Option<Value> {
     app.try_state::<AppState>().map(|s| {
         let p = s.data_storage.local_profile();
+        let owner = s.data_storage.odyle_owner();
+        let theirs = matches!((owner.as_deref(), p.name.as_deref()), (Some(o), Some(n)) if o.trim() == n.trim());
+        let odyle = s
+            .data_storage
+            .odyle_energy()
+            .filter(|_| theirs)
+            .map(|(basic, charged)| serde_json::json!({ "basic": basic, "charged": charged }));
+        // The game's entry counts by id, as `[first, second]`, theirs the same
+        // way (they come in Odyle energy's list). Known ids: 1 Shugo
+        // Festival keys, 4 Nightmare, 8 Dimensional Invasion, 101 Daily
+        // Dungeon, 60000001 Odyle energy, 80000001 Ascension Trial; 0 the
+        // character's Daily Duty today, [completed, taken] (data_storage).
+        let counts = s.data_storage.content_counts();
+        let content = (theirs && !counts.is_empty()).then(|| serde_json::json!(counts));
         serde_json::json!({
             "name": p.name,
             "serverId": p.server_id,
             "level": p.level,
             "class": p.class.map(|c| c.class_name().to_string()),
+            "combatPower": p.combat_power,
+            "gearScore": p.gear_score,
+            "odyleEnergy": odyle,
+            "contentCounts": content,
         })
     })
 }

@@ -62,6 +62,9 @@ const ABNORMAL_RETENTION_MS: i64 = 30 * 60 * 1000;
 /// How often, in capture time, the timeline drops what is past retention.
 const ABNORMAL_PRUNE_EVERY_MS: i64 = 60 * 1000;
 
+/// Daily Duty's count among the content counts (`content_counts`).
+pub const DAILY_DUTY_ID: u32 = 0;
+
 fn now_ms() -> i64 {
     crate::clock::now_ms()
 }
@@ -688,6 +691,12 @@ struct Inner {
     /// the character before a switch.
     odyle_owner: Option<String>,
     odyle_awaits_self_record: bool,
+    /// The game's entry counts by entry id (`0b 61` / `0c 61`), whose owner
+    /// is Odyle energy's (they come in the same list).
+    content_counts: std::collections::BTreeMap<u32, [u32; 2]>,
+    /// The Daily Duty board: each offer `(offer, your quest number, state)`
+    /// and the next reset (unix ms). See `parse_daily_duty_packet`.
+    daily_duty: Option<(Vec<(u32, u32, u8)>, i64)>,
 
     // Local player
     local_player_id: Option<i64>,
@@ -815,6 +824,8 @@ impl DataStorage {
                 odyle_energy: None,
                 odyle_owner: None,
                 odyle_awaits_self_record: false,
+                content_counts: Default::default(),
+                daily_duty: None,
                 local_player_id: None,
                 supporters: std::sync::Arc::new(crate::supporters::Roster::default()),
                 local_character_name: None,
@@ -1467,6 +1478,80 @@ impl DataStorage {
         if inner.odyle_energy != Some((basic, charged)) {
             tracing::info!("Odyle energy: {basic} basic, {charged} charged");
             inner.odyle_energy = Some((basic, charged));
+        }
+    }
+
+    /// The game's entry counts: the whole list (`whole_list`, at login and
+    /// after a server transfer) or the entries that changed. Logged, so the
+    /// ids not yet known can be matched to what the game shows.
+    pub fn set_content_counts(&self, counts: crate::capture::stream_processor::ContentCounts, whole_list: bool) {
+        let mut inner = self.inner.write();
+        if whole_list {
+            inner.content_counts.clear();
+            // Each character has its own Daily Duty board, sent right after
+            // the list when it is sent at all (not at Nully's logins,
+            // 2026-10-24): the last character's isn't theirs. The limit is
+            // the server's, the sum of each character's today: a plugin
+            // keeping each character's adds them up.
+            inner.daily_duty = None;
+            let list: Vec<String> = counts.iter().map(|(id, v)| format!("{id}={}+{}", v[0], v[1])).collect();
+            tracing::debug!("Content counts: {}", list.join(" "));
+        }
+        for (id, v) in counts {
+            if !whole_list && inner.content_counts.get(&id) != Some(&v) {
+                tracing::debug!("Content count {id}: {} (+{})", v[0], v[1]);
+            }
+            inner.content_counts.insert(id, v);
+        }
+    }
+
+    /// The entry counts, and Daily Duty as id 0 (no entry of the game's):
+    /// `[completed, taken]` today, both 0 once its reset has passed.
+    pub fn content_counts(&self) -> std::collections::BTreeMap<u32, [u32; 2]> {
+        let mut counts = self.inner.read().content_counts.clone();
+        if let Some((done, taken)) = self.daily_duty_at(now_ms()) {
+            counts.insert(DAILY_DUTY_ID, [done, taken]);
+        }
+        counts
+    }
+
+    /// Daily Duty at `now` (unix ms): `(completed, taken)`, taken counting
+    /// the completed too (the game's n/5 is taken). 0 once the board's reset
+    /// has passed; None before a board was seen. Completed is state 04 (a
+    /// turn-in, 2026-10-24; 03 would be ready to hand in, not counted).
+    pub fn daily_duty_at(&self, now: i64) -> Option<(u32, u32)> {
+        let inner = self.inner.read();
+        let (offers, reset_ms) = inner.daily_duty.as_ref()?;
+        if now >= *reset_ms {
+            return Some((0, 0));
+        }
+        let count = |f: fn(u8) -> bool| offers.iter().filter(|o| f(o.2)).count() as u32;
+        Some((count(|s| s >= 4), count(|s| s != 1)))
+    }
+
+    pub fn set_daily_duty_board(&self, offers: Vec<(u32, u32, u8)>, reset_ms: i64) {
+        let taken = offers.iter().filter(|o| o.2 != 1).count();
+        let states: Vec<String> = offers.iter().filter(|o| o.2 != 1).map(|o| format!("{}={:02x}", o.0, o.2)).collect();
+        tracing::info!("Daily Duty: {taken} of {} offers taken ({})", offers.len(), states.join(" "));
+        self.inner.write().daily_duty = Some((offers, reset_ms));
+    }
+
+    /// An offer taken: it counts, and is known by the quest number from now.
+    pub fn daily_duty_taken(&self, offer: u32, number: u32) {
+        let mut inner = self.inner.write();
+        if let Some(o) = inner.daily_duty.as_mut().and_then(|(offers, _)| offers.iter_mut().find(|o| o.0 == offer)) {
+            *o = (offer, number, 2);
+            tracing::info!("Daily Duty: offer {offer} taken (quest number {number})");
+        }
+    }
+
+    /// A quest given up: if one of the board's, it is open again.    /// A quest given up: if one of the board's, it is open again.
+    pub fn daily_duty_given_up(&self, number: u32) {
+        let mut inner = self.inner.write();
+        if let Some(o) = inner.daily_duty.as_mut().and_then(|(offers, _)| offers.iter_mut().find(|o| o.1 == number && o.2 != 1)) {
+            o.1 = 0;
+            o.2 = 1;
+            tracing::info!("Daily Duty: offer {} given up", o.0);
         }
     }
 

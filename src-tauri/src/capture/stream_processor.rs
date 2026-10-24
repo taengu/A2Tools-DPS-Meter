@@ -277,6 +277,7 @@ impl StreamProcessor {
         self.parse_party_scope_packet(packet);
         self.parse_party_left_packet(packet);
         self.parse_odyle_energy_packet(packet);
+        self.parse_daily_duty_packet(packet);
         self.parse_stagger_gauge_packet(packet);
         self.parse_self_stats_packet(packet);
         self.parse_death_packet(packet);
@@ -368,8 +369,70 @@ impl StreamProcessor {
             Some([0x0C, 0x61]) => (odyle_energy_in_update(&packet[offset + 2..]), false),
             _ => return,
         };
+        let counts =
+            if whole_list { content_counts_in_list(&packet[offset + 2..]) } else { content_counts_in_update(&packet[offset + 2..]) };
+        if let Some(counts) = counts {
+            self.data_storage.set_content_counts(counts, whole_list);
+        }
         if let Some((basic, charged)) = energy {
             self.data_storage.set_odyle_energy(basic, charged, whole_list);
+        }
+    }
+
+    // ===== DAILY DUTY BOARD (1C 8D, 20 8D, 0D 8D) =====
+
+    /// Daily Duty: the character's daily board of quest offers, and how many
+    /// of them were taken today (the game's "Per Server Daily Completion"
+    /// n/5: taken ones count, done or not, and giving one up frees it). Each
+    /// character has its own board, but the limit is the server's: the sum of
+    /// each character's today (5 taken on Nulli, none could be taken on
+    /// Nullception). A board not used since a reset still comes, with that
+    /// reset (Nullception's of yesterday, all completed): it counts 0. A
+    /// login's list drops the last board (`set_content_counts`).
+    ///
+    /// `1c 8d` is the board, at login and after a server transfer:
+    /// `<8 bytes> <count varint>`, then each offer `<offer u32> <quest u32>
+    /// <your quest number u32> <u32> <state u8> <rewards n u8>` and n rewards
+    /// `<item u32> <count varint> <u8> <u64>`, then the next reset (u64 ms),
+    /// a byte and the reset again. State 01 is open, 02 taken, 04
+    /// completed (handed in). The game sends the board again at a turn-in. `20 8d 01 00 00 <offer u32> <quest
+    /// u32> <your quest number u32>` is an offer taken; `0d 8d 00 00 <your
+    /// quest number u32>` a quest given up.
+    ///
+    /// Seen on 2026-10-24 (Nullception): the board at a transfer with three
+    /// taken (the game said 3/5); Defiance II taken as offer 37, quest
+    /// 2302143, number 263; Weaken Blades Defenses taken (offer 45, number
+    /// 266) and given up 3 s later. At 17:54:26 a turn-in (quest number
+    /// 268, after `0f 8d 00 00 0c 01 00 00 ...`) sent the board again at
+    /// once: 20 offers, five taken, that one at 04.
+    fn parse_daily_duty_packet(&self, packet: &[u8]) {
+        let length_info = read_varint(packet, 0);
+        if length_info.length <= 0 {
+            return;
+        }
+        let offset = length_info.length as usize;
+        let body = packet.get(offset + 2..).unwrap_or_default();
+        match packet.get(offset..offset + 2) {
+            Some([0x1C, 0x8D]) => {
+                if let Some((offers, reset_ms)) = daily_duty_board(body) {
+                    self.data_storage.set_daily_duty_board(offers, reset_ms);
+                } else {
+                    // Rare (login, transfer, turn-in): one that doesn't read
+                    // as a board is logged, to see how it differs.
+                    let hex: String = body.iter().take(64).map(|b| format!("{b:02x}")).collect();
+                    tracing::info!("Daily Duty: unreadable board ({} bytes): {hex}", body.len());
+                }
+            }
+            Some([0x20, 0x8D]) if body.len() >= 15 && body[0] == 0x01 => {
+                let offer = u32::from_le_bytes(body[3..7].try_into().unwrap());
+                let number = u32::from_le_bytes(body[11..15].try_into().unwrap());
+                self.data_storage.daily_duty_taken(offer, number);
+            }
+            Some([0x0D, 0x8D]) if body.len() >= 6 => {
+                let number = u32::from_le_bytes(body[2..6].try_into().unwrap());
+                self.data_storage.daily_duty_given_up(number);
+            }
+            _ => {}
         }
     }
 
@@ -2213,16 +2276,26 @@ fn odyle_energy_in_list(body: &[u8]) -> Option<(u32, u32)> {
         })
 }
 
+/// The key of the Odyle energy entry (`87 93 03`), in every list and
+/// update seen, from several players.
+const ODYLE_KEY: i32 = 51_591;
+
 /// Odyle energy in a `0c 61` update, if among the entries that changed.
 ///
 /// The first byte is not a count: updates with `00` there carry an entry too
 /// (`0c 61 00 08 01 87 93 03 ab 0e 03`, 2026-10-15), and the meter skipped
-/// them. The entries are read from after it, at least one.
+/// them. The entries are read from after it, at least one. Only the entry
+/// with the energy's key: another in slot 1 (`0c 61 00 0c 01 00 00 00 04 01
+/// 03`, key 0) was read as 0 basic, 0 charged.
 fn odyle_energy_in_update(body: &[u8]) -> Option<(u32, u32)> {
     let count = (*body.first()?).max(1);
     let mut at = 1;
     for _ in 0..count {
-        let (kind, slot, _, v, next) = entry_count_at(body, at)?;
+        let (kind, slot, key, v, next) = entry_count_at(body, at)?;
+        if key != ODYLE_KEY {
+            at = next;
+            continue;
+        }
         if let Some(energy) = odyle_energy_of(kind, slot, v) {
             return Some(energy);
         }
@@ -2230,6 +2303,110 @@ fn odyle_energy_in_update(body: &[u8]) -> Option<(u32, u32)> {
     }
     None
 }
+
+/// The game's entry counts, by entry id: `(first, second)` value.
+pub type ContentCounts = Vec<(u32, [u32; 2])>;
+
+/// One entry of the entry counts read as the game lays it out, `<kind> <id
+/// u32 LE> <values>`: kind `00` no value (both 0), `01` a u64 (a time, not a
+/// count: `None`), `04` the first value, `08` the second, `0c` both
+/// (varints). Odyle energy is id 60000001 (`01 87 93 03`), Shugo Festival
+/// keys id 1. Returns the entry, if a count, and where the next begins.
+fn content_entry_at(body: &[u8], at: usize) -> Option<(Option<(u32, [u32; 2])>, usize)> {
+    let kind = *body.get(at)?;
+    let id = u32::from_le_bytes(body.get(at + 1..at + 5)?.try_into().ok()?);
+    let mut o = at + 5;
+    let mut v = [0u32; 2];
+    let value = |o: &mut usize| try_read_varint(body, o).map(|n| n as u32);
+    match kind {
+        0x00 => {}
+        0x01 => {
+            body.get(o..o + 8)?;
+            return Some((None, o + 8));
+        }
+        0x04 => v[0] = value(&mut o)?,
+        0x08 => v[1] = value(&mut o)?,
+        0x0C => {
+            v[0] = value(&mut o)?;
+            v[1] = value(&mut o)?;
+        }
+        _ => return None,
+    }
+    Some((Some((id, v)), o))
+}
+
+/// `count` entries from `at`, and where they end.
+fn content_entries(body: &[u8], mut at: usize, count: usize) -> Option<(ContentCounts, usize)> {
+    let mut out = Vec::new();
+    for _ in 0..count {
+        let (entry, next) = content_entry_at(body, at)?;
+        out.extend(entry);
+        at = next;
+    }
+    Some((out, at))
+}
+
+/// The whole list in a `0b 61`: `<count varint> <entries>`, the list being
+/// the rest of the record. Where other things come first, the list is found
+/// as the place from which a count of entries ends right at the end.
+fn content_counts_in_list(body: &[u8]) -> Option<ContentCounts> {
+    (0..body.len()).find_map(|start| {
+        let mut o = start;
+        let count = try_read_varint(body, &mut o)? as usize;
+        if count == 0 || count > 1000 {
+            return None;
+        }
+        let (entries, end) = content_entries(body, o, count)?;
+        (end == body.len() && entries.iter().any(|(id, _)| *id == ODYLE_ID)).then_some(entries)
+    })
+}
+
+/// The entries that changed, in a `0c 61` (see `odyle_energy_in_update` for
+/// the first byte): as many as read, at least one.
+fn content_counts_in_update(body: &[u8]) -> Option<ContentCounts> {
+    let count = (*body.first()?).max(1) as usize;
+    let mut out = Vec::new();
+    let mut at = 1;
+    for _ in 0..count {
+        let Some((entry, next)) = content_entry_at(body, at) else { break };
+        out.extend(entry);
+        at = next;
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// The Daily Duty board in a `1c 8d` (see
+/// `StreamProcessor::parse_daily_duty_packet`): each offer as `(offer, your
+/// quest number, state)`, and the next reset (unix ms). The whole record must
+/// read as a board, its reset ending it.
+fn daily_duty_board(body: &[u8]) -> Option<(Vec<(u32, u32, u8)>, i64)> {
+    let u32_at = |o: usize| body.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+    let mut o = 8;
+    let count = try_read_varint(body, &mut o)? as usize;
+    if count == 0 || count > 100 {
+        return None;
+    }
+    let mut offers = Vec::with_capacity(count);
+    for _ in 0..count {
+        let offer = u32_at(o)?;
+        let number = u32_at(o + 8)?;
+        let state = *body.get(o + 16)?;
+        let rewards = *body.get(o + 17)? as usize;
+        o += 18;
+        for _ in 0..rewards {
+            o += 4;
+            try_read_varint(body, &mut o)?;
+            o += 9;
+        }
+        offers.push((offer, number, state));
+    }
+    let reset = i64::from_le_bytes(body.get(o..o + 8)?.try_into().ok()?);
+    // A reset a year either side of 2026 at most: anything else wasn't a board.
+    (body.len() == o + 17 && (1_750_000_000_000..1_850_000_000_000).contains(&reset)).then_some((offers, reset))
+}
+
+/// Odyle energy's entry id (`ODYLE_KEY` read as the whole u32).
+const ODYLE_ID: u32 = 60_000_001;
 
 fn try_read_varint(bytes: &[u8], offset: &mut usize) -> Option<i32> {
     let result = read_varint(bytes, *offset);
@@ -3995,6 +4172,142 @@ mod tests {
         assert_eq!(storage.odyle_energy(), Some((30, 880)));
     }
 
+    /// The Daily Duty board at a transfer (2026-10-24 17:34:16, the game
+    /// said 3/5), then an offer taken and given up (Weaken Blades Defenses,
+    /// 17:31:28 and 17:31:31, replayed on the board).
+    #[test]
+    fn daily_duty_from_the_board_and_its_changes() {
+        let (storage, mut p) = processor();
+        let board = [
+            "870b1c8d00000000000000000f1f0000003a2023000000000000000000010537337037f4030000e1f505000000006526",
+            "b41fc8010080f0fa020000000037337037e80700408af701000000002133703780fa010040787d01000000006826b41f",
+            "c80100809698000000000020000000a52023000000000000000000010537337037ac020000e1f5050000000037337037",
+            "f4030080f0fa020000000021337037b0ea0100408af701000000006426b41fc8010040787d0100000000c2ee65240100",
+            "809698000000000021000000c420230000000000000000000105e4f59306010000e1f5050000000037337037e8070080",
+            "f0fa020000000043da051e0100408af7010000000037337037f4030040787d010000000021337037a08d060080969800",
+            "00000000220000003b2023000000000000000000010521337037d00f0000e1f505000000006626b41fc8010080f0fa02",
+            "0000000023c59a250100408af7010000000037337037f4030040787d01000000000189890c0100809698000000000023",
+            "000000b52023000000000000000000010537337037640000e1f505000000006726b41fc8010080f0fa02000000003733",
+            "7037e80700408af70100000000bdee6524010040787d01000000006426b41fc80100809698000000000024000000d820",
+            "23000000000000000000010537337037ac020000e1f505000000006426b41fc8010080f0fa020000000023c59a250100",
+            "408af701000000006726b41fc8010040787d010000000037337037b81700809698000000000025000000bf2023000701",
+            "000000000000020543da051e010000e1f505000000006526b41fc8010080f0fa020000000040da051e0100408af70100",
+            "00000037337037f4030040787d01000000002133703780f10400809698000000000026000000a7202300090100000000",
+            "0000020541da051e010000e1f5050000000040da051e010080f0fa020000000040da051e0100408af701000000006626",
+            "b41fc8010040787d010000000040da051e0100809698000000000027000000c320230000000000000000000105213370",
+            "37a01f0000e1f5050000000037337037f4030080f0fa020000000041da051e0100408af701000000006626b41fc80100",
+            "40787d010000000021337037e0d40300809698000000000028000000b12023000000000000000000010521337037d00f",
+            "0000e1f5050000000037337037e8070080f0fa020000000021337037a09c0100408af701000000006526b41fc8010040",
+            "787d010000000021337037e0d40300809698000000000029000000dc2023000000000000000000010537337037900300",
+            "00e1f5050000000037337037f4030080f0fa020000000037337037f40300408af701000000006426b41fc8010040787d",
+            "01000000006426b41fc8010080969800000000002a000000a9202300080100000000000002056426b41fc8010000e1f5",
+            "050000000042da051e010080f0fa0200000000bcee65240100408af7010000000037337037d00f0040787d0100000000",
+            "37337037a01f0080969800000000002b000000d720230000000000000000000105dc156624010000e1f5050000000037",
+            "337037f4030080f0fa020000000037337037dc0b00408af7010000000021337037d089020040787d0100000000373370",
+            "37a01f0080969800000000002c000000d12023000000000000000000010521337037a01f0000e1f50500000000373370",
+            "37e8070080f0fa02000000006826b41fc80100408af7010000000023c59a25010040787d010000000037337037882700",
+            "80969800000000002d000000ad20230000000000000000000105c4899806010000e1f5050000000037337037e8070080",
+            "f0fa020000000085ca8f0c0100408af7010000000021337037b0ea010040787d01000000003733703788270080969800",
+            "0000000080e9db71a10100000080e9db71a1010000",
+        ]
+        .concat();
+        let (offers, reset) = daily_duty_board(&hex(&board)[4..]).unwrap();
+        assert_eq!(offers.len(), 15);
+        assert_eq!(reset, 1_792_911_600_000);
+        assert_eq!(offers.iter().filter(|o| o.2 == 2).map(|o| (o.0, o.1)).collect::<Vec<_>>(), vec![(37, 263), (38, 265), (42, 264)]);
+        p.parse_perfect_packet(&hex(&board));
+        // Before the board's reset (2026-10-25 07:00 UTC), and after it.
+        let duty = |s: &DataStorage| s.daily_duty_at(1_792_900_000_000).map(|(_, taken)| taken);
+        // Three taken, none completed.
+        assert_eq!(storage.daily_duty_at(1_792_900_000_000), Some((0, 3)));
+        assert_eq!(storage.daily_duty_at(1_792_911_600_000), Some((0, 0)));
+        p.parse_perfect_packet(&hex("15208d0100002d000000ad2023000a010000"));
+        assert_eq!(duty(&storage), Some(4));
+        p.parse_perfect_packet(&hex("0c0d8d00000a010000"));
+        assert_eq!(duty(&storage), Some(3));
+        // Another quest given up (not the board's) changes nothing.
+        p.parse_perfect_packet(&hex("0c0d8d0000ff010000"));
+        assert_eq!(duty(&storage), Some(3));
+
+        // The board the turn-in sent: one completed of five taken.
+        let after = [
+            "d90e1c8d02000000010000001425000000bf2023000701000000000000020543da051e010000e1f505000000006526b4",
+            "1fc8010080f0fa020000000040da051e0100408af7010000000037337037f4030040787d01000000002133703780f104",
+            "00809698000000000026000000a72023000901000000000000020541da051e010000e1f5050000000040da051e010080",
+            "f0fa020000000040da051e0100408af701000000006626b41fc8010040787d010000000040da051e0100809698000000",
+            "00002a000000a9202300080100000000000002056426b41fc8010000e1f5050000000042da051e010080f0fa02000000",
+            "00bcee65240100408af7010000000037337037d00f0040787d010000000037337037a01f008096980000000000310000",
+            "00ae202300000000000000000001056426b41fc8010000e1f505000000006426b41fc8010080f0fa02000000006426b4",
+            "1fc80100408af701000000006826b41fc8010040787d01000000002133703780f10400809698000000000035000000af",
+            "2023000b01000000000000020540da051e010000e1f5050000000037337037e8070080f0fa02000000006726b41fc801",
+            "00408af7010000000037337037e8070040787d01000000006426b41fc8010080969800000000003d0000003a20230000",
+            "0000000000000001053733703790030000e1f50500000000f33c6624010080f0fa020000000037337037f40300408af7",
+            "010000000005b0890c010040787d01000000002133703780f1040080969800000000003e000000482023000000000000",
+            "000000010521337037a01f0000e1f505000000006626b41fc8010080f0fa02000000006426b41fc80100408af7010000",
+            "000037337037f4030040787d01000000006526b41fc8010080969800000000003f000000b02023000000000000000000",
+            "010526e48c0c010000e1f5050000000021337037b06d0080f0fa02000000006826b41fc80100408af701000000006826",
+            "b41fc8010040787d010000000037337037a01f00809698000000000040000000d6202300000000000000000001056626",
+            "b41fc8010000e1f5050000000021337037d08c010080f0fa020000000037337037f40300408af7010000000021337037",
+            "80fa010040787d01000000002133703780f10400809698000000000041000000ca2023000c01000000000000040544da",
+            "051e010000e1f50500000000c4899806010080f0fa02000000002133703790cb0100408af701000000006726b41fc801",
+            "0040787d010000000021337037a08d06008096980000000000420000009e2023000000000000000000010537337037f4",
+            "030000e1f505000000006426b41fc8010080f0fa020000000021337037e0da0100408af7010000000023c59a25010040",
+            "787d0100000000c07b860c0100809698000000000043000000cb2023000000000000000000010521337037d00f0000e1",
+            "f505000000006d526524010080f0fa020000000040da051e0100408af7010000000037337037dc0b0040787d01000000",
+            "0037337037a01f00809698000000000044000000ce2023000000000000000000010521337037904e0000e1f505000000",
+            "0021337037807d0080f0fa020000000021337037f0ab0100408af7010000000037337037e8070040787d0100000000a2",
+            "0f8b0c0100809698000000000045000000c52023000000000000000000010521337037904e0000e1f505000000003733",
+            "7037e8070080f0fa02000000006426b41fc80100408af701000000006626b41fc8010040787d01000000006626b41fc8",
+            "0100809698000000000046000000b2202300000000000000000001053733703790030000e1f505000000006426b41fc8",
+            "010080f0fa020000000037337037e80700408af701000000006626b41fc8010040787d01000000006426b41fc8010080",
+            "9698000000000047000000c82023000000000000000000010521337037f02e0000e1f5050000000037337037f4030080",
+            "f0fa02000000006526b41fc80100408af70100000000c1ee6524010040787d01000000006626b41fc801008096980000",
+            "00000048000000a82023000000000000000000010521337037d00f0000e1f5050000000037337037f4030080f0fa0200",
+            "0000006726b41fc80100408af701000000006426b41fc8010040787d010000000080a38f0c0100809698000000000049",
+            "000000bd2023000000000000000000010537337037c8010000e1f5050000000005b0890c010080f0fa020000000040da",
+            "051e0100408af7010000000037337037d00f0040787d010000000021337037e0d4030080969800000000004a000000d2",
+            "2023000000000000000000010540da051e010000e1f5050000000037337037f4030080f0fa020000000021337037b0ea",
+            "0100408af7010000000040da051e010040787d010000000021337037e0d4030080969800000000004b000000d3202300",
+            "00000000000000000105f33c6624010000e1f5050000000021337037e05d0080f0fa02000000006826b41fc80100408a",
+            "f7010000000021337037b0ea010040787d010000000021337037a08d0600809698000000000080e9db71a10100000080",
+            "e9db71a1010000",
+        ]
+        .concat();
+        p.parse_perfect_packet(&hex(&after));
+        assert_eq!(storage.daily_duty_at(1_792_900_000_000), Some((1, 5)));
+
+        // Another character's login (its list): that board isn't theirs.
+        storage.set_content_counts(vec![(1, [12, 9])], true);
+        assert_eq!(storage.daily_duty_at(1_792_900_000_000), None);
+    }
+
+    /// The whole entry-count list, by id, and its updates (Nullception's
+    /// login, 2026-10-22 00:59:21; updates from 2026-10-17 and -19).
+    #[test]
+    fn content_counts_from_the_login_list_and_its_updates() {
+        let (storage, mut p) = processor();
+        let list = "fa030b61490c0100000006090103000000f89b7901000000000004000000000600000004070000002004080000000701090000008085800100000000040a0000000e040b00000002040c0000000e010d0000008085800100000000040e0000000e040f0000000e04650000000e04660000000704670000000701c9000000808580010000000001ca000000808580010000000001cb000000808580010000000001cc000000808580010000000001cd000000808580010000000001ce00000080858001000000000181969800d0fb01000000000000829698000083969800008496980000859698000086969800008796980000889698000089969800008a969800008b969800008c9698000c018793039601ff0b04028793030e04038793030e04048793030e04058793030e04068793031504078793032304088793031c04098793030a040a8793030704658793030e04c987930307044d8b93030704b18b93030e04358f93030704998f93030e041d9393030704819393030e04059793030704699793030704b59b930304049d9f93030404bda29303070421a393030e048daa93030704f1aa93030e0445b693030704a9b6930307042dba9303070415be93030704fdc193030704811d2c04030401b4c4040304814a5d050404824a5d050104834a5d050404844a5d050204854a5d050404864a5d0502";
+        p.parse_perfect_packet(&hex(list));
+        let counts = storage.content_counts();
+        assert_eq!(counts.get(&1), Some(&[6, 9]));
+        assert_eq!(counts.get(&60_000_001), Some(&[150, 1535]));
+        assert_eq!(counts.get(&4), Some(&[0, 0]));
+        assert_eq!(counts.get(&70_000_001), Some(&[3, 0]));
+        assert_eq!(counts.get(&90_000_006), Some(&[2, 0]));
+        // u64 entries (times) are not counts.
+        assert_eq!(counts.get(&3), None);
+        assert_eq!(storage.odyle_energy(), Some((150, 1535)));
+
+        p.parse_perfect_packet(&hex("0f0c61000c010000000b0103"));
+        assert_eq!(storage.content_counts().get(&1), Some(&[11, 1]));
+        p.parse_perfect_packet(&hex("0e0c6100040c0000000e02"));
+        assert_eq!(storage.content_counts().get(&12), Some(&[14, 0]));
+        // An update with Odyle energy only: the rest are kept.
+        p.parse_perfect_packet(&hex("140c61010c018793031ef0060128000000"));
+        assert_eq!(storage.content_counts().get(&60_000_001), Some(&[30, 880]));
+        assert_eq!(storage.content_counts().get(&1), Some(&[11, 1]));
+    }
+
     /// With no charged energy the entry has one value (`04`, the zero
     /// dropped): the list at a login on 2026-10-16 (its energy entry and the
     /// one after it, as the game sent them) is 840 basic, 0 charged. The
@@ -4014,9 +4327,11 @@ mod tests {
         assert_eq!(storage.odyle_energy(), Some((0, 1755)));
         p.parse_perfect_packet(&hex("130c61010801879303cb0f01f0000000"));
         assert_eq!(storage.odyle_energy(), Some((0, 1995)));
-        // Updates without the energy change nothing.
+        // Updates without the energy change nothing, nor another entry in
+        // slot 1 (2026-10-17 15:06:54, logged as 0 basic, 0 charged).
         p.parse_perfect_packet(&hex("0e0c6100040c0000000e02"));
         p.parse_perfect_packet(&hex("0d0c6100000987930303"));
+        p.parse_perfect_packet(&hex("0f0c61000c01000000040103"));
         assert_eq!(storage.odyle_energy(), Some((0, 1995)));
     }
 

@@ -80,7 +80,7 @@ A small `a2` object the plugin loads (`plugin://sdk/a2.js`), wrapping postMessag
 
 | Call | Permission | What it does |
 |---|---|---|
-| `a2.on("character", fn)` | `events:character` | Your character: class, level, server, and when it changes |
+| `a2.on("character", fn)` | `events:character` | Your character: class, level, server, combat power, gear score, Odyle energy and content counts (entries left of Nightmare, Shugo Festival, Invasion, Daily Dungeon, Ascension Trial; Daily Duty done today), and when any of it changes |
 | `a2.on("zone", fn)` | `events:zone` | Zone/dungeon entered (dungeon id, difficulty) |
 | `a2.on("fight", fn)` | `events:fight` | Boss fight started/ended: boss code, duration, your damage |
 | `a2.on("decoded:<name>", fn)` | `decoder:<name>` | Fields from one of the plugin's decoders (below) |
