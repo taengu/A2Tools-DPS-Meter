@@ -16,6 +16,7 @@ pub mod catalog;
 pub mod decoder;
 pub mod dock;
 pub mod fps;
+mod install_warning;
 pub mod widgets;
 #[cfg(feature = "online")]
 pub mod boss_live;
@@ -155,6 +156,41 @@ pub fn is_plugin_window(label: &str) -> bool {
     label.starts_with("plugin-") || label == dock::LABEL
 }
 
+/// Focus hiding must not reopen a panel or widget its plugin hid meanwhile.
+/// Widgets have their own lifetime; a hidden panel can still own shown icons.
+pub(crate) fn may_restore_after_focus(app: &tauri::AppHandle, label: &str) -> bool {
+    let intended = focus_restore_intended(
+        label,
+        label.strip_prefix("plugin-").is_none_or(|id| window_shown(app, id)),
+        label != dock::LABEL || !dock::shown_members(app).is_empty(),
+        widgets::is_closed(label),
+    );
+    if !intended {
+        return false;
+    }
+    if window_game_hides(app, label) {
+        // Transfer ownership to the game-closed rule so it can restore the
+        // window when the game opens, even though focus already hid it.
+        if let Some(window) = app.get_webview_window(label) {
+            hold_for_game(&window);
+        }
+        return false;
+    }
+    true
+}
+
+fn focus_restore_intended(label: &str, panel_shown: bool, dock_has_tabs: bool, widget_closed: bool) -> bool {
+    if widgets::parse_label(label).is_some() {
+        !widget_closed
+    } else if label == dock::LABEL {
+        dock_has_tabs
+    } else if label.starts_with("plugin-") {
+        panel_shown
+    } else {
+        true
+    }
+}
+
 /// Whether window `label` is to stay hidden now: AION2 closed, and its
 /// plugins (all the dock's shown ones) set to hide then.
 fn window_game_hides(app: &tauri::AppHandle, label: &str) -> bool {
@@ -207,7 +243,6 @@ pub fn sync_game_hiding(app: &tauri::AppHandle) {
 const MAX_STORED: usize = 1024 * 1024;
 const MAX_STORAGE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_STORAGE_KEYS: usize = 128;
-const PLUGIN_APPROVALS_KEY: &str = "dpsMeter.pluginTrustApprovals";
 /// How long a decoded event waits before it is stamped with the character and
 /// sent. At login the game sends some data (the pet list) a few records
 /// before the one that says which character is playing; the wait lets that
@@ -252,8 +287,6 @@ struct Loaded {
     decoders: Vec<Decoder>,
     /// Installed from the signed catalog, not a developer folder.
     reviewed: bool,
-    /// Native approval for execution and these exact data capabilities.
-    trusted: bool,
 }
 
 /// What Settings lists.
@@ -337,10 +370,7 @@ pub async fn plugin_set_enabled(app: tauri::AppHandle, id: String, enabled: bool
     }
     if !enabled { host.set_enabled(&id, false); }
     set_disabled(&app, &id, !enabled);
-    if enabled {
-        host.approve_plugins(&app, Some(&id));
-        if disabled(&app).contains(&id) { return Ok(view(&app, &host)); }
-    }
+    if enabled { host.set_enabled(&id, true); }
     reopened(&app, &id);
     if enabled {
         remember_window(&app, &id, Some("shown"));
@@ -646,7 +676,7 @@ fn load_folder(dir: &Path) -> Result<Loaded, String> {
         return Err("no index.html".into());
     }
     let decoders = compile_decoders(&manifest)?;
-    Ok(Loaded { manifest, dir: dir.to_path_buf(), decoders, reviewed: false, trusted: false })
+    Ok(Loaded { manifest, dir: dir.to_path_buf(), decoders, reviewed: false })
 }
 
 fn compile_decoders(manifest: &Manifest) -> Result<Vec<Decoder>, String> {
@@ -670,54 +700,6 @@ impl PluginHost {
         if activity.set_enabled(id, enabled) || !enabled {
             self.pending.lock().unwrap_or_else(|p| p.into_inner()).remove(id);
             self.log.lock().unwrap_or_else(|p| p.into_inner()).remove(id);
-        }
-    }
-
-    /// Webview isolation varies by engine. Every plugin needs explicit trust
-    /// before its code runs or it receives any game data, even without decoders.
-    /// Approval is bound to the network policy, every layout and permission.
-    fn approve_plugins(&self, app: &tauri::AppHandle, only: Option<&str>) {
-        let Some(state) = app.try_state::<AppState>() else { return };
-        let mut approvals: HashMap<String, String> = state.settings.get(PLUGIN_APPROVALS_KEY)
-            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        let blocked = disabled(app);
-        let requested: Vec<_> = self.loaded.read().unwrap_or_else(|p| p.into_inner()).iter()
-            .filter(|l| !blocked.contains(&l.manifest.id) && only.is_none_or(|id| id == l.manifest.id))
-            .map(|l| (l.manifest.id.clone(), decoder_fingerprint(&l.manifest)))
-            .collect();
-        let changed: Vec<_> = requested.iter().filter(|(id, hash)| approvals.get(id) != Some(hash)).collect();
-        if !changed.is_empty() {
-            // Stop old pages too: an updated plugin may already have a tab
-            // or widget from its previous approved layout.
-            for (id, _) in &changed {
-                set_disabled(app, id, true);
-                if let Some(window) = app.get_webview_window(&format!("plugin-{id}")) { let _ = window.close(); }
-                widgets::close_all(app, id);
-                boss_live::forget_plugin(app, id);
-            }
-            dock::sync(app, None);
-            let names = changed.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>().join("\n  • ");
-            let message = format!(
-                "Trust and run these plugins?\n\n  • {names}\n\nPlugins receive the game data their listed permissions allow. Decoder fields may include other players' names, identities and activity.\n\nWebview network isolation varies: plugins may be able to contact remote sites through browser features such as WebRTC and send the data they receive. Only enable plugins you trust with this access.\n\nApproval covers these decoder layouts and permissions; the meter asks again when they change. Choosing No keeps these plugins disabled."
-            );
-            if crate::platform::dialog::ask_yes_no_default_no("Plugin trust and data access", &message) {
-                for (id, hash) in &changed {
-                    approvals.insert((*id).clone(), (*hash).clone());
-                    set_disabled(app, id, false);
-                }
-                state.settings.set(PLUGIN_APPROVALS_KEY, &serde_json::to_string(&approvals).unwrap_or_default());
-            } else {
-                for (id, _) in &changed { set_disabled(app, id, true); }
-            }
-        }
-        let blocked = disabled(app);
-        let mut activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
-        for l in self.loaded.write().unwrap_or_else(|p| p.into_inner()).iter_mut() {
-            l.trusted = approvals.get(&l.manifest.id) == Some(&decoder_fingerprint(&l.manifest));
-            if activity.set_enabled(&l.manifest.id, l.trusted && !blocked.contains(&l.manifest.id)) {
-                self.pending.lock().unwrap_or_else(|p| p.into_inner()).remove(&l.manifest.id);
-                self.log.lock().unwrap_or_else(|p| p.into_inner()).remove(&l.manifest.id);
-            }
         }
     }
 
@@ -770,9 +752,6 @@ impl PluginHost {
                 Err(e) => tracing::warn!("Plugins: installed {} does not load: {e}", dir.display()),
             }
         }
-        let approvals: HashMap<String, String> = state.settings.get(PLUGIN_APPROVALS_KEY)
-            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-        for l in &mut loaded { l.trusted = approvals.get(&l.manifest.id) == Some(&decoder_fingerprint(&l.manifest)); }
         let any_decoders = loaded.iter().any(|l| !l.decoders.is_empty());
         tracing::info!("Plugins: {} loaded (developer mode {})", loaded.len(), if dev { "on" } else { "off" });
         {
@@ -787,15 +766,13 @@ impl PluginHost {
             let old: Vec<_> = activity.states.keys().cloned().collect();
             for id in old.into_iter().chain(ids.iter().cloned()).collect::<HashSet<_>>() {
                 if changed.contains(&id) { activity.set_enabled(&id, false); }
-                let trusted = loaded.iter().any(|l| l.manifest.id == id && l.trusted);
-                if activity.set_enabled(&id, ids.contains(&id) && trusted && !blocked.contains(&id)) || changed.contains(&id) {
+                if activity.set_enabled(&id, ids.contains(&id) && !blocked.contains(&id)) || changed.contains(&id) {
                     self.pending.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
                     self.log.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
                 }
             }
             *self.loaded.write().unwrap_or_else(|p| p.into_inner()) = loaded;
         }
-        self.approve_plugins(app, None);
         *self.errors.write().unwrap_or_else(|p| p.into_inner()) = errors;
 
         if !self.flusher.swap(true, Ordering::SeqCst) {
@@ -932,7 +909,6 @@ impl PluginHost {
         let loaded = self.loaded.read().unwrap_or_else(|p| p.into_inner());
         for plugin in loaded.iter() {
             let Some(generation) = activity.generation(&plugin.manifest.id) else { continue };
-            if !plugin.trusted { continue; }
             for d in plugin.decoders.iter().filter(|d| d.opcode == opcode) {
                 let Some(data) = d.decode(body) else { continue };
                 // Only the player's own doings, for a decoder that asks so.
@@ -1117,7 +1093,7 @@ fn info(l: &Loaded) -> PluginInfo {
 }
 
 fn decoder_fingerprint(manifest: &Manifest) -> String {
-    let layout = serde_json::to_vec(&("explicit-network-trust-v1", API_VERSION, manifest.api_version, &manifest.decoders, &manifest.permissions)).unwrap_or_default();
+    let layout = serde_json::to_vec(&(API_VERSION, manifest.api_version, &manifest.decoders, &manifest.permissions)).unwrap_or_default();
     sha2::Sha256::digest(layout).iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -1180,6 +1156,19 @@ fn data_file(app: &tauri::AppHandle, id: &str, key: &str) -> Result<PathBuf, Str
 
 // ── Settings ───────────────────────────────────────────────────────────────
 
+/// Installation consent lasts for this process only. Loading or opening an
+/// already installed plugin never calls this function.
+async fn confirm_plugin_installation() -> Result<(), String> {
+    static WARNING: install_warning::InstallWarning = install_warning::InstallWarning::new();
+    let approved = tauri::async_runtime::spawn_blocking(|| WARNING.confirm(|| {
+        crate::platform::dialog::ask_yes_no_default_no(
+            "Plugin installation and data access",
+            "Install plugins during this app session?\n\nPlugins receive the game data their listed permissions allow. Decoder fields may include other players' names, identities and activity.\n\nWebview network isolation varies. Plugins may be able to contact remote sites through browser features such as WebRTC and send the data they receive. Only install plugins you trust with this access.\n\nThis warning covers all plugin installations, updates and new developer folders during this app launch. It appears once, when the first installation is attempted. Existing plugins can still run.\n\nChoosing No blocks further installations until you restart the app.",
+        )
+    })).await.map_err(|e| format!("could not show the plugin installation warning: {e}"))?;
+    if approved { Ok(()) } else { Err("Plugin installations were declined for this app session. Restart the app to choose again.".into()) }
+}
+
 #[tauri::command]
 pub fn plugin_list(app: tauri::AppHandle) -> Result<PluginsView, String> {
     Ok(view(&app, &*host(&app)?))
@@ -1210,6 +1199,7 @@ pub async fn plugin_add_folder(app: tauri::AppHandle, window: tauri::WebviewWind
     let mut folders: Vec<String> =
         state.settings.get(DEV_FOLDERS_KEY).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     if !folders.contains(&folder) {
+        confirm_plugin_installation().await?;
         folders.push(folder);
     }
     state.settings.set(DEV_FOLDERS_KEY, &serde_json::to_string(&folders).unwrap_or_default());
@@ -1721,6 +1711,7 @@ pub async fn plugin_catalog(app: tauri::AppHandle) -> Result<Vec<CatalogItem>, S
 /// catalog's hashes) and run it.
 #[cfg(feature = "online")]
 async fn install_entry(app: &tauri::AppHandle, host: &Arc<PluginHost>, entry: &catalog::Entry) -> Result<(), String> {
+    confirm_plugin_installation().await?;
     let http = app.try_state::<AppState>().ok_or("no app state")?.http.clone();
     let dir = plugins_dir(app)?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -2581,7 +2572,8 @@ const SDK: &str = include_str!("a2.js");
 /// Serve `/<id>/<path>` from that plugin's folder, and `/_sdk/a2.js`.
 /// The content policy for a plugin's files: its own folder and the SDK, and
 /// no ordinary requests to other origins. The connection allowlist additionally
-/// restricts WebRTC on supporting engines; explicit trust covers older engines.
+/// restricts WebRTC on supporting engines; the installation warning explains
+/// that older engines may still allow outbound connections.
 ///
 /// The sources are named outright. A plugin page runs in a sandboxed frame,
 /// whose origin is opaque, and WebKit (the Linux webview) matches `'self'`
@@ -2855,6 +2847,18 @@ fn percent_decode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn focus_restore_respects_panel_dock_and_widget_lifetimes() {
+        assert!(super::focus_restore_intended("plugin-ping", true, false, false));
+        assert!(!super::focus_restore_intended("plugin-ping", false, true, false));
+        assert!(!super::focus_restore_intended("plugins-dock", true, false, false));
+        assert!(super::focus_restore_intended("plugins-dock", false, true, false));
+        // Icons can remain open after their main panel was hidden.
+        assert!(super::focus_restore_intended("pw_ping_alert", false, false, false));
+        assert!(!super::focus_restore_intended("pw_ping_alert", true, true, true));
+        assert!(super::focus_restore_intended("settings", false, false, true));
+    }
+
+    #[test]
     fn percent_decode_takes_any_text() {
         assert_eq!(super::percent_decode("a%20b%2Fc"), "a b/c");
         assert_eq!(super::percent_decode("%é%"), "%é%");
@@ -2916,7 +2920,7 @@ mod tests {
     }
 
     #[test]
-    fn decoder_approval_changes_with_fields_or_permissions() {
+    fn decoder_fingerprint_changes_with_fields_or_permissions() {
         let manifest = |json| serde_json::from_str::<super::Manifest>(json).unwrap();
         let mut a = manifest(r#"{"id":"pets","name":"Pets","version":"1","apiVersion":2,"permissions":["decoder:pets"],"decoders":[{"name":"pets","opcode":"00 90","fields":[{"name":"pet","type":"u32"}]}]}"#);
         let before = super::decoder_fingerprint(&a);

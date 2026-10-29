@@ -13,7 +13,7 @@ One player already had an AI add boss timers to a copy of the meter "in one shot
 - Plugins add features without growing the core: the core gains a plugin host, a small API and a Plugins tab, nothing per plugin.
 - Only reviewed plugins install from the app, and the app itself enforces that (signatures), not just the menu.
 - A plugin can only do what its manifest declares, and the user sees that in plain words before installing.
-- Character events expose the player's own character. Custom decoders require a separate approval of their complete field layout, including the possibility of reading other players' data.
+- Character events expose the player's own character. Custom decoder fields can include other players' data; the installation warning explains this before adding plugins.
 - Easy to find, read and submit: one public repo, and a Plugins section on a2tools.app.
 
 ## Non-goals (for now)
@@ -68,7 +68,7 @@ pet-souls/
 Each plugin runs in a sandboxed iframe inside a host window the meter owns (one small window per plugin panel, like Details):
 
 - The iframe has `sandbox="allow-scripts"` and no `allow-same-origin`: an opaque origin, no access to the host page, its storage or `window.__TAURI__`.
-- Its files are served by the meter with a restrictive Content-Security-Policy that blocks ordinary network requests and remote scripts. `Connection-Allowlist: (response-origin)` also blocks WebRTC and redirects on supporting engines. Network isolation varies across WebView2 and WebKitGTK versions, so every plugin requires an explicit native trust decision before its code runs or it receives game data. The question discloses possible outbound connections and disclosure of granted data; No is the default and keeps it disabled. Approval is bound to the network policy, complete decoder layouts and permissions, and is requested again when those change.
+- Its files are served by the meter with a restrictive Content-Security-Policy that blocks ordinary network requests and remote scripts. `Connection-Allowlist: (response-origin)` also blocks WebRTC and redirects on supporting engines. Network isolation varies across WebView2 and WebKitGTK versions. From fork 2.0.86.2, the first plugin installation, update installation or new developer-folder addition during each app launch asks one native question explaining possible outbound connections and disclosure of granted data. No is the default; declining blocks installations for the rest of that launch. Accepting covers all installations during that launch. The decision is held in process memory, never in settings. Starting the app, loading existing plugins and opening their windows do not show this warning. The previous per-plugin execution and decoder-fingerprint approvals are no longer used; existing enable/disable choices are preserved.
 - It talks to the meter only by `postMessage` to the host page, which checks every request against the manifest's permissions before passing anything to the backend.
 - The host window's label is added to the Tauri capabilities so the host can call the backend; the iframe itself never can.
 
@@ -95,7 +95,7 @@ Everything is asynchronous. The host limits a frame to 64 pending calls and a bu
 
 ## Decoders: game data without raw packets
 
-A plugin that needs game data describes the packets and fields it wants. The meter runs the decoder; the plugin receives the extracted numbers. Numbers are a representation, not anonymization: byte-valued fields can reconstruct text, and numeric identifiers can identify another player. The host therefore requires approval of the complete decoder layouts before collecting or replaying their events. Changing a layout requires approval again. This also applies to plugins installed before decoder approval was introduced.
+A plugin that needs game data describes the packets and fields it wants. The meter runs the decoder; the plugin receives the extracted numbers. Numbers are a representation, not anonymization: byte-valued fields can reconstruct text, and numeric identifiers can identify another player. The installation warning explains that risk once per app launch when an installation is attempted. It is a shared session acknowledgement, not approval of each decoder layout or a guarantee that the plugin cannot contact a remote site. Existing plugins run according to their saved enable/disable choices. Layout or permission changes still clear queued and replayed events so an old decoder's events do not carry over to its replacement.
 
 ```json
 "decoders": [{
@@ -111,8 +111,8 @@ A plugin that needs game data describes the packets and fields it wants. The met
 ```
 
 - The meter hooks every decoded game frame at the single point all frames already pass through (`StreamProcessor::parse_perfect_packet`), compares the opcode, and reads the fields in order (`u8`, `u16`, `u32`, `u64`, `i32`, `varint`, `skip:N`).
-- Numbers only. A numeric decoder may still expose names or identities, so its permission description and the host's approval explain that it can include other players' data. The meter additionally refuses known player-identity, party-roster, summon-owner and movement opcodes. This denylist does not make arbitrary other layouts anonymous.
-- Optional `self` names a unique numeric entity field, and the meter drops the event unless that field equals the local player (`DataStorage::local_player_id`). Personal records without an entity field, NPC/boss records and party-health records cannot all use that filter. It is a useful event filter, not a substitute for approving the decoder's complete layout.
+- Numbers only. A numeric decoder may still expose names or identities, so its permission description and the installation warning explain that it can include other players' data. The meter additionally refuses known player-identity, party-roster, summon-owner and movement opcodes. This denylist does not make arbitrary other layouts anonymous.
+- Optional `self` names a unique numeric entity field, and the meter drops the event unless that field equals the local player (`DataStorage::local_player_id`). Personal records without an entity field, NPC/boss records and party-health records cannot all use that filter. It is a useful event filter; review the decoder's complete layout when deciding whether to install its plugin.
 - Events reach a plugin as they are read, with `at` (unix ms) in their meta. A plugin with `events:character` gets them half a second later instead, stamped with the character: at login the game sends some data (the pet list) just before the record saying who is playing. A decoder with `"immediate": true` skips that wait, for records that never come at login (a soul picked up); it still never overtakes an earlier event of its plugin that is waiting. Meters before this ignore the key.
 - At most 32 fields at each level, two nested list levels, 4,096 entries per list and 8,192 total JSON values per decoded event. The total limit is shared by sibling and nested fields, including empty list objects. Field names are unique at each level and at most 64 bytes. Oversized layouts or events are refused before allocating their full output.
 - v1 covers whole frames only. Records embedded mid-frame (the meter's own `scan_records`) are a later extension if a plugin needs them.

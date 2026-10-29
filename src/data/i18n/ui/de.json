@@ -599,7 +599,7 @@
       "defaultMeterMode": "Der Zielmodus beim Öffnen: Boss, Ziel, Training oder Alle.",
       "playerLimit": "Wie viele Spielerzeilen das Meter zeigt; der Rest wird ausgelassen.",
       "pinMeToTop": "Deine Zeile bleibt oben, egal wie viel Schaden du machst.",
-      "autoHideMeter": "Das Meter verschwindet, solange ein anderes Fenster vor dem Spiel ist, und kommt mit dem Spiel zurück.",
+      "autoHideMeter": "Das Meter sowie Plugin-Fenster und -Symbole werden ausgeblendet, wenn eine andere App im Vordergrund ist, und kehren mit AION2 zurück. Während du die Fenster des Meters bedienst, bleiben sie sichtbar.",
       "detailsMonitor": "Öffnet das Detailfenster auf dem gewählten Bildschirm und hält es dort.",
       "showTtk": "Neben dem Kampftimer eine Schätzung, wie lange der ganze Bosskampf dauert.",
       "showTotalDps": "Eine Leiste unter den Zeilen mit DPS und Schaden der ganzen Gruppe.",

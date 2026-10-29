@@ -28,8 +28,14 @@ package from cdn.a2tools.app and installs it only if its SHA-256 matches the
 manifest.
 
 **The supporter list and the plugin catalog.** Downloaded from the CDN and used
-on your machine (see below). Plugins run sandboxed with no network access; a
-plugin that shows field boss timers gets them through the meter, which fetches
+on your machine (see below). Plugins run sandboxed, and ordinary network requests
+are blocked. Isolation depends on the webview engine: browser features such as
+WebRTC may still let a plugin send the data it receives to remote sites. The
+first plugin installation or update during each app launch shows one native
+warning covering all installations in that launch; it does not appear when
+existing plugins start or open. Adding a new developer folder counts as an
+installation. Only install plugins you trust with their listed data access.
+A plugin that shows field boss timers gets them through the meter, which fetches
 the server's published timers.
 
 **Your account, if you connect one.** Signing in under *Settings → A2 Tools

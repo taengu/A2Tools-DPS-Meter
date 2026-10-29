@@ -599,7 +599,7 @@
       "defaultMeterMode": "Le mode de cible à l'ouverture : Boss, Cible, Entraînement ou Tous.",
       "playerLimit": "Combien de lignes de joueurs le compteur affiche ; les autres sont masquées.",
       "pinMeToTop": "Ta ligne reste en premier, quels que soient tes dégâts.",
-      "autoHideMeter": "Le compteur disparaît quand une autre fenêtre passe devant le jeu, et revient avec lui.",
+      "autoHideMeter": "Le compteur ainsi que les fenêtres et icônes des plugins se masquent quand une autre application passe au premier plan, puis reviennent avec AION2. Ils restent visibles quand vous utilisez les fenêtres du compteur.",
       "detailsMonitor": "Ouvre la fenêtre Détails sur l'écran choisi et l'y garde.",
       "showTtk": "À côté du chronomètre, une estimation de la durée totale du combat contre le boss.",
       "showTotalDps": "Une barre sous les lignes avec le DPS et les dégâts de tout le groupe.",

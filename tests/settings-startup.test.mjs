@@ -192,6 +192,73 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+function startupWithPendingSettings(view, { storage = {}, read } = {}) {
+  const pending = deferred();
+  const fixture = setupBridge({
+    view, linux: false, loadsHidden: false, storage,
+    getSettings: read || (() => pending.promise),
+  });
+  const started = [];
+  const ready = [];
+  fixture.window.i18n = { init: async () => {} };
+  vm.runInContext(core, fixture.context);
+  fixture.window.dpsApp.start = () => started.push({
+    theme: fixture.window.javaBridge.getSetting('dpsMeter.theme'),
+    playerLimit: fixture.window.javaBridge.getSetting('dpsMeter.playerLimit'),
+    consent: fixture.window.javaBridge.getSetting('dpsMeter.partyPresenceConsent'),
+  });
+  fixture.window.dpsApp.enterDetailsWindowMode = () => {};
+  fixture.window.dpsApp.enterHistoryWindowMode = () => {};
+  fixture.window.dpsApp.enterSettingsWindowMode = () => {};
+  fixture.window.javaBridge.notifyUiReady = async () => ready.push(view);
+  for (const handler of fixture.domHandlers.get('DOMContentLoaded') || []) handler.callback();
+  return { ...fixture, pending, started, ready };
+}
+
+test('every window waits for saved preferences before initializing or revealing its UI', async () => {
+  for (const view of ['main', 'settings', 'details', 'history']) {
+    const app = startupWithPendingSettings(view, { storage: {
+      'dpsMeter.theme': 'aion2', 'dpsMeter.playerLimit': '6',
+      'dpsMeter.partyPresenceConsent': 'false',
+    } });
+    await settle();
+    assert.deepEqual(app.started, [], `${view} initialized from stale localStorage`);
+    assert.deepEqual(app.ready, [], `${view} revealed before preferences arrived`);
+    app.pending.resolve({
+      'dpsMeter.theme': 'aion2-classes', 'dpsMeter.playerLimit': '12',
+      'dpsMeter.partyPresenceConsent': 'true',
+    });
+    await app.window.a2SettingsReady;
+    await settle();
+    assert.deepEqual(app.started, [{ theme: 'aion2-classes', playerLimit: '12', consent: 'true' }]);
+    assert.deepEqual(app.ready, [view]);
+    assert.equal(app.calls.filter(call => call.command === 'update_settings').length, 0);
+  }
+});
+
+test('a cold main window gets disk preferences even when localStorage is empty', async () => {
+  const app = startupWithPendingSettings('main');
+  await settle();
+  assert.deepEqual(app.started, []);
+  app.pending.resolve({ 'dpsMeter.theme': 'frost', 'dpsMeter.playerLimit': '18' });
+  await app.window.a2SettingsReady;
+  await settle();
+  assert.equal(app.started[0].theme, 'frost');
+  assert.equal(app.started[0].playerLimit, '18');
+});
+
+test('a failed settings read retains the cached fallback and does not block startup', async () => {
+  const app = startupWithPendingSettings('main', {
+    storage: { 'dpsMeter.theme': 'frost', 'dpsMeter.playerLimit': '12' },
+    read: () => Promise.reject(new Error('synthetic settings read failure')),
+  });
+  await app.window.a2SettingsReady;
+  await settle();
+  assert.equal(app.started[0].theme, 'frost');
+  assert.equal(app.started[0].playerLimit, '12');
+  assert.deepEqual(app.ready, ['main']);
+});
+
 test('the full Linux bridge waits for resize_window before revealing the meter', async () => {
   const size = deferred();
   const app = setupBridge({ view: 'main', loadsHidden: true,

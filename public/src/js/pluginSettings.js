@@ -14,15 +14,19 @@
   // Update plugins automatically (src-tauri/src/plugins AUTO_UPDATE_KEY):
   // off unless turned on; the meter reads it when it starts.
   const AUTO_UPDATE_KEY = "dpsMeter.pluginAutoUpdate";
-  const autoUpdate = document.querySelector(".pluginAutoUpdateCheckbox");
-  if (autoUpdate) {
-    autoUpdate.checked = window.javaBridge?.getSetting?.(AUTO_UPDATE_KEY) === "true";
-    autoUpdate.addEventListener("change", () => {
-      window.javaBridge?.setSetting?.(AUTO_UPDATE_KEY, autoUpdate.checked ? "true" : "false");
-    });
-  }
 
-  const start = () => {
+  const start = async () => {
+    // Read controls and version history from the same saved snapshot as the
+    // settings form, rather than from an empty or stale localStorage cache.
+    await window.a2SettingsReady;
+    const autoUpdate = document.querySelector(".pluginAutoUpdateCheckbox");
+    if (autoUpdate) {
+      autoUpdate.checked = window.javaBridge?.getSetting?.(AUTO_UPDATE_KEY) === "true";
+      autoUpdate.addEventListener("change", () => {
+        window.javaBridge?.setSetting?.(AUTO_UPDATE_KEY, autoUpdate.checked ? "true" : "false");
+      });
+    }
+
     const toggle = document.querySelector(".pluginDevModeCheckbox");
     const devRow = document.querySelector(".pluginDevRow");
     const list = document.querySelector(".pluginList");

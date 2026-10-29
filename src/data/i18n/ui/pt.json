@@ -599,7 +599,7 @@
       "defaultMeterMode": "O modo de alvo ao abrir: Chefe, Alvo, Treino ou Todos.",
       "playerLimit": "Quantas linhas de jogadores o medidor mostra; o resto fica de fora.",
       "pinMeToTop": "Sua linha fica em primeiro, seja qual for seu dano.",
-      "autoHideMeter": "O medidor some enquanto outra janela está na frente do jogo e volta com ele.",
+      "autoHideMeter": "O medidor e as janelas e ícones dos plugins se ocultam quando outro aplicativo está em primeiro plano e voltam com o AION2. Permanecem visíveis enquanto você usa as janelas do medidor.",
       "detailsMonitor": "Abre a janela de detalhes na tela escolhida e a mantém lá.",
       "showTtk": "Ao lado do cronômetro, uma estimativa de quanto durará toda a luta contra o chefe.",
       "showTotalDps": "Uma barra sob as linhas com o DPS e o dano de todo o grupo.",

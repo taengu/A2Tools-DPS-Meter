@@ -608,7 +608,7 @@
       "playerLimit": "How many player rows the meter shows; the rest are left out.",
       "meterAnchor": "The edge of the meter that stays put as rows come and go.",
       "pinMeToTop": "Your row stays first, whatever your damage.",
-      "autoHideMeter": "The meter disappears while another window is in front of the game, and comes back with it.",
+      "autoHideMeter": "The meter and plugin windows/icons hide when another app is in front, and return with AION2. They stay visible while you use the meter's own windows.",
       "detailsMonitor": "Opens the Details window on the chosen display and keeps it there.",
       "showTtk": "Beside the battle timer, an estimate of how long the whole boss fight will take.",
       "showTotalDps": "A bar under the rows with the party's combined DPS and damage.",

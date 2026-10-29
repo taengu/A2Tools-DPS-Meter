@@ -6,19 +6,43 @@ dependency repairs, privacy changes, resource limits and compatibility effects.
 The complete package/advisory inventory is in
 [Dependency security review](dependency-security.md).
 
-## Fork release 2.0.86.1
+## Candidate packaging, saved settings and focus visibility
 
-This candidate is **Talal Alyaseen's fork**, not an official upstream release.
-The installer product/title identifies the fork, and Settings displays
-`2.0.86.1 (Talal Alyaseen fork)`. Windows Installer uses version `2.0.86.1`;
-Cargo, npm and Tauri retain the valid semantic version `2.0.86+1`.
-All three Rust lockfiles identify that same local parser package version.
-Original project authorship and licenses are preserved.
+The follow-up candidate restores saved settings before the meter and plugin
+settings initialize. New WebViews wait for the native settings snapshot rather
+than applying defaults from an empty or stale local cache. Regression coverage
+includes delayed settings and plugin initialization across a fresh start.
 
-This fork does not offer or install packages from upstream's update feed;
-Settings explains that updates must come from the fork's releases. Upstream
-release notes remain available as reference. The existing application identifier
-is retained so settings and history are not wiped by the version-label change.
+The master focus-hiding setting covers the meter, plugin panels, dock and
+widgets. Focus-owned hiding is released when the setting is turned off, while
+manual hiding and the game/party/combat rules retain their ownership. Cursor
+style updates are deferred while a native window is hidden or minimized so
+they cannot undo a focus hide through the window toolkit's cached styles.
+The exact reported Alt-Tab reversal still requires a live Windows retest.
+
+The plugin data/network-risk warning appears once per app launch, at the first
+installation, update installation or new developer-folder addition. Existing
+plugins open without this warning. Declining blocks installations until the
+next launch; catalog signatures, manifest validation and native permissions
+continue to apply.
+
+The proposed source retains the product/title **A2Tools DPS Meter** and reports
+the plain application version `2.0.86`. Cargo, npm, Tauri and all three Rust
+lockfiles agree on that version, which is also returned by `get_app_version`.
+The Windows MSI follows that plain package version; no separate installer
+version is pinned in the proposed source. The executable's numeric Windows
+file version is `2.0.86.0`. The source commit and artifact hashes identify this
+candidate; this does not declare a new official upstream release.
+
+Update checks use the normal signed upstream manifest and offer only newer
+application versions. The normal release-notes links, publisher metadata and
+Tauri-derived MSI UpgradeCode are restored. The existing application identifier
+`com.a2tools.dps-meter` remains unchanged. The earlier locally named preview
+used a different MSI upgrade family, so replacing its installation requires an
+explicit one-time replacement of the old installed application files.
+
+Contribution credit for this security review and follow-up work:
+**Twine aka Roswell**. Original project authorship and licenses are preserved.
 
 ## Exposure and scope
 
@@ -29,7 +53,7 @@ deciding whether a particular installation was exposed:
 | --- | --- |
 | Vulnerable TLS dependencies | An affected TLS interaction and the ability to intercept or redirect an outbound connection, or control its peer. Individual dependency advisories have their own additional prerequisites. |
 | Capture/parser resource exhaustion | Traffic reaching a captured interface, passing classification and reaching the relevant parser path. Connection identification is stronger after this patch, but captured TCP is still unauthenticated input. |
-| Plugin behavior | An installed plugin, approval to run it, and the relevant capability or data access. A signed catalog authenticates the distributor; it does not prove plugin behavior is harmless. |
+| Plugin behavior | An installed, enabled plugin and the relevant capability or data access. A signed catalog authenticates the distributor; it does not prove plugin behavior is harmless. |
 | Installer/DLL placement and handoff | Local file-placement or replacement rights, or substitution of an installer before authenticity checks. Installer execution also requires the user's installation/elevation decision. |
 | Uploaded identifiers | A fight upload containing the affected evidence, and a recipient able to inspect it. This was a linkability/privacy defect. |
 | OBS overlay | The overlay enabled, a reachable network path and, for its data, a valid key or observation of its unencrypted traffic. |
@@ -202,13 +226,19 @@ remove information already sent by an earlier version.
 
 ### Put the trust decision in the host
 
-- Require an explicit native trust decision before any plugin executes or
-  receives data. **No** is the default; declining keeps the plugin disabled.
+- In this follow-up candidate, show the native risk warning at the first plugin
+  installation, update installation or new developer-folder addition in each
+  app launch. One decision covers all installations during that launch;
+  **No** is the default, and declining blocks installations until the next
+  launch. Existing plugins can still load and open according to their saved
+  enable/disable choices without this warning.
 - Describe decoder access as selected game fields, which may include other
   players, rather than promising that arbitrary numeric fields are own-player
   data. Numeric lists can encode text and are not an anonymization boundary.
-- Bind approval to the policy version, API, complete decoder layouts and
-  permissions. A change to those inputs requires another decision.
+- Keep the warning decision in process memory. It replaces the earlier
+  persistent per-plugin execution/decoder-fingerprint approvals. Decoder
+  layout and permission changes still clear old queued/replay events; they do
+  not create another risk warning after this launch's decision.
 - Expand the absolute refusal list for identity, roster, movement and
   summon-owner packet types. Keep meaningful optional self filters for layouts
   that actually contain a local-player entity; forcing such a field into every
@@ -262,11 +292,12 @@ synthetic test on Chromium 156 observed a WebRTC STUN packet with CSP alone and
 none with the allowlist header. That result verifies the tested engine, not
 every supported WebView2/WebKitGTK release.
 
-The host trust question therefore discloses possible outbound connections and
-disclosure of granted data before code runs. The header strengthens supporting
-engines; it is not used to make an unconditional cross-platform no-network
-promise. Plugins remain a trust decision even when their distribution signature
-is valid.
+The host installation question discloses possible outbound connections and
+disclosure of granted data. In this follow-up candidate it is shown once per app launch when
+an installation is attempted, rather than when existing plugins execute. The
+header strengthens supporting engines; it is not used to make an unconditional
+cross-platform no-network promise. Plugins remain a trust decision even when
+their distribution signature is valid.
 
 ## HTTP and live-feed limits
 
@@ -347,8 +378,11 @@ intended network.
 
 - Existing privacy opt-outs remain off. Party-presence installs without the new
   consent marker need a deliberate choice before reporting resumes.
-- Installed plugins need the new native trust approval. Changes to a plugin's
-  data permissions/layout or trust-policy version require approval again.
+- Installed plugins keep their enable/disable choices. This follow-up candidate no longer
+  reads or writes the earlier per-plugin trust approvals; installation risks
+  are acknowledged once per app launch when installing or updating a plugin
+  or adding a developer folder. No warning appears merely because an existing
+  plugin loads or opens.
 - Existing text captures remain readable; addressed live stream names gain an
   opaque connection component while retaining their final server-port field.
 - Supported cached slices are sanitized before upload. Malformed, unsupported

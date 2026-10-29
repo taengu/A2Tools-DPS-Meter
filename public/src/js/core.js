@@ -3664,15 +3664,13 @@ class DpsApp {
       updateBtn.classList.remove("isChecking");
       const latest = String(found?.latest || "").replace(/^v/i, "");
       if (found?.state === "current") say(t("settings.update.current", "Up to date"));
-      else if (found?.state === "fork") say(found.message || "Fork build: install updates from the fork's releases.");
       else if (found?.state === "installing") say(t("settings.update.installing", "Updating…"));
       else if (found?.state === "update") say(t("settings.update.available", "{version} is out").replace("{version}", latest));
       else say(t("settings.update.failed", "Couldn't check. Try again later."));
     });
 
     this.settingsVersionLink?.addEventListener("click", () => {
-      const fork = String(window.dpsData?.getVersion?.() || "").includes("(Talal Alyaseen fork)");
-      const releases = fork ? "https://github.com/talyaseen/A2Tools-DPS-Meter/releases" : "https://github.com/taengu/A2Tools-DPS-Meter/releases";
+      const releases = "https://github.com/taengu/A2Tools-DPS-Meter/releases";
       const version = /^v\d+\.\d+\.\d+$/.exec(this.settingsVersionValue?.textContent?.trim() || "")?.[0];
       window.javaBridge?.openBrowser?.(version ? `${releases}/tag/${version}` : releases);
     });
@@ -8045,6 +8043,9 @@ const startApp = async ({ forced = false } = {}) => {
   // the window runs before this page (SETTINGS_WINDOW_SCRIPT in app.rs), so
   // they work before any of this has loaded.
   try {
+    // Every window needs the native snapshot before applying defaults. A new
+    // WebView can have empty or stale localStorage even when disk settings exist.
+    await window.a2SettingsReady;
     await window.i18n?.init?.();
     window.lucide?.createIcons?.();
     dpsApp.start();
