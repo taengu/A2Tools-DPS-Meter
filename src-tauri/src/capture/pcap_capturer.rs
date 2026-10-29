@@ -130,28 +130,8 @@ struct FilterFns {
 
 impl PcapLib {
     fn load() -> Result<Self, String> {
-        // The first of the OS's names for the library that loads.
-        crate::platform::pcap::prepare();
-        let mut errors = Vec::new();
-        let mut loaded = None;
-        for name in crate::platform::pcap::LIBRARIES {
-            // SAFETY: loading libpcap runs no initialisation we depend on not running.
-            match unsafe { Library::new(name) } {
-                Ok(lib) => {
-                    loaded = Some(lib);
-                    break;
-                }
-                Err(e) => errors.push(format!("{name}: {e}")),
-            }
-        }
-        let lib = loaded.ok_or_else(|| {
-            format!(
-                "Failed to load {}. {}\nError: {}",
-                crate::platform::pcap::LIBRARIES.join(" or "),
-                crate::platform::pcap::MISSING_HELP,
-                errors.join("; ")
-            )
-        })?;
+        let lib = crate::platform::pcap::load_library()
+            .map_err(|e| format!("{}. {e}", crate::platform::pcap::MISSING_HELP))?;
 
         unsafe {
             let findalldevs: Symbol<unsafe extern "C" fn(*mut PcapIfT, *mut c_char) -> c_int> =
@@ -786,9 +766,24 @@ fn parse_tcp_payload(frame: &[u8], link_type: c_int, device_name: &str) -> Optio
         return None;
     }
     let ip_header_len = ((ip_header[0] & 0x0F) as usize) * 4;
-    if ip_header[9] != 6 {
-        return None; // Not TCP
+    if ip_header_len < 20 || ip_header_len > ip_header.len() || ip_header[9] != 6 {
+        return None; // Invalid IPv4 header, or not TCP.
     }
+    // This reader does not reassemble IP fragments. Neither a first fragment
+    // nor a later one is a complete TCP segment; interpreting either as one
+    // can put IP/TCP header bytes or unrelated fragment data into the stream.
+    // Only the Don't Fragment flag may be set (the reserved flag is invalid).
+    let fragment = u16::from_be_bytes([ip_header[6], ip_header[7]]);
+    if fragment & 0xbfff != 0 {
+        return None;
+    }
+
+    let ip_total_len = u16::from_be_bytes([ip_header[2], ip_header[3]]) as usize;
+    if ip_total_len != 0 && ip_total_len < ip_header_len + 20 {
+        return None;
+    }
+    let ip_end = ip_offset + ip_total_len;
+    let end = if ip_total_len != 0 && ip_end <= frame.len() { ip_end } else { frame.len() };
 
     // Kept as numbers: formatting them as text cost two allocations for
     // every packet on every device, and nothing reads them as text.
@@ -796,16 +791,19 @@ fn parse_tcp_payload(frame: &[u8], link_type: c_int, device_name: &str) -> Optio
     let dst_ip = std::net::Ipv4Addr::new(ip_header[16], ip_header[17], ip_header[18], ip_header[19]);
 
     let tcp_offset = ip_offset + ip_header_len;
-    if frame.len() < tcp_offset + 20 {
+    if end < tcp_offset + 20 {
         return None;
     }
-    let tcp_header = &frame[tcp_offset..];
+    let tcp_header = &frame[tcp_offset..end];
     let src_port = u16::from_be_bytes([tcp_header[0], tcp_header[1]]);
     let dst_port = u16::from_be_bytes([tcp_header[2], tcp_header[3]]);
     let tcp_seq = u32::from_be_bytes([tcp_header[4], tcp_header[5], tcp_header[6], tcp_header[7]]);
     let tcp_ack =
         u32::from_be_bytes([tcp_header[8], tcp_header[9], tcp_header[10], tcp_header[11]]);
     let tcp_header_len = ((tcp_header[12] >> 4) as usize) * 4;
+    if tcp_header_len < 20 || tcp_header_len > tcp_header.len() {
+        return None;
+    }
 
     // The payload ends where the IP packet says it does, not at the end of the
     // frame: Ethernet pads short frames to 60 bytes, so a bare ACK carries 6
@@ -815,9 +813,6 @@ fn parse_tcp_payload(frame: &[u8], link_type: c_int, device_name: &str) -> Optio
     // player's meter read 77% of a boss's damage while their party member's,
     // in the same fight, read all of it (2026-10-06). A total length of 0
     // (segmentation offload) or past the frame keeps the frame's end.
-    let ip_total_len = u16::from_be_bytes([ip_header[2], ip_header[3]]) as usize;
-    let ip_end = ip_offset + ip_total_len;
-    let end = if ip_total_len >= ip_header_len + 20 && ip_end <= frame.len() { ip_end } else { frame.len() };
     let payload_offset = tcp_offset + tcp_header_len;
     if payload_offset >= end {
         return None;
@@ -882,7 +877,7 @@ mod tests {
     /// files only). Skipped where no libpcap is installed.
     #[test]
     fn the_capture_filter_passes_the_game_and_nothing_else() {
-        let Some(lib) = crate::platform::pcap::LIBRARIES.iter().find_map(|n| unsafe { Library::new(n) }.ok()) else {
+        let Ok(lib) = crate::platform::pcap::load_library() else {
             eprintln!("no libpcap: skipped");
             return;
         };
@@ -1007,6 +1002,69 @@ mod tests {
         tso[3] = 0;
         let frame = [ether.as_slice(), &tso].concat();
         assert_eq!(parse_tcp_payload(&frame, 1, "dev").unwrap().data, b"hi");
+    }
+
+    #[test]
+    fn impossible_header_lengths_and_short_declared_packets_are_rejected() {
+        for ihl in 0..5 {
+            let mut frame = ipv4_tcp();
+            frame[0] = 0x40 | ihl;
+            assert!(parse_tcp_payload(&frame, 12, "dev").is_none(), "IP IHL {ihl}");
+        }
+        let mut truncated_options = ipv4_tcp();
+        truncated_options[0] = 0x4f;
+        assert!(parse_tcp_payload(&truncated_options, 12, "dev").is_none());
+        for offset in [0, 1, 2, 3, 4, 15] {
+            let mut frame = ipv4_tcp();
+            frame[32] = offset << 4;
+            assert!(parse_tcp_payload(&frame, 12, "dev").is_none(), "TCP offset {offset}");
+        }
+        for total in [1u16, 19, 20, 39] {
+            let mut frame = ipv4_tcp();
+            frame[2..4].copy_from_slice(&total.to_be_bytes());
+            // Bytes after the declared IP packet cannot supply its headers.
+            frame.extend_from_slice(&[0x55; 40]);
+            assert!(parse_tcp_payload(&frame, 12, "dev").is_none(), "IP length {total}");
+        }
+        let mut short_tcp_options = ipv4_tcp();
+        short_tcp_options[32] = 0x60;
+        short_tcp_options.extend_from_slice(&[0; 20]);
+        assert!(parse_tcp_payload(&short_tcp_options, 12, "dev").is_none(), "options end past IP length");
+    }
+
+    #[test]
+    fn fragmented_ip_datagrams_do_not_enter_the_tcp_stream() {
+        for fragment in [0x2000u16, 0x0001, 0x2001, 0x8000] {
+            let mut frame = ipv4_tcp();
+            frame[6..8].copy_from_slice(&fragment.to_be_bytes());
+            assert!(parse_tcp_payload(&frame, 12, "dev").is_none(), "fragment {fragment:#x}");
+        }
+        let mut dont_fragment = ipv4_tcp();
+        dont_fragment[6..8].copy_from_slice(&0x4000u16.to_be_bytes());
+        assert_eq!(parse_tcp_payload(&dont_fragment, 12, "dev").unwrap().data, b"hi");
+    }
+
+    #[test]
+    fn valid_options_and_offloaded_lengths_keep_the_captured_payload() {
+        let mut ip_options = ipv4_tcp();
+        ip_options.splice(20..20, [0u8; 4]);
+        ip_options[0] = 0x46;
+        ip_options[2..4].copy_from_slice(&46u16.to_be_bytes());
+        assert_eq!(parse_tcp_payload(&ip_options, 12, "dev").unwrap().data, b"hi");
+
+        let mut tcp_options = ipv4_tcp();
+        tcp_options.splice(40..40, [0u8; 4]);
+        tcp_options[32] = 0x60;
+        tcp_options[2..4].copy_from_slice(&46u16.to_be_bytes());
+        assert_eq!(parse_tcp_payload(&tcp_options, 12, "dev").unwrap().data, b"hi");
+
+        for total in [0u16, 1000] {
+            let mut offloaded = ipv4_tcp();
+            offloaded[2..4].copy_from_slice(&total.to_be_bytes());
+            assert_eq!(parse_tcp_payload(&offloaded, 12, "dev").unwrap().data, b"hi");
+            offloaded.truncate(39);
+            assert!(parse_tcp_payload(&offloaded, 12, "dev").is_none(), "a whole TCP header is still required");
+        }
     }
 
     #[test]

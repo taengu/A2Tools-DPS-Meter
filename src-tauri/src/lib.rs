@@ -24,6 +24,8 @@ pub mod supporters;
 // ── desktop only ───────────────────────────────────────────────────────────
 #[cfg(feature = "online")]
 pub mod account;
+#[cfg(feature = "online")]
+pub mod bounded_http;
 #[cfg(feature = "desktop")]
 pub mod config;
 #[cfg(feature = "desktop")]

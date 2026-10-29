@@ -685,6 +685,7 @@
       "permBossTimers": "讀取玩家透過 a2tools.app 分享的野外首領計時",
       "permCharacter": "查看你角色的名稱、伺服器、職業和等級",
       "permDecoder": "讀取你自己的遊戲資料：{name}",
+      "permDecoderFields": "讀取選定的遊戲資料（可能包含其他玩家的資訊）：{name}",
       "permNone": "除顯示視窗外不做其他事",
       "enabled": "啟用",
       "enabledTip": "開啟：隨計量器啟動。關閉：保持安裝，但不執行。",

@@ -9,11 +9,12 @@
 //! constant time, or it gets a 403 — before the path is even looked at, so a
 //! stranger on the network cannot learn which paths exist.
 
-use std::net::SocketAddr;
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -27,9 +28,14 @@ const FEED_INTERVAL: Duration = Duration::from_millis(333);
 const HEARTBEAT_EVERY: Duration = Duration::from_secs(15);
 /// A client has this long to send its request line and headers.
 const HEAD_TIMEOUT: Duration = Duration::from_secs(5);
+/// A client that stops receiving cannot keep a response task indefinitely.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_HEAD: usize = 8 * 1024;
 /// Open connections at once. A scene or two in OBS uses one or two.
 const MAX_CONNECTIONS: usize = 32;
+/// Leave room for another streaming PC while allowing a browser's parallel
+/// icon requests alongside several event feeds.
+const MAX_PEER_CONNECTIONS: usize = MAX_CONNECTIONS / 2;
 
 const PAGE: &str = include_str!("page.html");
 
@@ -71,9 +77,40 @@ pub fn key_matches(given: &str, expected: &str) -> bool {
 
 struct Shared {
     key: RwLock<String>,
+    key_revision: watch::Sender<u64>,
     hooks: Hooks,
     feed: watch::Sender<Arc<str>>,
-    slots: Semaphore,
+    slots: Arc<Semaphore>,
+    peers: Arc<Mutex<HashMap<IpAddr, usize>>>,
+}
+
+struct PeerSlot {
+    peers: Arc<Mutex<HashMap<IpAddr, usize>>>,
+    peer: IpAddr,
+}
+
+impl PeerSlot {
+    fn acquire(peers: &Arc<Mutex<HashMap<IpAddr, usize>>>, peer: IpAddr) -> Option<Self> {
+        let mut counts = peers.lock();
+        let count = counts.entry(peer).or_default();
+        if *count >= MAX_PEER_CONNECTIONS {
+            return None;
+        }
+        *count += 1;
+        Some(Self { peers: peers.clone(), peer })
+    }
+}
+
+impl Drop for PeerSlot {
+    fn drop(&mut self) {
+        let mut counts = self.peers.lock();
+        if let Some(count) = counts.get_mut(&self.peer) {
+            *count -= 1;
+            if *count == 0 {
+                counts.remove(&self.peer);
+            }
+        }
+    }
 }
 
 /// A running server. Dropping it shuts it down; `stop` also waits until the
@@ -94,11 +131,14 @@ impl RunningServer {
         let addr = listener.local_addr()?;
 
         let (feed, _) = watch::channel::<Arc<str>>(Arc::from(""));
+        let (key_revision, _) = watch::channel(0);
         let shared = Arc::new(Shared {
             key: RwLock::new(key),
+            key_revision,
             hooks,
             feed,
-            slots: Semaphore::new(MAX_CONNECTIONS),
+            slots: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
+            peers: Arc::new(Mutex::new(HashMap::new())),
         });
         let (shutdown, _) = watch::channel(false);
         let (closed_tx, closed_rx) = std::sync::mpsc::channel::<()>();
@@ -119,15 +159,15 @@ impl RunningServer {
                 tokio::select! {
                     _ = accept_stop.changed() => break,
                     accepted = listener.accept() => {
-                        let Ok((stream, _peer)) = accepted else { continue };
+                        let Ok((stream, peer)) = accepted else { continue };
+                        // Reserve before spawning. Excess sockets are simply closed:
+                        // writing a 503 would itself need an unbounded extra task.
+                        let Ok(slot) = accept_shared.slots.clone().try_acquire_owned() else { continue };
+                        let Some(peer_slot) = PeerSlot::acquire(&accept_shared.peers, peer.ip()) else { continue };
                         let shared = accept_shared.clone();
                         let stop = conn_stop.clone();
                         tauri::async_runtime::spawn(async move {
-                            let Ok(_slot) = shared.slots.try_acquire() else {
-                                let mut stream = stream;
-                                let _ = respond(&mut stream, 503, "text/plain; charset=utf-8", &[], b"busy").await;
-                                return;
-                            };
+                            let (_slot, _peer_slot) = (slot, peer_slot);
                             handle(stream, &shared, stop).await;
                         });
                     }
@@ -166,10 +206,14 @@ impl RunningServer {
         self.addr
     }
 
-    /// Swap the key. Pages still open with the old one are cut off within a
-    /// second, and cannot reconnect.
+    /// Swap the key. Cancel existing connections, including blocked writes.
     pub fn set_key(&self, key: String) {
-        *self.shared.key.write() = key;
+        let mut current = self.shared.key.write();
+        if *current == key {
+            return;
+        }
+        *current = key;
+        self.shared.key_revision.send_modify(|revision| *revision = revision.wrapping_add(1));
     }
 
     /// Shut down and wait (briefly) for the port to be released.
@@ -203,7 +247,12 @@ async fn read_head(stream: &mut TcpStream) -> Option<String> {
     let mut buf = Vec::with_capacity(1024);
     let mut chunk = [0u8; 1024];
     loop {
-        let n = stream.read(&mut chunk).await.ok()?;
+        let room = MAX_HEAD.checked_sub(buf.len())?;
+        if room == 0 {
+            return None;
+        }
+        let limit = room.min(chunk.len());
+        let n = stream.read(&mut chunk[..limit]).await.ok()?;
         if n == 0 {
             return None;
         }
@@ -211,9 +260,6 @@ async fn read_head(stream: &mut TcpStream) -> Option<String> {
         if let Some(end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
             buf.truncate(end);
             return String::from_utf8(buf).ok();
-        }
-        if buf.len() > MAX_HEAD {
-            return None;
         }
     }
 }
@@ -238,7 +284,23 @@ fn parse_request(head: &str) -> Option<Request> {
     Some(Request { method, path: path.to_string(), query })
 }
 
-async fn handle(mut stream: TcpStream, shared: &Shared, stop: watch::Receiver<bool>) {
+async fn handle(stream: TcpStream, shared: &Shared, mut stop: watch::Receiver<bool>) {
+    let mut revision = shared.key_revision.subscribe();
+    if *stop.borrow() {
+        return;
+    }
+    let response_stop = stop.clone();
+    // Cancellation covers header reads, snapshot creation and every write, rather
+    // than only the moments between SSE frames. A stalled peer is revoked too.
+    tokio::select! {
+        biased;
+        _ = stop.changed() => {},
+        _ = revision.changed() => {},
+        _ = handle_request(stream, shared, response_stop) => {},
+    }
+}
+
+async fn handle_request(mut stream: TcpStream, shared: &Shared, stop: watch::Receiver<bool>) {
     let head = match tokio::time::timeout(HEAD_TIMEOUT, read_head(&mut stream)).await {
         Ok(Some(head)) => head,
         _ => return,
@@ -308,7 +370,7 @@ async fn events(mut stream: TcpStream, shared: &Shared, key: String, mut stop: w
                 Referrer-Policy: no-referrer\r\n\
                 Connection: close\r\n\r\n\
                 retry: 2000\n\n";
-    if stream.write_all(head.as_bytes()).await.is_err() {
+    if write_event(&mut stream, head.as_bytes()).await.is_err() {
         return;
     }
     let mut feed = shared.feed.subscribe();
@@ -319,7 +381,7 @@ async fn events(mut stream: TcpStream, shared: &Shared, key: String, mut stop: w
         let current: Arc<str> = feed.borrow_and_update().clone();
         if !current.is_empty() && *current != *last_sent {
             let frame = format!("data: {current}\n\n");
-            if stream.write_all(frame.as_bytes()).await.is_err() {
+            if write_event(&mut stream, frame.as_bytes()).await.is_err() {
                 return;
             }
             last_sent = current.to_string();
@@ -334,13 +396,18 @@ async fn events(mut stream: TcpStream, shared: &Shared, key: String, mut stop: w
                 since_beat += Duration::from_secs(1);
                 if since_beat >= HEARTBEAT_EVERY {
                     since_beat = Duration::ZERO;
-                    if stream.write_all(b": ping\n\n").await.is_err() {
+                    if write_event(&mut stream, b": ping\n\n").await.is_err() {
                         return;
                     }
                 }
             }
         }
     }
+}
+
+async fn write_event(stream: &mut TcpStream, bytes: &[u8]) -> std::io::Result<()> {
+    tokio::time::timeout(WRITE_TIMEOUT, stream.write_all(bytes)).await
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "overlay write timed out"))?
 }
 
 async fn respond(
@@ -372,11 +439,12 @@ async fn respond(
         head.push_str(&format!("{name}: {value}\r\n"));
     }
     head.push_str("\r\n");
-    stream.write_all(head.as_bytes()).await?;
-    stream.write_all(body).await?;
-    stream.flush().await?;
-    let _ = stream.shutdown().await;
-    Ok(())
+    tokio::time::timeout(WRITE_TIMEOUT, async {
+        stream.write_all(head.as_bytes()).await?;
+        stream.write_all(body).await?;
+        stream.flush().await?;
+        stream.shutdown().await
+    }).await.map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "overlay response timed out"))?
 }
 
 #[cfg(test)]
@@ -468,6 +536,71 @@ pub(crate) mod tests {
         server.stop();
     }
 
+    fn wait_until(mut condition: impl FnMut() -> bool) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        while !condition() {
+            assert!(std::time::Instant::now() < deadline, "server did not settle within one second");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn the_header_limit_includes_the_terminator() {
+        let server = RunningServer::start(local(), "k".into(), test_hooks("{}")).unwrap();
+        let mut head = "GET /overlay/snapshot?key=k HTTP/1.1\r\nHost: x\r\nX-Fill: ".to_string();
+        head.extend(std::iter::repeat_n('a', MAX_HEAD - 4 - head.len()));
+        head.push_str("\r\n\r\n");
+        assert_eq!(head.len(), MAX_HEAD);
+        assert_eq!(request(server.local_addr(), &head).0, 200);
+        head.insert(head.len() - 4, 'a');
+        assert_eq!(request(server.local_addr(), &head).0, 0, "an oversized header is closed before routing");
+        server.stop();
+    }
+
+    #[test]
+    fn excess_slow_connections_do_not_create_more_handlers() {
+        let server = RunningServer::start(local(), "k".into(), test_hooks("{}")).unwrap();
+        let mut held = Vec::new();
+        for _ in 0..MAX_PEER_CONNECTIONS {
+            held.push(std::net::TcpStream::connect(server.local_addr()).unwrap());
+        }
+        wait_until(|| server.shared.slots.available_permits() == MAX_CONNECTIONS - MAX_PEER_CONNECTIONS);
+        for _ in 0..20 {
+            let mut excess = std::net::TcpStream::connect(server.local_addr()).unwrap();
+            excess.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+            let mut byte = [0];
+            match excess.read(&mut byte) {
+                Ok(0) => {},
+                Err(e) if matches!(e.kind(), std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted) => {},
+                result => panic!("excess connection was not promptly closed: {result:?}"),
+            }
+        }
+        assert_eq!(server.shared.slots.available_permits(), MAX_CONNECTIONS - MAX_PEER_CONNECTIONS);
+        assert_eq!(server.shared.peers.lock().len(), 1);
+        let shared = server.shared.clone();
+        server.stop();
+        wait_until(|| shared.slots.available_permits() == MAX_CONNECTIONS);
+        assert!(shared.peers.lock().is_empty(), "peer bookkeeping expires with its last connection");
+    }
+
+    #[test]
+    fn rotating_the_key_cancels_a_stalled_event_write() {
+        let server = RunningServer::start(local(), "old".into(), test_hooks("{}")).unwrap();
+        let mut slow = std::net::TcpStream::connect(server.local_addr()).unwrap();
+        slow.write_all(b"GET /overlay/events?key=old HTTP/1.1\r\n\r\n").unwrap();
+        wait_until(|| server.shared.feed.receiver_count() == 1);
+        // The client never drains its receive buffer. This frame is larger
+        // than the socket's send window, so its write has to wait for it.
+        server.shared.feed.send_replace(Arc::from("x".repeat(16 * 1024 * 1024)));
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(server.shared.slots.available_permits(), MAX_CONNECTIONS - 1);
+        server.set_key("new".into());
+        wait_until(|| server.shared.slots.available_permits() == MAX_CONNECTIONS);
+        assert_eq!(server.shared.feed.receiver_count(), 0);
+        assert_eq!(get(server.local_addr(), "/overlay/snapshot?key=new").0, 200);
+        server.stop();
+    }
+
     #[test]
     fn the_event_stream_pushes_the_snapshot() {
         let server = RunningServer::start(local(), "k".into(), test_hooks(r#"{"rows":[]}"#)).unwrap();
@@ -484,6 +617,15 @@ pub(crate) mod tests {
         assert!(got.starts_with("HTTP/1.1 200 OK"));
         assert!(got.contains("text/event-stream"));
         assert!(got.contains(r#"data: {"rows":[]}"#));
+        // Settings sync calls set_key even when only a display setting changed.
+        // That must not interrupt an existing OBS source.
+        server.set_key("k".into());
+        server.shared.feed.send_replace(Arc::from(r#"{"rows":[1]}"#));
+        while !got.contains(r#"data: {"rows":[1]}"#) {
+            let n = s.read(&mut buf).unwrap();
+            assert!(n > 0, "unchanged key closed the source");
+            got.push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
         server.stop();
         // The stream ends with the server.
         let mut rest = Vec::new();

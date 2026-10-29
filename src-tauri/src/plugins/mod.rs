@@ -3,7 +3,7 @@
 //! A plugin is a folder: `manifest.json`, an `index.html` and its scripts and
 //! data. It runs in a window of its own (`plugin-<id>`), inside a sandboxed
 //! frame with an origin of its own (the `a2plugin` scheme served here), no
-//! network and no access to the meter: it talks only to the host page, which
+//! ordinary network requests and no access to the meter: it talks to the host page, which
 //! passes on what its manifest's permissions allow. Game data reaches it
 //! through its own decoders (`decoder`), as numbers.
 //!
@@ -133,7 +133,7 @@ fn all_listed(ids: &[String], list: &[String]) -> bool {
 /// here when a plugin page starts using it.
 const PLUGIN_SURFACE_COMMANDS: &[&str] = &[
     "dock_close", "dock_fold", "dock_hello", "meter_shown", "open_settings_at", "open_settings_window",
-    "open_url", "plugin_abyss_siege", "plugin_boss_follow", "plugin_boss_timers", "plugin_close",
+    "plugin_open_url", "plugin_abyss_siege", "plugin_boss_follow", "plugin_boss_timers", "plugin_close",
     "plugin_fps_admin", "plugin_fps_watch", "plugin_hello", "plugin_screenshot", "plugin_set_docked", "plugin_storage_get",
     "plugin_storage_set", "plugin_widget_area", "plugin_widget_close", "plugin_widget_drag",
     "plugin_widget_hello", "plugin_widget_open", "plugin_widget_place", "plugin_widget_post",
@@ -205,6 +205,9 @@ pub fn sync_game_hiding(app: &tauri::AppHandle) {
 }
 /// Largest value one storage key may hold.
 const MAX_STORED: usize = 1024 * 1024;
+const MAX_STORAGE_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_STORAGE_KEYS: usize = 128;
+const PLUGIN_APPROVALS_KEY: &str = "dpsMeter.pluginTrustApprovals";
 /// How long a decoded event waits before it is stamped with the character and
 /// sent. At login the game sends some data (the pet list) a few records
 /// before the one that says which character is playing; the wait lets that
@@ -220,6 +223,9 @@ const MAX_LOGGED: usize = 20_000;
 /// a plugin reading every hit or spawn held tens of MB each, all run long,
 /// part of what made a Linux meter climb past 1 GB (2026-10-29).
 const MAX_LOGGED_BYTES: usize = 2 * 1024 * 1024;
+const MAX_PENDING: usize = 1024;
+const MAX_PENDING_BYTES: usize = 8 * 1024 * 1024;
+const MAX_DECODERS: usize = 64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -246,6 +252,8 @@ struct Loaded {
     decoders: Vec<Decoder>,
     /// Installed from the signed catalog, not a developer folder.
     reviewed: bool,
+    /// Native approval for execution and these exact data capabilities.
+    trusted: bool,
 }
 
 /// What Settings lists.
@@ -323,7 +331,16 @@ pub async fn plugin_set_enabled(app: tauri::AppHandle, id: String, enabled: bool
     if !valid_id(&id) {
         return Err("not a plugin id".into());
     }
+    let host = host(&app)?;
+    if host.with(&id, |_| ()).is_none() {
+        return Err("plugin not loaded".into());
+    }
+    if !enabled { host.set_enabled(&id, false); }
     set_disabled(&app, &id, !enabled);
+    if enabled {
+        host.approve_plugins(&app, Some(&id));
+        if disabled(&app).contains(&id) { return Ok(view(&app, &host)); }
+    }
     reopened(&app, &id);
     if enabled {
         remember_window(&app, &id, Some("shown"));
@@ -341,9 +358,9 @@ pub async fn plugin_set_enabled(app: tauri::AppHandle, id: String, enabled: bool
         // window's going), but one in the plugin dock has none to close, and
         // Event Timers' icons stayed on screen after it was turned off.
         widgets::close_all(&app, &id);
+        boss_live::forget_plugin(&app, &id);
     }
     tracing::info!("Plugins: {id} {}", if enabled { "enabled" } else { "disabled" });
-    let host = host(&app)?;
     Ok(view(&app, &host))
 }
 
@@ -388,8 +405,60 @@ struct Pending {
     /// can tell how old an event is however long it waited.
     read_ms: i64,
     plugin: String,
+    generation: u64,
     event: String,
     data: Value,
+}
+
+#[derive(Default)]
+struct Activity {
+    states: HashMap<String, (bool, u64)>,
+}
+
+impl Activity {
+    fn generation(&self, id: &str) -> Option<u64> {
+        self.states.get(id).filter(|(enabled, _)| *enabled).map(|(_, generation)| *generation)
+    }
+
+    fn set_enabled(&mut self, id: &str, enabled: bool) -> bool {
+        let state = self.states.entry(id.to_string()).or_default();
+        if state.0 == enabled { return false; }
+        state.0 = enabled;
+        state.1 = state.1.wrapping_add(1);
+        true
+    }
+}
+
+#[derive(Default)]
+struct PendingQueue {
+    items: Vec<Pending>,
+    bytes: usize,
+}
+
+impl PendingQueue {
+    fn push(&mut self, item: Pending) {
+        let bytes = item.data.to_string().len() + item.plugin.len() + item.event.len();
+        if self.items.len() >= MAX_PENDING || bytes > MAX_LOGGED_BYTES || self.bytes.saturating_add(bytes) > MAX_PENDING_BYTES {
+            return;
+        }
+        self.bytes += bytes;
+        self.items.push(item);
+    }
+
+    fn take_ready(&mut self, now: Instant) -> Vec<Pending> {
+        let ready = take_ready(&mut self.items, now);
+        self.recount();
+        ready
+    }
+
+    fn remove(&mut self, id: &str) {
+        self.items.retain(|p| p.plugin != id);
+        self.recount();
+    }
+
+    fn recount(&mut self) {
+        self.bytes = self.items.iter().map(|p| p.data.to_string().len() + p.plugin.len() + p.event.len()).sum();
+    }
 }
 
 /// Decoded events reach a plugin exactly once and in order, whether or not
@@ -399,7 +468,13 @@ struct Pending {
 pub struct PluginHost {
     loaded: RwLock<Vec<Loaded>>,
     errors: RwLock<Vec<PluginInfo>>,
-    pending: Mutex<Vec<Pending>>,
+    pending: Mutex<PendingQueue>,
+    /// Serializes collection, delivery and disabling. Epochs reject work
+    /// already taken by the flusher when a plugin is disabled and enabled again.
+    activity: Mutex<Activity>,
+    storage: Mutex<()>,
+    links: Mutex<HashMap<String, Instant>>,
+    screenshots: Mutex<HashMap<String, Instant>>,
     /// Wakes the flusher when an event is queued.
     queued: Condvar,
     /// Each plugin's numbered events, as their JSON text (a `Value` tree took
@@ -423,6 +498,10 @@ impl Default for PluginHost {
             loaded: RwLock::default(),
             errors: RwLock::default(),
             pending: Mutex::default(),
+            activity: Mutex::default(),
+            storage: Mutex::default(),
+            links: Mutex::default(),
+            screenshots: Mutex::default(),
             queued: Condvar::new(),
             log: Mutex::default(),
             seq: Mutex::new(0),
@@ -566,18 +645,82 @@ fn load_folder(dir: &Path) -> Result<Loaded, String> {
     if !dir.join("index.html").is_file() {
         return Err("no index.html".into());
     }
+    let decoders = compile_decoders(&manifest)?;
+    Ok(Loaded { manifest, dir: dir.to_path_buf(), decoders, reviewed: false, trusted: false })
+}
+
+fn compile_decoders(manifest: &Manifest) -> Result<Vec<Decoder>, String> {
+    if manifest.decoders.len() > MAX_DECODERS { return Err("at most 64 decoders per plugin".into()); }
+    let mut names = HashSet::new();
     let mut decoders = Vec::new();
     for spec in &manifest.decoders {
+        if !names.insert(spec.name.as_str()) { return Err("decoder names must be unique".into()); }
         let decoder = Decoder::compile(spec)?;
         if !manifest.permissions.iter().any(|p| p == &format!("decoder:{}", decoder.name)) {
             return Err(format!("decoder {} needs the permission \"decoder:{}\"", decoder.name, decoder.name));
         }
         decoders.push(decoder);
     }
-    Ok(Loaded { manifest, dir: dir.to_path_buf(), decoders, reviewed: false })
+    Ok(decoders)
 }
 
 impl PluginHost {
+    fn set_enabled(&self, id: &str, enabled: bool) {
+        let mut activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
+        if activity.set_enabled(id, enabled) || !enabled {
+            self.pending.lock().unwrap_or_else(|p| p.into_inner()).remove(id);
+            self.log.lock().unwrap_or_else(|p| p.into_inner()).remove(id);
+        }
+    }
+
+    /// Webview isolation varies by engine. Every plugin needs explicit trust
+    /// before its code runs or it receives any game data, even without decoders.
+    /// Approval is bound to the network policy, every layout and permission.
+    fn approve_plugins(&self, app: &tauri::AppHandle, only: Option<&str>) {
+        let Some(state) = app.try_state::<AppState>() else { return };
+        let mut approvals: HashMap<String, String> = state.settings.get(PLUGIN_APPROVALS_KEY)
+            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let blocked = disabled(app);
+        let requested: Vec<_> = self.loaded.read().unwrap_or_else(|p| p.into_inner()).iter()
+            .filter(|l| !blocked.contains(&l.manifest.id) && only.is_none_or(|id| id == l.manifest.id))
+            .map(|l| (l.manifest.id.clone(), decoder_fingerprint(&l.manifest)))
+            .collect();
+        let changed: Vec<_> = requested.iter().filter(|(id, hash)| approvals.get(id) != Some(hash)).collect();
+        if !changed.is_empty() {
+            // Stop old pages too: an updated plugin may already have a tab
+            // or widget from its previous approved layout.
+            for (id, _) in &changed {
+                set_disabled(app, id, true);
+                if let Some(window) = app.get_webview_window(&format!("plugin-{id}")) { let _ = window.close(); }
+                widgets::close_all(app, id);
+                boss_live::forget_plugin(app, id);
+            }
+            dock::sync(app, None);
+            let names = changed.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>().join("\n  • ");
+            let message = format!(
+                "Trust and run these plugins?\n\n  • {names}\n\nPlugins receive the game data their listed permissions allow. Decoder fields may include other players' names, identities and activity.\n\nWebview network isolation varies: plugins may be able to contact remote sites through browser features such as WebRTC and send the data they receive. Only enable plugins you trust with this access.\n\nApproval covers these decoder layouts and permissions; the meter asks again when they change. Choosing No keeps these plugins disabled."
+            );
+            if crate::platform::dialog::ask_yes_no_default_no("Plugin trust and data access", &message) {
+                for (id, hash) in &changed {
+                    approvals.insert((*id).clone(), (*hash).clone());
+                    set_disabled(app, id, false);
+                }
+                state.settings.set(PLUGIN_APPROVALS_KEY, &serde_json::to_string(&approvals).unwrap_or_default());
+            } else {
+                for (id, _) in &changed { set_disabled(app, id, true); }
+            }
+        }
+        let blocked = disabled(app);
+        let mut activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
+        for l in self.loaded.write().unwrap_or_else(|p| p.into_inner()).iter_mut() {
+            l.trusted = approvals.get(&l.manifest.id) == Some(&decoder_fingerprint(&l.manifest));
+            if activity.set_enabled(&l.manifest.id, l.trusted && !blocked.contains(&l.manifest.id)) {
+                self.pending.lock().unwrap_or_else(|p| p.into_inner()).remove(&l.manifest.id);
+                self.log.lock().unwrap_or_else(|p| p.into_inner()).remove(&l.manifest.id);
+            }
+        }
+    }
+
     /// Load the installed plugins, and in developer mode the folders the
     /// settings list. A developer folder wins over an installed copy of the
     /// same plugin, so its author tests their own files.
@@ -627,9 +770,32 @@ impl PluginHost {
                 Err(e) => tracing::warn!("Plugins: installed {} does not load: {e}", dir.display()),
             }
         }
+        let approvals: HashMap<String, String> = state.settings.get(PLUGIN_APPROVALS_KEY)
+            .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        for l in &mut loaded { l.trusted = approvals.get(&l.manifest.id) == Some(&decoder_fingerprint(&l.manifest)); }
         let any_decoders = loaded.iter().any(|l| !l.decoders.is_empty());
         tracing::info!("Plugins: {} loaded (developer mode {})", loaded.len(), if dev { "on" } else { "off" });
-        *self.loaded.write().unwrap_or_else(|p| p.into_inner()) = loaded;
+        {
+            let mut activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
+            let blocked = disabled(app);
+            let ids: HashSet<_> = loaded.iter().map(|l| l.manifest.id.clone()).collect();
+            let changed: HashSet<_> = {
+                let previous = self.loaded.read().unwrap_or_else(|p| p.into_inner());
+                loaded.iter().filter(|next| previous.iter().any(|old| old.manifest.id == next.manifest.id && decoder_fingerprint(&old.manifest) != decoder_fingerprint(&next.manifest)))
+                    .map(|l| l.manifest.id.clone()).collect()
+            };
+            let old: Vec<_> = activity.states.keys().cloned().collect();
+            for id in old.into_iter().chain(ids.iter().cloned()).collect::<HashSet<_>>() {
+                if changed.contains(&id) { activity.set_enabled(&id, false); }
+                let trusted = loaded.iter().any(|l| l.manifest.id == id && l.trusted);
+                if activity.set_enabled(&id, ids.contains(&id) && trusted && !blocked.contains(&id)) || changed.contains(&id) {
+                    self.pending.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
+                    self.log.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
+                }
+            }
+            *self.loaded.write().unwrap_or_else(|p| p.into_inner()) = loaded;
+        }
+        self.approve_plugins(app, None);
         *self.errors.write().unwrap_or_else(|p| p.into_inner()) = errors;
 
         if !self.flusher.swap(true, Ordering::SeqCst) {
@@ -653,11 +819,11 @@ impl PluginHost {
                     // events go once their wait is over.
                     let ready = {
                         let mut pending = host.pending.lock().unwrap_or_else(|p| p.into_inner());
-                        let mut ready = take_ready(&mut pending, Instant::now());
+                        let mut ready = pending.take_ready(Instant::now());
                         if ready.is_empty() {
-                            let wait = if pending.is_empty() { Duration::from_secs(1) } else { Duration::from_millis(50) };
+                            let wait = if pending.items.is_empty() { Duration::from_secs(1) } else { Duration::from_millis(50) };
                             pending = host.queued.wait_timeout(pending, wait).unwrap_or_else(|p| p.into_inner()).0;
-                            ready = take_ready(&mut pending, Instant::now());
+                            ready = pending.take_ready(Instant::now());
                         }
                         ready
                     };
@@ -667,7 +833,7 @@ impl PluginHost {
                         ready
                     } else {
                         std::thread::sleep(BATCH_WAIT);
-                        let mut more = take_ready(&mut host.pending.lock().unwrap_or_else(|p| p.into_inner()), Instant::now());
+                        let mut more = host.pending.lock().unwrap_or_else(|p| p.into_inner()).take_ready(Instant::now());
                         let mut ready = ready;
                         ready.append(&mut more);
                         ready
@@ -762,8 +928,11 @@ impl PluginHost {
         let at = len as usize;
         let Some(opcode) = packet.get(at..at + 2) else { return };
         let body = &packet[at + 2..];
+        let activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
         let loaded = self.loaded.read().unwrap_or_else(|p| p.into_inner());
         for plugin in loaded.iter() {
+            let Some(generation) = activity.generation(&plugin.manifest.id) else { continue };
+            if !plugin.trusted { continue; }
             for d in plugin.decoders.iter().filter(|d| d.opcode == opcode) {
                 let Some(data) = d.decode(body) else { continue };
                 // Only the player's own doings, for a decoder that asks so.
@@ -783,6 +952,7 @@ impl PluginHost {
                         .map(|d| d.as_millis() as i64)
                         .unwrap_or_default(),
                     plugin: plugin.manifest.id.clone(),
+                    generation,
                     event: format!("decoded:{}", d.name),
                     data,
                 });
@@ -798,6 +968,7 @@ impl PluginHost {
         if ready.is_empty() {
             return;
         }
+        let activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
         let who = character(app);
         // One message to each window per flush (`emit_plugins`): each emit is
         // a script the page runs, with the event in its source, and a zone's
@@ -805,6 +976,7 @@ impl PluginHost {
         // plugin process went past 1.3 GB for those minutes (2026-10-29).
         let mut batches: HashMap<String, Vec<Value>> = HashMap::new();
         for item in ready {
+            if activity.generation(&item.plugin) != Some(item.generation) { continue; }
             let allowed = self
                 .with(&item.plugin, |l| l.manifest.permissions.iter().any(|p| p == "events:character"))
                 .unwrap_or(false);
@@ -818,6 +990,7 @@ impl PluginHost {
             let event = serde_json::json!({
                 "plugin": item.plugin,
                 "seq": seq,
+                "generation": item.generation,
                 "event": item.event,
                 "data": item.data,
                 "at": item.read_ms,
@@ -844,17 +1017,19 @@ impl PluginHost {
     /// An unnumbered event to every loaded plugin (pluginHost.js hands it
     /// straight on).
     fn tell_all(&self, app: &tauri::AppHandle, event: &str, data: Value) {
+        let activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
         let ids: Vec<String> =
-            self.loaded.read().unwrap_or_else(|p| p.into_inner()).iter().map(|l| l.manifest.id.clone()).collect();
+            self.loaded.read().unwrap_or_else(|p| p.into_inner()).iter().filter(|l| activity.generation(&l.manifest.id).is_some()).map(|l| l.manifest.id.clone()).collect();
         for id in ids {
             let msg = serde_json::json!({ "plugin": id, "event": event, "data": data });
-            emit_plugin(app, &id, msg);
+            emit_plugin_current(app, &id, msg, activity.generation(&id).unwrap());
         }
     }
 
     /// A numbered event (see `flush`) to the plugins with a permission.
     /// `read_ms` is when it happened (unix ms).
     fn queue_permitted(&self, permission: &str, event: &str, read_ms: i64, data: Value) {
+        let activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
         let ids: Vec<String> = self
             .loaded
             .read()
@@ -865,11 +1040,13 @@ impl PluginHost {
             .collect();
         let mut pending = self.pending.lock().unwrap_or_else(|p| p.into_inner());
         for plugin in ids {
+            let Some(generation) = activity.generation(&plugin) else { continue };
             pending.push(Pending {
                 at: Instant::now(),
                 settle: false,
                 read_ms,
                 plugin,
+                generation,
                 event: event.to_string(),
                 data: data.clone(),
             });
@@ -879,6 +1056,7 @@ impl PluginHost {
 
     /// An unnumbered event to the plugins with a permission.
     fn tell_permitted(&self, app: &tauri::AppHandle, permission: &str, event: &str, data: Value) {
+        let activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
         let ids: Vec<String> = self
             .loaded
             .read()
@@ -888,8 +1066,9 @@ impl PluginHost {
             .map(|l| l.manifest.id.clone())
             .collect();
         for id in ids {
+            if activity.generation(&id).is_none() { continue; }
             let msg = serde_json::json!({ "plugin": id, "event": event, "data": data });
-            emit_plugin(app, &id, msg);
+            emit_plugin_current(app, &id, msg, activity.generation(&id).unwrap());
         }
     }
 
@@ -897,6 +1076,7 @@ impl PluginHost {
     /// an unnumbered event straight on).
     fn tell_character(&self, app: &tauri::AppHandle, who: Option<Value>) {
         let Some(who) = who else { return };
+        let activity = self.activity.lock().unwrap_or_else(|p| p.into_inner());
         let ids: Vec<String> = self
             .loaded
             .read()
@@ -906,8 +1086,9 @@ impl PluginHost {
             .map(|l| l.manifest.id.clone())
             .collect();
         for id in ids {
+            if activity.generation(&id).is_none() { continue; }
             let event = serde_json::json!({ "plugin": id, "event": "character", "data": who });
-            emit_plugin(app, &id, event);
+            emit_plugin_current(app, &id, event, activity.generation(&id).unwrap());
         }
     }
 
@@ -935,6 +1116,11 @@ fn info(l: &Loaded) -> PluginInfo {
     }
 }
 
+fn decoder_fingerprint(manifest: &Manifest) -> String {
+    let layout = serde_json::to_vec(&("explicit-network-trust-v1", API_VERSION, manifest.api_version, &manifest.decoders, &manifest.permissions)).unwrap_or_default();
+    sha2::Sha256::digest(layout).iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// The plugin a call is for: a `plugin-<id>` window's own, or the one the
 /// dock names, if docked now (`dock::plugin_of_call`).
 fn window_plugin(window: &tauri::WebviewWindow, plugin: Option<&str>) -> Result<String, String> {
@@ -944,6 +1130,44 @@ fn window_plugin(window: &tauri::WebviewWindow, plugin: Option<&str>) -> Result<
 
 fn host(app: &tauri::AppHandle) -> Result<Arc<PluginHost>, String> {
     app.try_state::<Arc<PluginHost>>().map(|h| Arc::clone(&h)).ok_or_else(|| "plugins are not available".into())
+}
+
+fn plugin_link(raw: &str) -> Result<tauri::Url, String> {
+    if raw.len() > 2048 || raw.chars().any(char::is_control) {
+        return Err("only plain https links open".into());
+    }
+    let url = tauri::Url::parse(raw).map_err(|_| "not a link")?;
+    if url.scheme() != "https" || url.host_str().is_none() || !url.username().is_empty() || url.password().is_some() {
+        return Err("only plain https links open".into());
+    }
+    Ok(url)
+}
+
+/// The host confirms the exact destination, including its query, before the
+/// browser receives it. A frame message is never evidence of a human click.
+#[tauri::command]
+pub async fn plugin_open_url(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin: Option<String>, url: String) -> Result<bool, String> {
+    static PROMPT: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+    let id = window_plugin(&window, plugin.as_deref())?;
+    let url = plugin_link(&url)?;
+    let host = host(&app)?;
+    let generation = host.activity.lock().unwrap_or_else(|p| p.into_inner()).generation(&id).ok_or("plugin is disabled")?;
+    {
+        let mut links = host.links.lock().unwrap_or_else(|p| p.into_inner());
+        if links.get(&id).is_some_and(|at| at.elapsed() < Duration::from_secs(10)) {
+            return Err("wait before opening another link".into());
+        }
+        links.insert(id.clone(), Instant::now());
+    }
+    let _permit = PROMPT.try_acquire().map_err(|_| "another link is awaiting a decision")?;
+    let message = format!("Plugin {id} wants to open this link in your browser:\n\n{}\n\nThe destination receives this complete address, including any data in its path or query. Open it?", url.as_str());
+    let accepted = tauri::async_runtime::spawn_blocking(move || crate::platform::dialog::ask_yes_no_default_no("Open plugin link", &message))
+        .await.map_err(|e| e.to_string())?;
+    if !accepted { return Ok(false); }
+    let activity = host.activity.lock().unwrap_or_else(|p| p.into_inner());
+    if activity.generation(&id) != Some(generation) { return Err("plugin changed while the link was awaiting approval".into()); }
+    crate::platform::shell::open_url(url.as_str());
+    Ok(true)
 }
 
 fn data_file(app: &tauri::AppHandle, id: &str, key: &str) -> Result<PathBuf, String> {
@@ -1213,7 +1437,7 @@ fn prompt_texts(data_dir: Option<&Path>, lang: &str) -> PromptTexts {
         perm_window: perm("permWindow", "Show and hide its own window, without taking focus from the game"),
         perm_widgets: perm("permWidgets", "Show small windows of its own, which you can move anywhere and lock in place"),
         perm_character: perm("permCharacter", "See your character's name, server, class and level"),
-        perm_decoder: perm("permDecoder", "Read your own game data: {name}"),
+        perm_decoder: perm("permDecoderFields", "Read selected game fields (may include other players): {name}"),
         perm_fps: perm("permFps", "Show the game's frame rate (on Windows, the meter asks to run as administrator for it)"),
         perm_death_recap: perm("permDeathRecap", "After a player kills you: who they were and the damage they did to you"),
         perm_screenshot: perm("permScreenshot", "Take screenshots of its own window, to the clipboard and your screenshot folder"),
@@ -2015,6 +2239,8 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
         widgets::close_all(&app, &id);
     }
     let host = host(&app)?;
+    let activity = host.activity.lock().unwrap_or_else(|p| p.into_inner());
+    let generation = activity.generation(&id).ok_or("plugin is disabled")?;
     let manifest = host.with(&id, |l| l.manifest.clone()).ok_or("plugin not loaded")?;
     let replay: Vec<Value> = host
         .log
@@ -2030,7 +2256,8 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
     Ok(serde_json::json!({
         "manifest": manifest,
         "replay": replay,
-        "run": host.run,
+        "run": format!("{}:{generation}", host.run),
+        "generation": generation,
         "character": character,
         "language": language,
         "theme": plugin_theme(&app),
@@ -2108,6 +2335,29 @@ pub fn set_plugin_theme(app: tauri::AppHandle, theme: Value) -> Result<(), Strin
 /// events sent to any window, and each keeps only its own plugins'
 /// (pluginHost.js, pluginDock.js).
 pub(crate) fn emit_plugin(app: &tauri::AppHandle, id: &str, event: Value) {
+    let Ok(host) = host(app) else { return };
+    let activity = host.activity.lock().unwrap_or_else(|p| p.into_inner());
+    let Some(generation) = activity.generation(id) else { return };
+    emit_plugin_current(app, id, event, generation);
+}
+
+pub(crate) fn plugin_generation(app: &tauri::AppHandle, id: &str) -> Option<u64> {
+    host(app).ok()?.activity.lock().unwrap_or_else(|p| p.into_inner()).generation(id)
+}
+
+pub(crate) fn emit_plugin_if_current(app: &tauri::AppHandle, id: &str, event: Value, generation: u64) {
+    while_current_generation(app, id, generation, || emit_plugin_current(app, id, event, generation));
+}
+
+fn while_current_generation(app: &tauri::AppHandle, id: &str, generation: u64, action: impl FnOnce()) {
+    let Ok(host) = host(app) else { return };
+    let activity = host.activity.lock().unwrap_or_else(|p| p.into_inner());
+    if activity.generation(id) == Some(generation) { action(); }
+}
+
+/// Caller holds the activity lock until the message has been queued.
+fn emit_plugin_current(app: &tauri::AppHandle, id: &str, mut event: Value, generation: u64) {
+    event["generation"] = Value::from(generation);
     let _ = app.emit_to(plugin_target(app, id), "plugin-event", event);
 }
 
@@ -2149,22 +2399,48 @@ pub async fn plugin_screenshot(
     height: f64,
     scale: f64,
 ) -> Result<Value, String> {
+    static CAPTURE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
     let id = window_plugin(&window, plugin.as_deref())?;
     require(&app, &id, "screenshot")?;
-    if ![x, y, width, height, scale].iter().all(|v| v.is_finite()) || width < 1.0 || height < 1.0 {
+    let actual_scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let size = window.inner_size().map_err(|e| e.to_string())?;
+    if !screenshot_area(x, y, width, height, scale, actual_scale, size.width, size.height) {
         return Err("not an area".into());
     }
+    let host = host(&app)?;
+    {
+        let mut screenshots = host.screenshots.lock().unwrap_or_else(|p| p.into_inner());
+        if screenshots.get(&id).is_some_and(|at| at.elapsed() < Duration::from_secs(2)) {
+            return Err("wait before another screenshot".into());
+        }
+        screenshots.insert(id.clone(), Instant::now());
+    }
+    let permit = CAPTURE.try_acquire().map_err(|_| "another screenshot is running")?;
     let path = crate::app::screenshot_dir(&app).join(format!("{id}_{}.png", chrono::Local::now().format("%Y%m%d_%H%M%S")));
     tauri::async_runtime::spawn_blocking(move || {
-        let (clipboard, saved) = crate::platform::screenshot::capture(&window, x, y, width, height, scale, None, Some(&path));
+        let _permit = permit;
+        let (clipboard, saved) = crate::platform::screenshot::capture(&window, x, y, width, height, actual_scale, None, Some(&path));
         serde_json::json!({ "clipboard": clipboard, "file": saved.then(|| path.display().to_string()) })
     })
     .await
     .map_err(|e| e.to_string())
 }
 
+fn screenshot_area(x: f64, y: f64, width: f64, height: f64, scale: f64, actual_scale: f64, client_width: u32, client_height: u32) -> bool {
+    [x, y, width, height, scale, actual_scale].iter().all(|v| v.is_finite())
+        && (0.25..=8.0).contains(&actual_scale) && (scale - actual_scale).abs() < 0.01
+        && x >= 0.0 && y >= 0.0 && width >= 1.0 && height >= 1.0
+        && (x + width) * actual_scale <= client_width as f64
+        && (y + height) * actual_scale <= client_height as f64
+        && width * actual_scale <= 8192.0 && height * actual_scale <= 8192.0
+        && width * height * actual_scale * actual_scale <= 16_777_216.0
+}
+
 fn require(app: &tauri::AppHandle, id: &str, permission: &str) -> Result<(), String> {
-    let has = host(app)?.with(id, |l| l.manifest.permissions.iter().any(|p| p == permission)).unwrap_or(false);
+    let host = host(app)?;
+    let activity = host.activity.lock().unwrap_or_else(|p| p.into_inner());
+    if activity.generation(id).is_none() { return Err("plugin is disabled".into()); }
+    let has = host.with(id, |l| l.manifest.permissions.iter().any(|p| p == permission)).unwrap_or(false);
     if has { Ok(()) } else { Err(format!("the plugin lacks the {permission:?} permission")) }
 }
 
@@ -2209,9 +2485,12 @@ async fn boss_timers(_app: &tauri::AppHandle, _server: u32) -> Result<Option<Val
 /// One server's file of a feed on the CDN (`feeds/<feed>/<server>.json`).
 #[cfg(feature = "online")]
 async fn feed_file(app: &tauri::AppHandle, feed: &'static str, server: u32) -> Result<Option<Value>, String> {
+    static FETCHES: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
+    if !(1000..10000).contains(&server) { return Err("not a server id".into()); }
     static CACHE: std::sync::OnceLock<Mutex<HashMap<(&'static str, u32), (Instant, Option<Value>)>>> = std::sync::OnceLock::new();
     let cache = CACHE.get_or_init(Mutex::default);
     let key = (feed, server);
+    let _fetch = FETCHES.try_acquire().map_err(|_| "too many feed requests")?;
     // As long as the CDN keeps the file (max-age 2): a plugin following a
     // boss that is being fought reads it every few seconds, for its HP as it
     // falls and its kill (Event Timers' pinned bosses).
@@ -2225,10 +2504,19 @@ async fn feed_file(app: &tauri::AppHandle, feed: &'static str, server: u32) -> R
     let res = state.http.get(&url).timeout(Duration::from_secs(15)).send().await.map_err(|e| e.to_string())?;
     let value = match res.status() {
         s if s == reqwest::StatusCode::NOT_FOUND => None,
-        s if s.is_success() => Some(serde_json::from_str(&res.text().await.map_err(|e| e.to_string())?).map_err(|e| e.to_string())?),
+        s if s.is_success() => Some(serde_json::from_str(&crate::bounded_http::text(res, 1024 * 1024).await?).map_err(|e| e.to_string())?),
         s => return Err(format!("the feed answered {s}")),
     };
-    cache.lock().unwrap_or_else(|p| p.into_inner()).insert(key, (Instant::now(), value.clone()));
+    {
+        let mut cache = cache.lock().unwrap_or_else(|p| p.into_inner());
+        cache.retain(|_, (at, _)| at.elapsed() < Duration::from_secs(60));
+        if cache.len() >= 32 {
+            if let Some(oldest) = cache.iter().min_by_key(|(_, (at, _))| *at).map(|(key, _)| *key) {
+                cache.remove(&oldest);
+            }
+        }
+        cache.insert(key, (Instant::now(), value.clone()));
+    }
     Ok(value)
 }
 
@@ -2241,21 +2529,48 @@ async fn feed_file(_app: &tauri::AppHandle, _feed: &'static str, _server: u32) -
 pub fn plugin_storage_get(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin: Option<String>, key: String) -> Result<Option<String>, String> {
     let id = window_plugin(&window, plugin.as_deref())?;
     require(&app, &id, "storage")?;
-    Ok(std::fs::read_to_string(data_file(&app, &id, &key)?).ok())
+    let file = data_file(&app, &id, &key)?;
+    let mut bytes = Vec::new();
+    use std::io::Read;
+    let input = match std::fs::File::open(file) {
+        Ok(input) => input,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.to_string()),
+    };
+    input.take(MAX_STORED as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() > MAX_STORED { return Err("stored value larger than 1 MB".into()); }
+    String::from_utf8(bytes).map(Some).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn plugin_storage_set(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin: Option<String>, key: String, value: String) -> Result<(), String> {
     let id = window_plugin(&window, plugin.as_deref())?;
     require(&app, &id, "storage")?;
-    if value.len() > MAX_STORED {
-        return Err("value larger than 1 MB".into());
-    }
+    let host = host(&app)?;
+    let _storage = host.storage.lock().unwrap_or_else(|p| p.into_inner());
     let file = data_file(&app, &id, &key)?;
-    if let Some(dir) = file.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    write_storage(&file, &value)
+}
+
+fn write_storage(file: &Path, value: &str) -> Result<(), String> {
+    if value.len() > MAX_STORED { return Err("value larger than 1 MB".into()); }
+    let dir = file.parent().ok_or("no storage directory")?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let mut bytes = value.len() as u64;
+    let mut keys = 1usize;
+    for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if !entry.file_type().map_err(|e| e.to_string())?.is_file() {
+            return Err("storage contains a non-file entry".into());
+        }
+        if entry.path() == file { continue; }
+        keys += 1;
+        bytes = bytes.saturating_add(entry.metadata().map_err(|e| e.to_string())?.len());
+        if keys > MAX_STORAGE_KEYS || bytes > MAX_STORAGE_BYTES {
+            return Err("plugin storage quota exceeded (128 keys, 16 MB total)".into());
+        }
     }
-    std::fs::write(file, value).map_err(|e| e.to_string())
+    crate::atomic_file::write(file, value.as_bytes()).map_err(|e| e.to_string())
 }
 
 // ── The plugin files ───────────────────────────────────────────────────────
@@ -2265,7 +2580,8 @@ const SDK: &str = include_str!("a2.js");
 
 /// Serve `/<id>/<path>` from that plugin's folder, and `/_sdk/a2.js`.
 /// The content policy for a plugin's files: its own folder and the SDK, and
-/// nothing from anywhere else (no network at all).
+/// no ordinary requests to other origins. The connection allowlist additionally
+/// restricts WebRTC on supporting engines; explicit trust covers older engines.
 ///
 /// The sources are named outright. A plugin page runs in a sandboxed frame,
 /// whose origin is opaque, and WebKit (the Linux webview) matches `'self'`
@@ -2298,6 +2614,8 @@ pub fn serve(app: &tauri::AppHandle, path: &str) -> tauri::http::Response<Vec<u8
             .header("Content-Type", kind)
             .header("Content-Security-Policy", policy.as_str())
             .header("X-Content-Type-Options", "nosniff")
+            .header("Connection-Allowlist", "(response-origin)")
+            .header("X-DNS-Prefetch-Control", "off")
             .body(body)
             .unwrap_or_default()
     };
@@ -2331,6 +2649,8 @@ pub fn serve(app: &tauri::AppHandle, path: &str) -> tauri::http::Response<Vec<u8
                 .header("Content-Type", "text/html; charset=utf-8")
                 .header("Content-Security-Policy", policy.as_str())
                 .header("X-Content-Type-Options", "nosniff")
+                .header("Connection-Allowlist", "(response-origin)")
+                .header("X-DNS-Prefetch-Control", "off")
                 .body(page.into_bytes())
                 .unwrap_or_default();
         }
@@ -2545,7 +2865,8 @@ mod tests {
     fn plugin_windows_reach_only_their_own_commands() {
         for label in ["plugin-ping", "plugins-dock", "pw_ping_ping"] {
             assert!(allowed_from(label, "plugin_storage_get"), "{label}");
-            assert!(allowed_from(label, "open_url"), "{label}");
+            assert!(allowed_from(label, "plugin_open_url"), "{label}");
+            assert!(!allowed_from(label, "open_url"), "{label}");
             for cmd in ["show_update_window", "send_logs_to_dev", "plugin_add_folder", "plugin_install", "update_settings", "capture_screenshot", "set_run_as_admin"] {
                 assert!(!allowed_from(label, cmd), "{label} {cmd}");
             }
@@ -2560,6 +2881,99 @@ mod tests {
     use super::{update_prompt, updates_to_offer, within_reach, Pending, PluginAvailable, PluginInfo, LANGUAGES, SETTLE};
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn disabling_clears_history_and_invalidates_work_already_taken_by_the_flusher() {
+        let host = super::PluginHost::default();
+        host.set_enabled("pets", true);
+        let generation = host.activity.lock().unwrap().generation("pets").unwrap();
+        let mut old = event("pets", "list", false, Instant::now());
+        old.generation = generation;
+        host.pending.lock().unwrap().push(event("pets", "waiting", false, Instant::now()));
+        host.log.lock().unwrap().insert("pets".into(), (["old".into()].into(), 3));
+        host.set_enabled("pets", false);
+        assert!(host.pending.lock().unwrap().items.is_empty());
+        assert!(!host.log.lock().unwrap().contains_key("pets"));
+        assert!(host.activity.lock().unwrap().generation("pets").is_none());
+        host.set_enabled("pets", true);
+        assert_ne!(host.activity.lock().unwrap().generation("pets"), Some(old.generation));
+    }
+
+    #[test]
+    fn pending_events_stop_growing_at_the_count_and_byte_limits() {
+        let mut queue = super::PendingQueue::default();
+        for _ in 0..super::MAX_PENDING + 20 { queue.push(event("pets", "list", true, Instant::now())); }
+        assert_eq!(queue.items.len(), super::MAX_PENDING);
+        queue.remove("pets");
+        assert_eq!(queue.bytes, 0);
+        for _ in 0..10 {
+            let mut item = event("pets", "list", true, Instant::now());
+            item.data = serde_json::Value::String("x".repeat(super::MAX_LOGGED_BYTES / 2));
+            queue.push(item);
+        }
+        assert!(queue.bytes <= super::MAX_PENDING_BYTES);
+        assert!(queue.items.len() < 10);
+    }
+
+    #[test]
+    fn decoder_approval_changes_with_fields_or_permissions() {
+        let manifest = |json| serde_json::from_str::<super::Manifest>(json).unwrap();
+        let mut a = manifest(r#"{"id":"pets","name":"Pets","version":"1","apiVersion":2,"permissions":["decoder:pets"],"decoders":[{"name":"pets","opcode":"00 90","fields":[{"name":"pet","type":"u32"}]}]}"#);
+        let before = super::decoder_fingerprint(&a);
+        a.decoders[0].fields[0].kind = "u64".into();
+        assert_ne!(before, super::decoder_fingerprint(&a));
+        a.decoders[0].fields[0].kind = "u32".into();
+        a.permissions.push("events:character".into());
+        assert_ne!(before, super::decoder_fingerprint(&a));
+    }
+
+    #[test]
+    fn repeated_or_excessive_decoder_specs_cannot_multiply_per_frame_work() {
+        let mut manifest: super::Manifest = serde_json::from_str(r#"{"id":"pets","name":"Pets","version":"1","apiVersion":2,"permissions":["decoder:pets"],"decoders":[{"name":"pets","opcode":"00 90","fields":[{"name":"pet","type":"u32"}]}]}"#).unwrap();
+        let spec = manifest.decoders[0].clone();
+        manifest.decoders.push(spec.clone());
+        assert!(super::compile_decoders(&manifest).unwrap_err().contains("unique"));
+        manifest.decoders.clear();
+        manifest.permissions.clear();
+        for i in 0..=super::MAX_DECODERS {
+            let mut next = spec.clone();
+            next.name = format!("decoder-{i}");
+            manifest.permissions.push(format!("decoder:{}", next.name));
+            manifest.decoders.push(next);
+        }
+        assert!(super::compile_decoders(&manifest).is_err());
+        manifest.decoders.pop();
+        assert_eq!(super::compile_decoders(&manifest).unwrap().len(), super::MAX_DECODERS);
+    }
+
+    #[test]
+    fn links_need_plain_https_and_screenshot_rectangles_stay_in_the_client() {
+        for url in ["http://example.com/", "https://me:secret@example.com/", "file:///tmp/x", "https://example.com/\nsecret"] {
+            assert!(super::plugin_link(url).is_err(), "{url}");
+        }
+        assert!(super::plugin_link("https://example.com/?query=value").is_ok());
+        assert!(super::screenshot_area(10.0, 20.0, 100.0, 200.0, 2.0, 2.0, 800, 600));
+        assert!(!super::screenshot_area(-1.0, 0.0, 100.0, 100.0, 1.0, 1.0, 800, 600));
+        assert!(!super::screenshot_area(700.0, 0.0, 101.0, 100.0, 1.0, 1.0, 800, 600));
+        assert!(!super::screenshot_area(0.0, 0.0, 100.0, 100.0, 8.0, 1.0, 800, 600));
+        assert!(!super::screenshot_area(0.0, 0.0, 8192.0, 8192.0, 1.0, 1.0, 8192, 8192));
+    }
+
+    #[test]
+    fn plugin_storage_limits_total_bytes_and_keys_but_allows_replacements() {
+        let dir = std::env::temp_dir().join(format!("a2-plugin-storage-{}-{}", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = std::panic::catch_unwind(|| {
+            for i in 0..super::MAX_STORAGE_KEYS { super::write_storage(&dir.join(format!("{i}.json")), "").unwrap(); }
+            assert!(super::write_storage(&dir.join("overflow.json"), "").is_err());
+            super::write_storage(&dir.join("0.json"), "replacement").unwrap();
+            std::fs::write(dir.join("1.json"), vec![0; super::MAX_STORAGE_BYTES as usize]).unwrap();
+            assert!(super::write_storage(&dir.join("0.json"), "more").is_err());
+            super::write_storage(&dir.join("1.json"), "smaller").unwrap();
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        result.unwrap();
+    }
 
     fn available(id: &str, from: &str, to: &str, new_permissions: &[&str]) -> PluginAvailable {
         PluginAvailable {
@@ -2607,9 +3021,9 @@ mod tests {
         let (a, b) = (available("a", "1.0.0", "1.1.0", &[]), available("b", "2.0", "2.1", &["storage", "decoder:pets"]));
         let two = update_prompt(&en, &[&a, &b]);
         assert!(two.starts_with("Plugin updates are available:"));
-        assert!(two.contains("Plugin b 2.0 → 2.1\n    The new version also asks to:\n    • Save its own data on this computer\n    • Read your own game data: pets"));
+        assert!(two.contains("Plugin b 2.0 → 2.1\n    The new version also asks to:\n    • Save its own data on this computer\n    • Read selected game fields (may include other players): pets"));
         let de = update_prompt(&prompt_texts(Some(&data), "de"), &[&b]);
-        assert!(de.contains("Jetzt aktualisieren?") && de.contains("Deine eigenen Spieldaten lesen: pets"), "{de}");
+        assert!(de.contains("Jetzt aktualisieren?") && de.contains("Ausgewählte Spieldaten lesen (können andere Spieler betreffen): pets"), "{de}");
     }
 
     /// What's new: each version's notes under its update, in the player's
@@ -2751,7 +3165,7 @@ mod tests {
     }
 
     fn event(plugin: &str, name: &str, settle: bool, at: Instant) -> Pending {
-        Pending { at, settle, read_ms: 0, plugin: plugin.into(), event: name.into(), data: serde_json::Value::Null }
+        Pending { at, settle, read_ms: 0, plugin: plugin.into(), generation: 0, event: name.into(), data: serde_json::Value::Null }
     }
 
     fn names(events: &[Pending]) -> Vec<&str> {

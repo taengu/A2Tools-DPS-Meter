@@ -22,21 +22,34 @@ impl ScreenRect {
     pub fn union(self, other: ScreenRect) -> ScreenRect {
         let left = self.left.min(other.left);
         let top = self.top.min(other.top);
-        let right = (self.left + self.width).max(other.left + other.width);
-        let bottom = (self.top + self.height).max(other.top + other.height);
-        ScreenRect { left, top, width: right - left, height: bottom - top }
+        let right = (self.left as i64 + self.width as i64).max(other.left as i64 + other.width as i64);
+        let bottom = (self.top as i64 + self.height as i64).max(other.top as i64 + other.height as i64);
+        match (i32::try_from(right - left as i64), i32::try_from(bottom - top as i64)) {
+            (Ok(width), Ok(height)) if self.width > 0 && self.height > 0 && other.width > 0 && other.height > 0 =>
+                ScreenRect { left, top, width, height },
+            _ => ScreenRect { left: 0, top: 0, width: 0, height: 0 },
+        }
     }
 }
 
 /// A CSS-pixel rect inside a window's client area, as screen pixels, given the
 /// client area's on-screen origin.
 pub fn css_rect_to_screen(origin: (i32, i32), x: f64, y: f64, w: f64, h: f64, scale: f64) -> ScreenRect {
-    let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
-    let left = origin.0 + (x * scale).round() as i32;
-    let top = origin.1 + (y * scale).round() as i32;
-    let right = origin.0 + ((x + w) * scale).round() as i32;
-    let bottom = origin.1 + ((y + h) * scale).round() as i32;
-    ScreenRect { left, top, width: (right - left).max(1), height: (bottom - top).max(1) }
+    let invalid = ScreenRect { left: 0, top: 0, width: 0, height: 0 };
+    if ![x, y, w, h, scale].iter().all(|v| v.is_finite()) || w <= 0.0 || h <= 0.0 || scale <= 0.0 {
+        return invalid;
+    }
+    let coordinate = |origin: i32, css: f64| -> Option<i32> {
+        let value = origin as f64 + (css * scale).round();
+        (value.is_finite() && value >= i32::MIN as f64 && value <= i32::MAX as f64).then_some(value as i32)
+    };
+    let (Some(left), Some(top), Some(right), Some(bottom)) = (
+        coordinate(origin.0, x), coordinate(origin.1, y), coordinate(origin.0, x + w), coordinate(origin.1, y + h)
+    ) else { return invalid };
+    match (right.checked_sub(left), bottom.checked_sub(top)) {
+        (Some(width), Some(height)) if width > 0 && height > 0 => ScreenRect { left, top, width, height },
+        _ => invalid,
+    }
 }
 
 /// Encode top-down RGBA rows as a PNG. Hand-rolled because the only thing
@@ -109,6 +122,17 @@ mod tests {
         let meter = ScreenRect { left: 100, top: 100, width: 400, height: 300 };
         let details = ScreenRect { left: 520, top: 80, width: 800, height: 600 };
         assert_eq!(meter.union(details), ScreenRect { left: 100, top: 80, width: 1220, height: 600 });
+    }
+
+    #[test]
+    fn invalid_or_overflowing_capture_rectangles_are_empty() {
+        assert_eq!(css_rect_to_screen((i32::MAX, 0), 1.0, 0.0, 100.0, 100.0, 1.0).width, 0);
+        assert_eq!(css_rect_to_screen((0, 0), f64::INFINITY, 0.0, 100.0, 100.0, 1.0).width, 0);
+        assert_eq!(css_rect_to_screen((0, 0), 0.0, 0.0, f64::MAX, 100.0, 2.0).width, 0);
+        assert_eq!(css_rect_to_screen((0, 0), 0.0, 0.0, 100.0, 100.0, f64::NAN).width, 0);
+        let left = ScreenRect { left: i32::MIN, top: 0, width: 100, height: 100 };
+        let right = ScreenRect { left: i32::MAX - 100, top: 0, width: 100, height: 100 };
+        assert_eq!(left.union(right).width, 0);
     }
 
     #[test]

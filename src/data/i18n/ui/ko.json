@@ -685,6 +685,7 @@
       "permBossTimers": "a2tools.app에서 플레이어들이 공유하는 필드 보스 타이머 읽기",
       "permCharacter": "캐릭터의 이름, 서버, 클래스, 레벨 보기",
       "permDecoder": "내 게임 데이터 읽기: {name}",
+      "permDecoderFields": "선택한 게임 데이터 읽기 (다른 플레이어 정보가 포함될 수 있음): {name}",
       "permNone": "창을 표시하는 것 외에는 없음",
       "enabled": "사용",
       "enabledTip": "켜짐: 미터와 함께 시작됩니다. 꺼짐: 설치된 상태로 남지만 실행되지 않습니다.",

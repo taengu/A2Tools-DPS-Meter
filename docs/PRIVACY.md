@@ -63,8 +63,10 @@ Training dummies are never uploaded. Turning automatic uploads off stops them
 immediately; it does not remove logs already uploaded, which you manage from
 your account.
 
-**Party presence.** *Settings → Privacy → Show A2Tools users in my party*, on
-unless you turn it off (asked once). While you are in a party, the meter sends a
+**Party presence.** *Settings → Privacy → Show A2Tools users in my party*, off
+until you enable it in Settings or the unchecked one-time prompt. Older versions
+enabled this even when their prompt was dismissed; those installs require a new
+choice before reporting resumes. While you are in a party, the meter sends a
 hash of your character's name and server, and of each party member's, so that
 members who also use A2Tools see a small A2 tag beside each other's names: on
 each party change and every 10 minutes (`src-tauri/src/party_presence.rs`).
@@ -73,7 +75,9 @@ name and a server can compute it, so the site can tell who plays with whom among
 A2Tools users, and party members using A2Tools learn that you use a meter.
 
 **Field boss and supply data.** *Settings → Privacy → Sync useful data to
-A2Tools*, on unless you turn it off. To keep A2Tools' boss timers and Supply
+A2Tools*, off until you enable it. An existing explicit choice is preserved;
+the older separate boss and supply switches migrate only when both were
+explicitly enabled. To keep A2Tools' boss timers and Supply
 Request boards current for everyone, the meter reports game state it sees on
 your server: the field bosses on a map you open, the ones you see killed and
 their health (every few seconds while one is being fought), who holds the Abyss
@@ -222,9 +226,8 @@ catches chat and bystanders.
 **Names.** The slice contains no names. Each token is made with a random key
 that belongs to that one slice and is thrown away once it is cut, so a token
 cannot be worked out from a name or a roster id, and the same name gets a
-different token in every slice. That does not make a person unlinkable across
-uploads: the party roster record in a slice still carries each member's roster
-id, a stable per-character number, beside their token.
+different token in every slice. Roster identities are also replaced for each
+slice, so their original stable values cannot join uploads.
 Separately, the upload sends the names the saved fight already holds: signed
 in, **yours in full, everyone else masked**; shared anonymously without an
 account, **everyone masked, you too**; masked the way
@@ -235,12 +238,19 @@ promised that no name at all would be uploaded and that others would appear as
 "Sorcerer #2"; logs now look like the meter instead, and this paragraph is the
 correction.
 
-**Roster ids.** The party roster packet carries a server-assigned id for each
-member, and that packet is in the slice, so those ids reach the service inside
-it. The slice is stored so a log can be re-derived later; it is never served,
-and the ids are removed from the record that is. The separate table in the slice
-that paired each blinded name with its roster id is blanked before the slice is
-saved.
+**Roster ids.** The party roster packet's leader and member identities are
+replaced with values derived from the slice's random key. Repeated references
+keep the same value within that slice; the server bits stay intact because
+replay needs them to read the roster. Recognized identities copied elsewhere in
+retained packets are replaced too. The separate name-token table carries zero
+ids. Roster packets are rebuilt from the fields replay understands, leaving out
+opaque tails. A retained roster whose member layout cannot be completely read
+is refused. A plain packet with an embedded compressed identity block is also
+refused until its surrounding layout has a privacy rule; the meter reports why
+the slice could not be shared instead of sending unchecked compressed data.
+Older local cached slices are re-anonymized before upload. Slices already sent
+to the service can still contain original ids. Packet fields whose meaning is
+unknown remain a limit of the format and its allowlist.
 
 **Who can see a log.** You choose whether your logs are public or private, as a
 default and per log. A private log is not listed anywhere, but anyone you give
@@ -328,8 +338,9 @@ marketing.
   it. Someone who knows who you play with can often tell who it is.
 - **The operator sees more than the public does.** Signed in, your log is tied
   to your account and your own name is on it in full. Every upload, signed in or
-  not, comes from an IP address, and the stored slice holds your party's roster
-  ids. None of that is published, but it is not hidden from the service.
+  not, comes from an IP address. The slice keeps server identifiers and
+  per-slice roster relationships. None of that is published, but it is not
+  hidden from the service.
 - **Party presence links people.** The hashes it sends can be matched to any
   name the site already knows, so the site can see who plays together among
   A2Tools users. Turn it off in Settings → Privacy if that matters to you.

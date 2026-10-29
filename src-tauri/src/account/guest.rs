@@ -68,7 +68,6 @@ pub async fn token(client: &reqwest::Client, app_data_dir: &Path) -> Result<Stri
         .await
         .map_err(|e| GuestError { message: format!("Could not reach a2tools.app: {e}"), retryable: true })?;
     let status = response.status();
-    let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(GuestError {
             message: if status.as_u16() == 429 {
@@ -79,6 +78,8 @@ pub async fn token(client: &reqwest::Client, app_data_dir: &Path) -> Result<Stri
             retryable: status.as_u16() == 429 || status.is_server_error(),
         });
     }
+    let text = crate::bounded_http::text(response, super::MAX_RESPONSE).await
+        .map_err(|message| GuestError { message, retryable: true })?;
     let token = serde_json::from_str::<serde_json::Value>(&text)
         .ok()
         .and_then(|v| v["token"].as_str().map(str::to_string))
@@ -116,7 +117,7 @@ pub async fn delete_uploads(client: &reqwest::Client, app_data_dir: &Path) -> Op
         .await
         .ok()?;
     let status = response.status().as_u16();
-    let text = response.text().await.unwrap_or_default();
+    let text = crate::bounded_http::text(response, super::MAX_RESPONSE).await.ok()?;
     match status {
         200..=299 => {
             let deleted = serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v["deleted"].as_u64()).unwrap_or(0);
@@ -156,7 +157,7 @@ pub async fn merge_into_account(client: &reqwest::Client, app_data_dir: &Path) -
         .await
         .ok()?;
     let status = response.status();
-    let text = response.text().await.unwrap_or_default();
+    let text = crate::bounded_http::text(response, super::MAX_RESPONSE).await.ok()?;
     match status.as_u16() {
         200..=299 => {
             let claimed = serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v["claimed"].as_u64()).unwrap_or(0);
@@ -192,10 +193,10 @@ pub async fn claim_code(client: &reqwest::Client, app_data_dir: &Path) -> Result
         .await
         .map_err(|e| format!("Could not reach a2tools.app: {e}"))?;
     let status = response.status();
-    let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(format!("a2tools.app could not make a claim code ({status})."));
     }
+    let text = crate::bounded_http::text(response, super::MAX_RESPONSE).await?;
     let v: serde_json::Value = serde_json::from_str(&text).map_err(|_| "Unexpected reply from a2tools.app.".to_string())?;
     match (v["code"].as_str(), v["expiresAt"].as_str()) {
         (Some(code), Some(at)) if !code.is_empty() => Ok((code.to_string(), at.to_string())),

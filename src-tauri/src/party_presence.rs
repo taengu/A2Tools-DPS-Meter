@@ -1,7 +1,8 @@
 //! Which party members also run A2Tools: a small mark beside their names.
 //!
-//! On unless turned off (`dpsMeter.partyPresence`, asked once with a popup,
-//! ticked by default). While the player is in a party, the meter registers
+//! Off until enabled in Settings or the one-time, unticked popup. The
+//! consent marker distinguishes a choice from the old popup's implicit yes
+//! on dismissal. While the player is in a party, the meter registers
 //! its own character with a2tools.app and asks about its party members: the
 //! ones not asked about yet, as the party fills (a dungeon's matchmaking, an
 //! invite), and every 10 minutes the ones that weren't using it, in case they
@@ -23,6 +24,11 @@ use tauri::Manager;
 use crate::app::AppState;
 
 pub const SETTING_KEY: &str = "dpsMeter.partyPresence";
+pub const CONSENT_KEY: &str = "dpsMeter.partyPresenceConsent";
+
+fn enabled(get: impl Fn(&str) -> Option<String>) -> bool {
+    get(SETTING_KEY).as_deref() == Some("true") && get(CONSENT_KEY).as_deref() == Some("true")
+}
 const CHECK: Duration = Duration::from_secs(3);
 /// Own registration refreshed, and the "not using it" answers asked again, this often.
 const REFRESH_MS: i64 = 10 * 60_000;
@@ -65,7 +71,12 @@ pub fn spawn(app: tauri::AppHandle) {
         loop {
             tokio::time::sleep(CHECK).await;
             let Some(state) = app.try_state::<AppState>() else { continue };
-            if state.settings.get(SETTING_KEY).as_deref() == Some("false") {
+            if !enabled(|k| state.settings.get(k)) {
+                asked.clear();
+                last_sent = 0;
+                last_refresh = 0;
+                retry_at = 0;
+                failed_wait = FAILED_WAIT_MS;
                 if !users.is_empty() {
                     users.clear();
                     state.data_storage.set_a2tools_users(HashSet::new());
@@ -112,7 +123,11 @@ pub fn spawn(app: tauri::AppHandle) {
             if !res.status().is_success() {
                 continue; // paced or down: asked again on a later pass
             }
-            let Ok(answer) = serde_json::from_str::<serde_json::Value>(&res.text().await.unwrap_or_default()) else { continue };
+            let Ok(text) = crate::bounded_http::text(res, 64 * 1024).await else { continue };
+            if !enabled(|k| state.settings.get(k)) {
+                continue;
+            }
+            let Ok(answer) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
             retry_at = 0;
             failed_wait = FAILED_WAIT_MS;
             if refresh {
@@ -135,6 +150,24 @@ pub fn spawn(app: tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn presence_requires_a_choice_and_a_consent_marker() {
+        for (setting, consent, expected) in [
+            (None, None, false),
+            (Some("true"), None, false),
+            (Some("false"), Some("true"), false),
+            (Some("true"), Some("false"), false),
+            (Some("yes"), Some("true"), false),
+            (Some("true"), Some("true"), true),
+        ] {
+            assert_eq!(enabled(|k| match k {
+                SETTING_KEY => setting.map(str::to_string),
+                CONSENT_KEY => consent.map(str::to_string),
+                _ => None,
+            }), expected);
+        }
+    }
 
     #[test]
     fn a_hash_ignores_case_and_spaces_but_not_the_server() {

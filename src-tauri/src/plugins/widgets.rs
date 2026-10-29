@@ -603,23 +603,27 @@ pub fn close_all(app: &tauri::AppHandle, id: &str) {
 /// plugin ("widget-moved", `{ name, x, y }`), which may lay its widgets out
 /// around it.
 pub fn note_moved(app: &tauri::AppHandle, label: &str, at: tauri::PhysicalPosition<i32>) {
-    static LATEST: std::sync::OnceLock<Mutex<HashMap<String, (i32, i32)>>> = std::sync::OnceLock::new();
+    static LATEST: std::sync::OnceLock<Mutex<HashMap<(String, u64), (i32, i32)>>> = std::sync::OnceLock::new();
     let Some((id, name)) = parse_label(label) else { return };
+    let Some(generation) = super::plugin_generation(app, &id) else { return };
     let key = place_key(&id, &name);
+    let pending_key = (key.clone(), generation);
     let latest = LATEST.get_or_init(Mutex::default);
-    let first = latest.lock().unwrap_or_else(|p| p.into_inner()).insert(key.clone(), (at.x, at.y)).is_none();
+    let first = latest.lock().unwrap_or_else(|p| p.into_inner()).insert(pending_key.clone(), (at.x, at.y)).is_none();
     if !first {
         return;
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(600)).await;
-        let Some((x, y)) = latest.lock().unwrap_or_else(|p| p.into_inner()).remove(&key) else { return };
-        if let Some(state) = app.try_state::<AppState>() {
-            state.settings.set(&key, &format!("{x},{y}"));
-        }
-        let event = serde_json::json!({ "plugin": id, "event": "widget-moved", "data": { "name": name, "x": x, "y": y } });
-        super::emit_plugin(&app, &id, event);
+        let Some((x, y)) = latest.lock().unwrap_or_else(|p| p.into_inner()).remove(&pending_key) else { return };
+        super::while_current_generation(&app, &id, generation, || {
+            if let Some(state) = app.try_state::<AppState>() {
+                state.settings.set(&key, &format!("{x},{y}"));
+            }
+            let event = serde_json::json!({ "plugin": id, "event": "widget-moved", "data": { "name": name, "x": x, "y": y } });
+            super::emit_plugin_current(&app, &id, event, generation);
+        });
     });
 }
 

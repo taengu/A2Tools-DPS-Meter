@@ -13,7 +13,7 @@ One player already had an AI add boss timers to a copy of the meter "in one shot
 - Plugins add features without growing the core: the core gains a plugin host, a small API and a Plugins tab, nothing per plugin.
 - Only reviewed plugins install from the app, and the app itself enforces that (signatures), not just the menu.
 - A plugin can only do what its manifest declares, and the user sees that in plain words before installing.
-- Plugins see only the player's own character. Never other players' names or identities.
+- Character events expose the player's own character. Custom decoders require a separate approval of their complete field layout, including the possibility of reading other players' data.
 - Easy to find, read and submit: one public repo, and a Plugins section on a2tools.app.
 
 ## Non-goals (for now)
@@ -21,7 +21,7 @@ One player already had an AI add boss timers to a copy of the meter "in one shot
 - Native code plugins. A plugin never runs code inside the meter's process, which on Linux holds the packet-capture permission and on Windows may run as administrator.
 - Raw packets. Plugins get named numeric fields the meter extracts for them, never packet bytes.
 - Network access from plugins.
-- Data about other players.
+- Unapproved access to game data or ambient player identity feeds.
 
 ## Overview
 
@@ -68,7 +68,7 @@ pet-souls/
 Each plugin runs in a sandboxed iframe inside a host window the meter owns (one small window per plugin panel, like Details):
 
 - The iframe has `sandbox="allow-scripts"` and no `allow-same-origin`: an opaque origin, no access to the host page, its storage or `window.__TAURI__`.
-- Its files are served by the meter from a `plugin://<id>/` scheme with their own Content-Security-Policy: `default-src 'none'; script-src plugin:; style-src plugin: 'unsafe-inline'; img-src plugin: data:; connect-src 'none'`. No network, no remote scripts.
+- Its files are served by the meter with a restrictive Content-Security-Policy that blocks ordinary network requests and remote scripts. `Connection-Allowlist: (response-origin)` also blocks WebRTC and redirects on supporting engines. Network isolation varies across WebView2 and WebKitGTK versions, so every plugin requires an explicit native trust decision before its code runs or it receives game data. The question discloses possible outbound connections and disclosure of granted data; No is the default and keeps it disabled. Approval is bound to the network policy, complete decoder layouts and permissions, and is requested again when those change.
 - It talks to the meter only by `postMessage` to the host page, which checks every request against the manifest's permissions before passing anything to the backend.
 - The host window's label is added to the Tauri capabilities so the host can call the backend; the iframe itself never can.
 
@@ -84,18 +84,18 @@ A small `a2` object the plugin loads (`plugin://sdk/a2.js`), wrapping postMessag
 | `a2.on("zone", fn)` | `events:zone` | Zone/dungeon entered (dungeon id, difficulty) |
 | `a2.on("fight", fn)` | `events:fight` | Boss fight started/ended: boss code, duration, your damage |
 | `a2.on("decoded:<name>", fn)` | `decoder:<name>` | Fields from one of the plugin's decoders (below) |
-| `a2.storage.get/set(key, value)` | `storage` | The plugin's own JSON store, per character, 1 MB cap |
+| `a2.storage.get/set(key, value)` | `storage` | The plugin's own JSON store: 1 MB per key, 128 keys and 16 MB total |
 | `a2.notify(text, {sound})` | `notify` | A toast in the meter (and a sound if the user allows) |
 | `a2.now()` | none | Server-aligned time, for timers |
 | `a2.on("language", fn)` | none | The meter's language code, at start and whenever the user changes it |
 | `a2.watchFps(on)`, `a2.on("fps", fn)` | `fps` | The game's frame rate about every second, `{ fps, state }` (meter 2.0.78; Windows, counted from DXGI's Present events while the meter runs as administrator) |
 | `a2.fpsAdmin()` | `fps` | Ask the player to restart the meter as administrator (the meter's prompt, then Windows'); it stays so until turned off in Settings |
 
-Everything is asynchronous; nothing blocks the meter. A plugin that floods messages is rate-limited and then paused.
+Everything is asynchronous. The host limits a frame to 64 pending calls and a burst of 120 requests, refilling at 60 requests per second; oversized requests are refused before native invocation.
 
 ## Decoders: game data without raw packets
 
-A plugin that needs game data describes the packets and fields it wants. The meter runs the decoder; the plugin only ever receives the extracted numbers.
+A plugin that needs game data describes the packets and fields it wants. The meter runs the decoder; the plugin receives the extracted numbers. Numbers are a representation, not anonymization: byte-valued fields can reconstruct text, and numeric identifiers can identify another player. The host therefore requires approval of the complete decoder layouts before collecting or replaying their events. Changing a layout requires approval again. This also applies to plugins installed before decoder approval was introduced.
 
 ```json
 "decoders": [{
@@ -111,10 +111,10 @@ A plugin that needs game data describes the packets and fields it wants. The met
 ```
 
 - The meter hooks every decoded game frame at the single point all frames already pass through (`StreamProcessor::parse_perfect_packet`), compares the opcode, and reads the fields in order (`u8`, `u16`, `u32`, `u64`, `i32`, `varint`, `skip:N`).
-- Numbers only. No string fields exist, so no names can ever be extracted.
-- `self` is required: it names the entity field, and the meter drops the event unless that entity is the local player (`DataStorage::local_player_id`). This is what enforces "your own character only".
+- Numbers only. A numeric decoder may still expose names or identities, so its permission description and the host's approval explain that it can include other players' data. The meter additionally refuses known player-identity, party-roster, summon-owner and movement opcodes. This denylist does not make arbitrary other layouts anonymous.
+- Optional `self` names a unique numeric entity field, and the meter drops the event unless that field equals the local player (`DataStorage::local_player_id`). Personal records without an entity field, NPC/boss records and party-health records cannot all use that filter. It is a useful event filter, not a substitute for approving the decoder's complete layout.
 - Events reach a plugin as they are read, with `at` (unix ms) in their meta. A plugin with `events:character` gets them half a second later instead, stamped with the character: at login the game sends some data (the pet list) just before the record saying who is playing. A decoder with `"immediate": true` skips that wait, for records that never come at login (a soul picked up); it still never overtakes an earlier event of its plugin that is waiting. Meters before this ignore the key.
-- At most 16 fields; events per second capped.
+- At most 32 fields at each level, two nested list levels, 4,096 entries per list and 8,192 total JSON values per decoded event. The total limit is shared by sibling and nested fields, including empty list objects. Field names are unique at each level and at most 64 bytes. Oversized layouts or events are refused before allocating their full output.
 - v1 covers whole frames only. Records embedded mid-frame (the meter's own `scan_records`) are a later extension if a plugin needs them.
 
 Reviewers see in the manifest exactly which packet and fields a plugin reads, and the website shows it in plain words.
@@ -131,7 +131,7 @@ For pet souls, the opcode and field layout still have to be found in a capture (
 
 **Submitting:** a pull request adding or updating a plugin folder. CI checks it automatically:
 - manifest schema valid, `apiVersion` supported, version bumped on update;
-- permissions and decoders well formed; no strings in decoders; `self` present;
+- permissions and decoders well formed; numeric fields and meaningful `self` filters where the record has a local-player entity;
 - bundle size limit; no remote URLs in code; no minified or obfuscated code (reviewability);
 - a README and at least one screenshot.
 

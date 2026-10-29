@@ -685,6 +685,7 @@
       "permBossTimers": "Die Feldboss-Timer lesen, die Spieler über a2tools.app teilen",
       "permCharacter": "Name, Server, Klasse und Stufe deines Charakters sehen",
       "permDecoder": "Deine eigenen Spieldaten lesen: {name}",
+      "permDecoderFields": "Ausgewählte Spieldaten lesen (können andere Spieler betreffen): {name}",
       "permNone": "Nichts außer sein Fenster anzuzeigen",
       "enabled": "Aktiviert",
       "enabledTip": "An: startet mit dem Meter. Aus: bleibt installiert, läuft aber nicht.",

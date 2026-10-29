@@ -11,7 +11,9 @@ pub const READ_TIMES_OUT_WHEN_IDLE: bool = false;
 
 pub const FILTER_CHANGE_KEEPS_QUEUE: bool = false;
 
-pub fn prepare() {}
+pub fn load_library() -> Result<libloading::Library, String> {
+    Err(MISSING_HELP.into())
+}
 
 pub fn run_installer(_installer: &std::path::Path) -> Result<(), String> {
     Err("packet capture is not supported on this platform yet".into())

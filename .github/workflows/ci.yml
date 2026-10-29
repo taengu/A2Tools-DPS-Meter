@@ -94,6 +94,9 @@ jobs:
       - name: Test
         working-directory: src-tauri
         run: cargo test --all-targets --no-default-features --features desktop
+      - name: GLib iterator backport regression (optimized)
+        working-directory: src-tauri
+        run: cargo test --release --manifest-path vendor/glib-0.18.5/Cargo.toml --lib test_variant_str_iter
       # The account token lives in the desktop keyring on Linux, and the step
       # above has none, so its tests skip there. Here they run against a real
       # GNOME Keyring in a private D-Bus session.

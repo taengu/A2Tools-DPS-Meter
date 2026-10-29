@@ -11,15 +11,16 @@
 //!
 //! Field types: `u8`, `u16`, `u32`, `u64`, `i32` (little-endian), `varint`,
 //! `skip:N`, and `list` (a `count` of `u8`, `u16`, `u32` or `varint`, then that
-//! many entries of the list's own `fields`). Numbers only: there is no string
-//! type, so no name can be read out of a frame.
+//! many entries of the list's own `fields`). Numeric fields are not an
+//! anonymization boundary: a byte-valued list can reconstruct text. The host
+//! therefore asks for approval of each plugin's complete decoder layout.
 //!
 //! `"self": "<field>"` (plugin API 2) names a top-level number field that holds
 //! an entity id: the meter passes the event on only when that entity is the
 //! player's own character, so a plugin can tell "I did this" without ever
 //! seeing anyone else's id.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 /// Most fields one level of a decoder may have.
@@ -28,11 +29,21 @@ const MAX_FIELDS: usize = 32;
 const MAX_LIST: u64 = 4096;
 /// How deep lists may nest.
 const MAX_DEPTH: u8 = 2;
+/// Total JSON values one decoded event may allocate, including list items.
+/// Per-list limits alone allow nested lists to multiply into millions of
+/// empty objects without consuming a corresponding amount of packet data.
+const MAX_VALUES: usize = 8192;
+const MAX_FIELD_NAME: usize = 64;
 /// Frame types no decoder may read, for any plugin: another player coming
 /// into view (`44 36`, `45 36`) and players' movement (`1e`-`20 37`,
-/// `28`-`2a 37`). A plugin may tell you about your game, never that someone
-/// is near.
-const REFUSED_OPCODES: [[u8; 2]; 8] = [
+/// `28`-`2a 37`), self/party identity and summon-owner records. This is an
+/// additional restriction, not a guarantee that other numeric packet fields
+/// cannot identify players: decoder access needs explicit host approval.
+const REFUSED_OPCODES: [[u8; 2]; 12] = [
+    [0x33, 0x36],
+    [0x02, 0x97],
+    [0x04, 0x8d],
+    [0x40, 0x36],
     [0x44, 0x36],
     [0x45, 0x36],
     [0x1e, 0x37],
@@ -43,7 +54,7 @@ const REFUSED_OPCODES: [[u8; 2]; 8] = [
     [0x2a, 0x37],
 ];
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DecoderSpec {
     pub name: String,
     /// Two bytes in hex, as frames are logged: `"0D 90"`.
@@ -59,7 +70,7 @@ pub struct DecoderSpec {
     pub immediate: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FieldSpec {
     #[serde(default)]
     pub name: Option<String>,
@@ -122,7 +133,8 @@ impl Decoder {
     /// Decode a frame's body (the bytes after its type) into the fields.
     pub fn decode(&self, body: &[u8]) -> Option<Value> {
         let mut pos = 0;
-        decode_fields(&self.fields, body, &mut pos).map(Value::Object)
+        let mut remaining = MAX_VALUES;
+        decode_fields(&self.fields, body, &mut pos, &mut remaining).map(Value::Object)
     }
 }
 
@@ -130,8 +142,15 @@ fn check_fields(fields: &[FieldSpec], depth: u8) -> Result<(), String> {
     if fields.len() > MAX_FIELDS {
         return Err(format!("more than {MAX_FIELDS} fields"));
     }
+    let mut names = std::collections::HashSet::new();
     for field in fields {
         let kind = field.kind.as_str();
+        if !kind.starts_with("skip:") {
+            let name = field.name.as_deref().unwrap_or_default();
+            if name.is_empty() || name.len() > MAX_FIELD_NAME || !names.insert(name) {
+                return Err(format!("field names must be unique, nonempty and at most {MAX_FIELD_NAME} bytes"));
+            }
+        }
         match kind {
             "u8" | "u16" | "u32" | "u64" | "i32" | "varint" => {
                 if field.name.as_deref().is_none_or(str::is_empty) {
@@ -174,6 +193,9 @@ fn varint(body: &[u8], pos: &mut usize) -> Option<u64> {
     let mut value = 0u64;
     for shift in (0..64).step_by(7) {
         let byte = *take(body, pos, 1)?.first()?;
+        if shift == 63 && byte > 1 {
+            return None;
+        }
         value |= u64::from(byte & 0x7F) << shift;
         if byte & 0x80 == 0 {
             return Some(value);
@@ -193,7 +215,7 @@ fn number(kind: &str, body: &[u8], pos: &mut usize) -> Option<u64> {
     })
 }
 
-fn decode_fields(fields: &[FieldSpec], body: &[u8], pos: &mut usize) -> Option<Map<String, Value>> {
+fn decode_fields(fields: &[FieldSpec], body: &[u8], pos: &mut usize, remaining: &mut usize) -> Option<Map<String, Value>> {
     let mut out = Map::new();
     for field in fields {
         let kind = field.kind.as_str();
@@ -201,6 +223,7 @@ fn decode_fields(fields: &[FieldSpec], body: &[u8], pos: &mut usize) -> Option<M
             take(body, pos, n.parse().ok()?)?;
             continue;
         }
+        *remaining = remaining.checked_sub(1)?;
         let name = field.name.clone().unwrap_or_default();
         match kind {
             "i32" => {
@@ -212,10 +235,13 @@ fn decode_fields(fields: &[FieldSpec], body: &[u8], pos: &mut usize) -> Option<M
                 if count > MAX_LIST {
                     return None;
                 }
+                // Charge every item before reserving its array, including
+                // empty objects (whose fields consume no packet bytes).
+                *remaining = remaining.checked_sub(count as usize)?;
                 let inner = field.fields.as_deref().unwrap_or(&[]);
                 let mut items = Vec::with_capacity(count as usize);
                 for _ in 0..count {
-                    items.push(Value::Object(decode_fields(inner, body, pos)?));
+                    items.push(Value::Object(decode_fields(inner, body, pos, remaining)?));
                 }
                 out.insert(name, Value::Array(items));
             }
@@ -260,7 +286,7 @@ mod tests {
 
     #[test]
     fn other_players_records_are_refused() {
-        for opcode in ["45 36", "44 36", "29 37", "2A 37"] {
+        for opcode in ["45 36", "44 36", "29 37", "2A 37", "33 36", "02 97", "04 8D", "40 36"] {
             let json = format!(r#"{{"name":"x","opcode":"{opcode}","fields":[{{"name":"id","type":"varint"}}]}}"#);
             assert!(Decoder::compile(&serde_json::from_str(&json).unwrap()).is_err(), "{opcode}");
         }
@@ -345,5 +371,52 @@ mod tests {
     fn immediate_is_off_unless_set() {
         assert!(!spec(r#"{"name":"a","opcode":"0D 90","fields":[]}"#).immediate);
         assert!(spec(r#"{"name":"a","opcode":"0D 90","immediate":true,"fields":[]}"#).immediate);
+    }
+
+    #[test]
+    fn nested_empty_lists_cannot_amplify_a_small_packet() {
+        let d = spec(r#"{"name":"x","opcode":"0D 90","fields":[
+            {"name":"outer","type":"list","count":"u16","fields":[
+                {"name":"inner","type":"list","count":"u16","fields":[]}]}]}"#);
+        let mut body = 4096u16.to_le_bytes().to_vec();
+        for _ in 0..4096 {
+            body.extend(4096u16.to_le_bytes());
+        }
+        assert!(d.decode(&body).is_none(), "16 million empty objects must be refused");
+        let small = [2, 0, 3, 0, 4, 0];
+        let value = d.decode(&small).expect("ordinary nested lists still work");
+        assert_eq!(value["outer"][0]["inner"].as_array().unwrap().len(), 3);
+        assert_eq!(value["outer"][1]["inner"].as_array().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn value_budget_is_shared_by_sibling_fields() {
+        let d = spec(r#"{"name":"x","opcode":"0D 90","fields":[
+            {"name":"a","type":"list","count":"u16","fields":[]},
+            {"name":"b","type":"list","count":"u16","fields":[]}]}"#);
+        assert!(d.decode(&[0, 16, 0, 16]).is_none());
+        assert!(d.decode(&[0, 16, 0, 0]).is_some());
+    }
+
+    #[test]
+    fn overflowing_varints_are_refused() {
+        let d = spec(r#"{"name":"x","opcode":"0D 90","fields":[{"name":"n","type":"varint"}]}"#);
+        let mut max = vec![0xff; 9];
+        max.push(1);
+        assert_eq!(d.decode(&max).unwrap()["n"].as_u64(), Some(u64::MAX));
+        max[9] = 2;
+        assert!(d.decode(&max).is_none());
+        max[9] = 0x81;
+        assert!(d.decode(&max).is_none());
+    }
+
+    #[test]
+    fn field_names_cannot_overwrite_a_self_filter_or_amplify_keys() {
+        let duplicate = r#"{"name":"x","opcode":"0D 90","self":"actor","fields":[
+            {"name":"actor","type":"varint"},{"name":"actor","type":"u32"}]}"#;
+        assert!(Decoder::compile(&serde_json::from_str(duplicate).unwrap()).is_err());
+        let mut oversized: DecoderSpec = serde_json::from_str(r#"{"name":"x","opcode":"0D 90","fields":[{"name":"n","type":"u8"}]}"#).unwrap();
+        oversized.fields[0].name = Some("n".repeat(MAX_FIELD_NAME + 1));
+        assert!(Decoder::compile(&oversized).is_err());
     }
 }

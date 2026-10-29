@@ -10,13 +10,21 @@ fn wide(s: &str) -> Vec<u16> {
 
 /// A Yes/No question. Blocking; true for Yes.
 pub fn ask_yes_no(title: &str, message: &str) -> bool {
+    ask(title, message, false)
+}
+
+pub fn ask_yes_no_default_no(title: &str, message: &str) -> bool {
+    ask(title, message, true)
+}
+
+fn ask(title: &str, message: &str, default_no: bool) -> bool {
     let (title, message) = (wide(title), wide(message));
     let result = unsafe {
         MessageBoxW(
             None,
             PCWSTR(message.as_ptr()),
             PCWSTR(title.as_ptr()),
-            MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND,
+            MB_YESNO | MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND | if default_no { MB_DEFBUTTON2 } else { MB_DEFBUTTON1 },
         )
     };
     result == IDYES

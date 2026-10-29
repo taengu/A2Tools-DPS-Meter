@@ -86,7 +86,17 @@ impl Manager {
             }
             *self.error.lock() = None;
         } else {
-            let key = ensure_token(settings);
+            let key = match ensure_token(settings) {
+                Ok(key) => key,
+                Err(error) => {
+                    if let Some(r) = running.take() {
+                        r.server.stop();
+                    }
+                    *self.error.lock() = Some(error);
+                    drop(running);
+                    return self.status(settings);
+                }
+            };
             match running.as_ref() {
                 Some(r) if r.requested_port == port => r.server.set_key(key),
                 _ => {
@@ -158,37 +168,32 @@ pub fn overlay_url(ip: Ipv4Addr, port: u16, token: &str) -> String {
 }
 
 /// The overlay key, made on first use.
-fn ensure_token(settings: &Settings) -> String {
+fn ensure_token(settings: &Settings) -> Result<String, String> {
     match settings.get(TOKEN_KEY).filter(|t| t.len() >= 16) {
-        Some(token) => token,
+        Some(token) => Ok(token),
         None => {
-            let token = new_token();
+            let token = new_token()?;
             settings.set(TOKEN_KEY, &token);
-            token
+            Ok(token)
         }
     }
 }
 
 /// Replace the key, which cuts off every link handed out with the old one.
-pub fn regenerate_token(settings: &Settings) {
-    settings.set(TOKEN_KEY, &new_token());
+pub fn regenerate_token(settings: &Settings) -> Result<(), String> {
+    settings.set(TOKEN_KEY, &new_token()?);
+    Ok(())
 }
 
 /// 128 random bits as hex: URL-safe and easy to compare.
-fn new_token() -> String {
+fn new_token() -> Result<String, String> {
+    token_with_random(getrandom::fill)
+}
+
+fn token_with_random(fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>) -> Result<String, String> {
     let mut bytes = [0u8; 16];
-    if getrandom::fill(&mut bytes).is_err() {
-        // No OS randomness (should not happen on a desktop): still unguessable
-        // enough across a LAN, from the clock and a per-process hash seed.
-        use std::hash::{BuildHasher, Hasher};
-        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-        h.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
-        let a = h.finish();
-        h.write_u64(a);
-        bytes[..8].copy_from_slice(&a.to_le_bytes());
-        bytes[8..].copy_from_slice(&h.finish().to_le_bytes());
-    }
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    fill(&mut bytes).map_err(|_| "Cannot obtain a secure random overlay key; the overlay was not started or re-keyed".to_string())?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// This PC's private IPv4 addresses, the one with the default route first.
@@ -304,7 +309,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!(
             "a2t-stream-overlay-{}-{}",
             std::process::id(),
-            new_token()
+            new_token().unwrap()
         ));
         std::fs::create_dir_all(&dir).unwrap();
         (Settings::new(dir.clone()), dir)
@@ -330,7 +335,7 @@ mod tests {
         assert_eq!(get(addr, &format!("/overlay/snapshot?key={token}")).0, 200);
 
         // A new key: same server, old links refused.
-        regenerate_token(&settings);
+        regenerate_token(&settings).unwrap();
         manager.sync(&settings, || panic!("re-keying must not restart the server"));
         let new_token = settings.get(TOKEN_KEY).unwrap();
         assert_ne!(token, new_token);
@@ -371,10 +376,17 @@ mod tests {
 
     #[test]
     fn tokens_are_random_hex() {
-        let (a, b) = (new_token(), new_token());
+        let (a, b) = (new_token().unwrap(), new_token().unwrap());
         assert_eq!(a.len(), 32);
         assert!(a.bytes().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn a_random_source_failure_does_not_fall_back_to_a_predictable_key() {
+        assert!(token_with_random(|_| Err(getrandom::Error::UNSUPPORTED)).is_err());
+        let token = token_with_random(|bytes| { bytes.fill(0xAB); Ok(()) }).unwrap();
+        assert_eq!(token, "ab".repeat(16));
     }
 
     #[test]

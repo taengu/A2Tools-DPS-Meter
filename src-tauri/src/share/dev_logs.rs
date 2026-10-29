@@ -45,6 +45,7 @@ pub fn files_to_send(app_data_dir: &Path) -> Vec<PathBuf> {
 /// The most of the debug log a report sends: its newest part, under the
 /// site's 40 MB a file.
 const DEBUG_LOG_MAX_BYTES: usize = 32 * 1024 * 1024;
+const MAX_RESPONSE: usize = 64 * 1024;
 
 pub fn newest_captures(app_data_dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(app_data_dir) else { return Vec::new() };
@@ -117,7 +118,7 @@ pub async fn send(client: &reqwest::Client, app_data_dir: &Path) -> Result<SendR
         .map_err(|e| format!("Could not reach a2tools.app: {e}"))?;
     let status = response.status();
     let reply: serde_json::Value =
-        serde_json::from_str(&response.text().await.unwrap_or_default()).unwrap_or_default();
+        serde_json::from_str(&crate::bounded_http::text(response, MAX_RESPONSE).await?).unwrap_or_default();
     if !status.is_success() {
         return Err(server_message(&reply, status));
     }
@@ -141,7 +142,7 @@ pub async fn send(client: &reqwest::Client, app_data_dir: &Path) -> Result<SendR
         let status = response.status();
         if !status.is_success() {
             let reply: serde_json::Value =
-                serde_json::from_str(&response.text().await.unwrap_or_default()).unwrap_or_default();
+                serde_json::from_str(&crate::bounded_http::text(response, MAX_RESPONSE).await?).unwrap_or_default();
             return Err(format!("{name}: {}", server_message(&reply, status)));
         }
         sent += 1;

@@ -464,8 +464,27 @@ fn apply_overlay_lock(app: &tauri::AppHandle, locked: bool) {
 // ===== TAURI COMMANDS =====
 
 #[tauri::command]
-fn get_app_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+fn get_app_version() -> String {
+    displayed_app_version(env!("CARGO_PKG_VERSION"))
+}
+
+// Numeric SemVer build metadata also gives the Windows executable its fourth
+// version component. Keep this fork's release identity off upstream's channel.
+const FORK_PACKAGE_VERSION: &str = "2.0.86+1";
+
+fn displayed_app_version(version: &str) -> String {
+    if version == FORK_PACKAGE_VERSION {
+        return format!("{} (Talal Alyaseen fork)", version.replace('+', "."));
+    }
+    version.to_string()
+}
+
+fn fork_update_status(version: &str) -> Option<serde_json::Value> {
+    (version == FORK_PACKAGE_VERSION).then(|| serde_json::json!({
+        "state": "fork",
+        "current": displayed_app_version(version),
+        "message": "Talal Alyaseen fork: install updates from this fork's releases. Official upstream packages are not installed by this build.",
+    }))
 }
 
 // Details read shared immutable lookups and storage snapshots, without taking
@@ -950,7 +969,7 @@ async fn stream_overlay_configure(
 /// A fresh overlay key: every URL handed out before stops working.
 #[tauri::command]
 async fn stream_overlay_new_key(app: tauri::AppHandle) -> Result<crate::stream_overlay::Status, String> {
-    crate::stream_overlay::regenerate_token(&app.state::<AppState>().settings);
+    crate::stream_overlay::regenerate_token(&app.state::<AppState>().settings)?;
     Ok(crate::stream_overlay::sync(&app))
 }
 
@@ -1563,6 +1582,9 @@ async fn write_cached_icon(app: tauri::AppHandle, key: String, data: String) -> 
 /// is out: declined, or this install's package manager updates it).
 #[tauri::command]
 async fn check_for_update(app: tauri::AppHandle, state: tauri::State<'_, AppState>, ask: Option<bool>) -> Result<serde_json::Value, String> {
+    if let Some(status) = fork_update_status(env!("CARGO_PKG_VERSION")) {
+        return Ok(status);
+    }
     let manifest = crate::update_check::fetch(&state.http).await?;
     let current = env!("CARGO_PKG_VERSION");
     let latest = manifest.version.trim_start_matches(['v', 'V']).to_string();
@@ -1756,20 +1778,28 @@ async fn download_and_install_update(app: &tauri::AppHandle, url: &str, expected
     if !response.status().is_success() {
         return Err(format!("HTTP {}", response.status()));
     }
+    const MAX_UPDATE_BYTES: u64 = 256 * 1024 * 1024;
     let total_size = response.content_length().unwrap_or(0);
+    if total_size > MAX_UPDATE_BYTES {
+        return Err("the update package exceeds the download limit".into());
+    }
     let msi_path = update_download_path(&url_owned)?;
 
-    let mut file = tokio::fs::File::create(&msi_path).await.map_err(|e| e.to_string())?;
+    let mut file = tokio::fs::OpenOptions::new().write(true).create_new(true)
+        .open(&msi_path).await.map_err(|e| e.to_string())?;
     let mut downloaded: u64 = 0;
     let mut stream = response.bytes_stream();
     let mut last_pct: u64 = 0;
     let mut hasher = Sha256::new();
 
-    while let Some(chunk) = stream.next().await {
+    let transfer: Result<(), String> = async {
+      while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
+        downloaded = downloaded.checked_add(chunk.len() as u64)
+            .filter(|&n| n <= MAX_UPDATE_BYTES)
+            .ok_or("the update package exceeds the download limit")?;
         hasher.update(&chunk);
         file.write_all(&chunk).await.map_err(|e| e.to_string())?;
-        downloaded += chunk.len() as u64;
         if total_size > 0 {
             let pct = (downloaded * 100 / total_size).min(100);
             if pct != last_pct {
@@ -1778,9 +1808,14 @@ async fn download_and_install_update(app: &tauri::AppHandle, url: &str, expected
                 tracing::info!("Download: {}%", pct);
             }
         }
-    }
-    file.flush().await.map_err(|e| e.to_string())?;
+      }
+      file.flush().await.map_err(|e| e.to_string())
+    }.await;
     drop(file);
+    if let Err(error) = transfer {
+        let _ = tokio::fs::remove_file(&msi_path).await;
+        return Err(error);
+    }
 
     let actual: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
     if !package_hash_matches(expected_sha256, &actual) {
@@ -1907,14 +1942,11 @@ async fn fetch_supporter_roster(client: &reqwest::Client, etag: Option<&str>) ->
         .get(reqwest::header::ETAG)
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
-    let Ok(bytes) = response.bytes().await else {
+    let Ok(bytes) = crate::bounded_http::bytes(response, 8 * 1024 * 1024).await else {
         return RosterFetch::Failed;
     };
     // A roster for ten thousand supporters is about 80 KB; anything far past
     // that is not one of ours.
-    if bytes.len() > 8 * 1024 * 1024 {
-        return RosterFetch::Failed;
-    }
     match crate::supporters::Roster::parse(&bytes) {
         Some(roster) => RosterFetch::Fresh(roster, tag),
         None => RosterFetch::Failed,
@@ -4417,6 +4449,7 @@ pub fn run() {
             crate::plugins::plugin_set_enabled,
             crate::plugins::plugin_set_hide,
             crate::plugins::plugin_hello,
+            crate::plugins::plugin_open_url,
             open_settings_at,
             take_settings_section,
             crate::plugins::dock::dock_hello,
@@ -4549,6 +4582,17 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fork_version_is_distinct_and_cannot_offer_an_upstream_installer() {
+        assert_eq!(env!("CARGO_PKG_VERSION"), super::FORK_PACKAGE_VERSION);
+        assert_eq!(super::displayed_app_version("2.0.86+1"), "2.0.86.1 (Talal Alyaseen fork)");
+        assert_eq!(super::displayed_app_version("2.0.86"), "2.0.86");
+        let fork = super::fork_update_status("2.0.86+1").unwrap();
+        assert_eq!(fork["state"], "fork");
+        assert!(fork.get("latest").is_none());
+        assert!(super::fork_update_status("2.0.86").is_none());
+    }
+
     // Updates are an online build's: the offline one has no updater.
     #[cfg(feature = "online")]
     #[test]

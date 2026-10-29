@@ -2,8 +2,8 @@
 //! (`capture::supply_requests`) goes to a2tools.app, whose Profiteer shows
 //! each server's current requests and what they're worth.
 //!
-//! On by default, with the field boss timers: Settings' "Sync useful data to
-//! A2Tools" (`boss_report::shares_data`, "false" turns it off). What
+//! Opt-in, with the field boss timers: Settings' "Sync useful data to
+//! A2Tools" (`boss_report::shares_data`, explicit "true" enables it). What
 //! is sent: the server, and each board whose window is open (its id, tab,
 //! window and request ids). Not the character, nor its progress on them.
 //!

@@ -136,15 +136,11 @@ fn safe_path(path: &str) -> bool {
 }
 
 async fn get(http: &reqwest::Client, url: &str, cap: usize) -> Result<Vec<u8>, String> {
-    let response = http.get(url).send().await.map_err(|e| format!("{url}: {e}"))?;
+    let response = http.get(url).timeout(std::time::Duration::from_secs(30)).send().await.map_err(|e| format!("{url}: {e}"))?;
     if !response.status().is_success() {
         return Err(format!("{url}: {}", response.status()));
     }
-    let bytes = response.bytes().await.map_err(|e| format!("{url}: {e}"))?;
-    if bytes.len() > cap {
-        return Err(format!("{url}: larger than {cap} bytes"));
-    }
-    Ok(bytes.to_vec())
+    crate::bounded_http::bytes(response, cap).await.map_err(|e| format!("{url}: {e}"))
 }
 
 /// Download the catalog and check its signature. The list and its signature
@@ -213,7 +209,7 @@ pub async fn install(http: &reqwest::Client, entry: &Entry, plugins_dir: &Path) 
             return Err(format!("{}: file {path:?} is not allowed", entry.name));
         }
         let url = format!("{}/{}/{}/{path}", base_url(), entry.id, entry.version);
-        let bytes = get(http, &url, MAX_PLUGIN).await?;
+        let bytes = get(http, &url, MAX_PLUGIN - total).await?;
         total += bytes.len();
         if total > MAX_PLUGIN {
             return Err(format!("{} is larger than {MAX_PLUGIN} bytes", entry.name));

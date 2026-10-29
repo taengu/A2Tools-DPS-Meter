@@ -31,6 +31,7 @@
     // gets each event once: the ones it missed while closed, none twice.
     const CURSOR_KEY = `a2plugin.cursor.${id}`;
     let run = null;
+    let generation = null;
     let delivered = 0;
     const saveCursor = () => {
       try { localStorage.setItem(CURSOR_KEY, JSON.stringify({ run, seq: delivered })); } catch {}
@@ -47,6 +48,7 @@
     };
     // A numbered event from the meter: skipped if already handed over.
     const deliverLogged = (e) => {
+      if (e?.generation !== generation) return;
       if (typeof e?.seq !== "number" || e.seq <= delivered) return;
       delivered = e.seq;
       deliver(e.event, e.data, { character: e.character ?? null, at: e.at ?? null });
@@ -163,9 +165,8 @@
         toast(String(text));
         return true;
       },
-      // A link clicked in the plugin's page (the SDK passes on https ones): its
-      // frame may not open windows, so the browser opens it. Only plain https
-      // addresses, and one a second, so a plugin can't open a stream of tabs.
+      // The native host asks before opening the exact destination. A message
+      // from this frame alone cannot establish that the player clicked a link.
       openUrl: ([raw]) => {
         const url = new URL(String(raw));
         if (url.protocol !== "https:" || url.username || url.password || url.href.length > 2048) {
@@ -174,10 +175,13 @@
         const now = Date.now();
         if (now - lastLinkAt < 1000) throw new Error("one link a second");
         lastLinkAt = now;
-        return invoke("open_url", { url: url.href });
+        return call("plugin_open_url", { url: url.href });
       },
     };
     let lastLinkAt = 0;
+    let pendingCalls = 0;
+    let callTokens = 120;
+    let tokenTime = Date.now();
 
     // Only this plugin's frame speaks for it: the source is checked against
     // its frame's window, whatever the message says.
@@ -185,12 +189,30 @@
       if (!frame || event.source !== frame.contentWindow) return;
       const msg = event.data;
       if (!msg || msg.a2 !== 1 || !msg.id || typeof msg.call !== "string") return;
+      if (!['string', 'number'].includes(typeof msg.id) || String(msg.id).length > 128 || msg.call.length > 80) return;
       const fn = calls[msg.call];
+      const now = Date.now();
+      callTokens = Math.min(120, callTokens + Math.max(0, now - tokenTime) * 0.06);
+      tokenTime = now;
+      if (pendingCalls >= 64 || callTokens < 1) {
+        send({ id: msg.id, error: 'too many plugin requests; wait before retrying' });
+        return;
+      }
+      callTokens -= 1;
+      try {
+        if (JSON.stringify(msg).length > 2 * 1024 * 1024 + 4096) throw new Error('plugin request too large');
+      } catch {
+        send({ id: msg.id, error: 'plugin request too large or not serializable' });
+        return;
+      }
+      pendingCalls += 1;
       try {
         if (!fn) throw new Error(`unknown call ${msg.call}`);
         send({ id: msg.id, result: await fn(Array.isArray(msg.args) ? msg.args : []) });
       } catch (e) {
         send({ id: msg.id, error: String(e?.message || e) });
+      } finally {
+        pendingCalls -= 1;
       }
     };
     window.addEventListener("message", onMessage);
@@ -198,11 +220,17 @@
     // A "plugin-event" for this plugin (the page has checked it is).
     const receive = (payload) => {
       if (typeof payload?.event !== "string") return;
+      // Keep the original epoch until hello establishes this instance's.
+      // Passing an early unnumbered event straight to deliver loses it.
+      if (early) {
+        if (early.length < 2048) early.push(payload);
+        return;
+      }
+      if (generation !== null && typeof payload.generation === "number" && payload.generation !== generation) return;
       // Sent to this plugin's widgets, not to its window.
       if (payload.event === "widget" || payload.event === "locked") return;
       if ((payload.event === "widget-message" || payload.event === "widget-moved") && !allowed("widgets")) return;
       if (typeof payload.seq !== "number") deliver(payload.event, payload.data);
-      else if (early) early.push(payload);
       else deliverLogged(payload);
     };
 
@@ -224,13 +252,16 @@
         manifest = hello.manifest;
         for (const [event, data] of startState(hello)) deliver(event, data);
         run = hello.run;
+        generation = hello.generation;
         try {
           const cursor = JSON.parse(localStorage.getItem(CURSOR_KEY) || "null");
           if (cursor?.run === run) delivered = Number(cursor.seq) || 0;
         } catch {}
-        const logged = [...(hello.replay || []), ...early].sort((a, b) => a.seq - b.seq);
+        const arrived = early;
+        const logged = [...(hello.replay || []), ...arrived.filter(e => typeof e.seq === "number")].sort((a, b) => a.seq - b.seq);
         early = null;
         for (const e of logged) deliverLogged(e);
+        for (const e of arrived.filter(e => typeof e.seq !== "number")) receive(e);
         frame = document.createElement("iframe");
         frame.setAttribute("sandbox", "allow-scripts");
         frame.setAttribute("referrerpolicy", "no-referrer");

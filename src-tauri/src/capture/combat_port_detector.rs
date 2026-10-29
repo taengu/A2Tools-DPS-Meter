@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,6 +17,8 @@ fn now_ms() -> i64 {
 /// take precedence. A loopback flow locks immediately and ignores this window;
 /// direct-connection users simply wait this long once before the first lock.
 const LOOPBACK_GRACE_MS: i64 = 2500;
+const CANDIDATE_IDLE_MS: i64 = 30_000;
+const MAX_CANDIDATES: usize = 64;
 
 /// Global combat port detector — identifies which network device and port
 /// carry AION 2 game traffic by looking for the combat signature bytes.
@@ -35,8 +37,7 @@ pub struct CombatPortDetector {
 struct Inner {
     locked_port: Option<u16>,
     locked_device: Option<String>,
-    candidates: HashMap<u16, Option<String>>,
-    device_flows: HashMap<String, HashSet<(u16, u16)>>,
+    candidates: HashMap<u16, (Option<String>, i64)>,
     preferred_device: Option<String>,
     /// Wall-clock of the first combat candidate seen since the last reset; used
     /// to time the loopback-preference grace window.
@@ -50,7 +51,6 @@ impl CombatPortDetector {
                 locked_port: None,
                 locked_device: None,
                 candidates: HashMap::new(),
-                device_flows: HashMap::new(),
                 preferred_device: None,
                 first_candidate_ms: 0,
             }),
@@ -88,7 +88,7 @@ impl CombatPortDetector {
         self.inner.lock().preferred_device = device.map(|d| d.trim().to_string()).filter(|d| !d.is_empty());
     }
 
-    pub fn register_candidate(&self, port: u16, flow_key: (u16, u16), device_name: Option<&str>) {
+    pub fn register_candidate(&self, port: u16, _flow_key: (u16, u16), device_name: Option<&str>) {
         let mut inner = self.inner.lock();
         let trimmed = device_name.map(|d| d.trim().to_string()).filter(|d| !d.is_empty());
 
@@ -103,18 +103,20 @@ impl CombatPortDetector {
             return;
         }
 
-        if inner.first_candidate_ms == 0 {
-            inner.first_candidate_ms = now_ms();
+        let now = now_ms();
+        inner.candidates.retain(|_, (_, last)| now.saturating_sub(*last) <= CANDIDATE_IDLE_MS);
+        if inner.candidates.is_empty() {
+            inner.first_candidate_ms = now;
         }
 
-        if let Some(ref dev) = trimmed {
-            inner.device_flows.entry(dev.clone()).or_default().insert(flow_key);
+        if !inner.candidates.contains_key(&port) && inner.candidates.len() >= MAX_CANDIDATES {
+            return;
         }
 
         // Note: loopback flows are no longer locked here on sight. Locking is
         // gated on the flow actually producing combat (see confirm_candidate),
         // so a coincidental loopback service can't hijack the lock.
-        inner.candidates.entry(port).or_insert(trimmed);
+        inner.candidates.entry(port).or_insert((trimmed, now)).1 = now;
     }
 
     pub fn confirm_candidate(&self, port_a: u16, port_b: u16, device_name: Option<&str>) {
@@ -137,7 +139,7 @@ impl CombatPortDetector {
         };
 
         let trimmed = device_name.map(|d| d.trim().to_string()).filter(|d| !d.is_empty());
-        let candidate_device = inner.candidates.get(&port).cloned().flatten();
+        let candidate_device = inner.candidates.get(&port).and_then(|(device, _)| device.clone());
         let device_for_lock = trimmed.or(candidate_device);
 
         // A loopback flow is the relay/ping-reducer's local tunnel — the exact
@@ -195,7 +197,6 @@ impl CombatPortDetector {
             inner.locked_device = device.clone();
             info!("Combat port locked: {}", port);
             inner.candidates.clear();
-            inner.device_flows.clear();
         }
     }
 
@@ -220,7 +221,6 @@ impl CombatPortDetector {
         inner.locked_port = None;
         inner.locked_device = None;
         inner.candidates.clear();
-        inner.device_flows.clear();
         inner.first_candidate_ms = 0;
         self.last_parsed_at_ms.store(0, Ordering::Relaxed);
         self.locked_port_now.store(0, Ordering::Relaxed);
@@ -237,4 +237,23 @@ fn is_loopback(name: &str) -> bool {
 
 fn is_loopback_opt(name: &Option<String>) -> bool {
     name.as_ref().is_some_and(|n| is_loopback(n))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn candidate_bookkeeping_has_a_global_limit_and_discards_idle_ports() {
+        let detector = CombatPortDetector::new();
+        for port in 1..1000 {
+            detector.register_candidate(port, (port, 50000), Some("eth0"));
+        }
+        assert_eq!(detector.inner.lock().candidates.len(), MAX_CANDIDATES);
+        for (_, last) in detector.inner.lock().candidates.values_mut() {
+            *last = now_ms() - CANDIDATE_IDLE_MS - 1;
+        }
+        detector.register_candidate(2000, (2000, 50000), Some("eth0"));
+        assert_eq!(detector.inner.lock().candidates.len(), 1);
+    }
 }

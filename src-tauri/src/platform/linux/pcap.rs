@@ -25,15 +25,24 @@ pub const READ_TIMES_OUT_WHEN_IDLE: bool = false;
 pub const FILTER_CHANGE_KEEPS_QUEUE: bool = true;
 
 /// Nothing to set up before loading libpcap.
-pub fn prepare() {}
+pub fn load_library() -> Result<libloading::Library, String> {
+    let mut errors = Vec::new();
+    for name in LIBRARIES {
+        // SAFETY: libpcap is loaded from the system loader's library paths.
+        match unsafe { libloading::Library::new(name) } {
+            Ok(library) => return Ok(library),
+            Err(error) => errors.push(format!("{name}: {error}")),
+        }
+    }
+    Err(errors.join("; "))
+}
 
 pub fn run_installer(_installer: &std::path::Path) -> Result<(), String> {
     Err("the meter does not install libpcap; the distribution's packages do".into())
 }
 
 pub fn library_available() -> bool {
-    // SAFETY: loading libpcap runs no initialisation we depend on not running.
-    LIBRARIES.iter().any(|name| unsafe { libloading::Library::new(name).is_ok() })
+    load_library().is_ok()
 }
 
 /// Skip libpcap's pseudo-devices. "any" sees every packet a second time on top

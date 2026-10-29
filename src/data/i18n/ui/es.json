@@ -685,6 +685,7 @@
       "permBossTimers": "Leer los temporizadores de jefes de campo que los jugadores comparten en a2tools.app",
       "permCharacter": "Ver el nombre, servidor, clase y nivel de tu personaje",
       "permDecoder": "Leer tus propios datos del juego: {name}",
+      "permDecoderFields": "Leer datos seleccionados del juego (pueden incluir a otros jugadores): {name}",
       "permNone": "Nada más que mostrar su ventana",
       "enabled": "Activado",
       "enabledTip": "Activado: se inicia con el medidor. Desactivado: sigue instalado, pero no se ejecuta.",

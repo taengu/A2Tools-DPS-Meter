@@ -51,6 +51,58 @@ const MAX_DECOMPRESSED_BYTES: usize = 1_000_000;
 /// Bundles nest. Four is far past anything observed and stops a crafted file
 /// from recursing us to death. The outermost bundle is depth 1.
 pub const MAX_BUNDLE_DEPTH: usize = 4;
+/// A single parser read may contain many small bundles, each expanding close
+/// to the individual limit. Bound their combined expansion and failed probes
+/// as well as their nesting depth.
+const MAX_DECOMPRESSED_TOTAL_BYTES: usize = 8 * 1024 * 1024;
+const MAX_BUNDLE_ATTEMPTS: usize = 256;
+
+/// Shared by every bundle opened while processing one input, including nested
+/// and embedded bundles. Charge the declared output before asking LZ4 to
+/// allocate; failed blocks do not refund the work already attempted.
+#[derive(Debug)]
+pub struct DecompressionBudget {
+    bytes_left: usize,
+    attempts_left: usize,
+}
+
+impl Default for DecompressionBudget {
+    fn default() -> Self {
+        Self::new(MAX_DECOMPRESSED_TOTAL_BYTES, MAX_BUNDLE_ATTEMPTS)
+    }
+}
+
+impl DecompressionBudget {
+    pub fn new(max_bytes: usize, max_attempts: usize) -> Self {
+        Self { bytes_left: max_bytes, attempts_left: max_attempts }
+    }
+
+    pub fn is_exhausted(&self) -> bool {
+        self.bytes_left == 0 || self.attempts_left == 0
+    }
+
+    pub fn decompress(&mut self, payload: &[u8]) -> Option<Vec<u8>> {
+        let size = self.charge(payload)?;
+        lz4_flex::decompress(&payload[6..], size).ok()
+    }
+
+    /// Reserve one expansion without allocating. A caller applying both an
+    /// input budget and an operation budget can charge one, then decompress
+    /// through the other, without opening the same block twice.
+    pub fn charge(&mut self, payload: &[u8]) -> Option<usize> {
+        if self.is_exhausted() {
+            return None;
+        }
+        self.attempts_left -= 1;
+        let size = bundle_output_size(payload)?;
+        let Some(left) = self.bytes_left.checked_sub(size) else {
+            self.bytes_left = 0;
+            return None;
+        };
+        self.bytes_left = left;
+        Some(size)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameKind {
@@ -355,14 +407,19 @@ pub fn length_value(body_len: usize) -> u32 {
 /// anything malformed, because a bundle that will not decompress is a resync
 /// artefact rather than an error worth surfacing.
 pub fn decompress_bundle(payload: &[u8]) -> Option<Vec<u8>> {
-    if payload.len() < 7 {
+    let size = bundle_output_size(payload)?;
+    lz4_flex::decompress(&payload[6..], size).ok()
+}
+
+fn bundle_output_size(payload: &[u8]) -> Option<usize> {
+    if payload.len() < 7 || payload[..2] != [0xFF, 0xFF] {
         return None;
     }
     let size = u32::from_le_bytes([payload[2], payload[3], payload[4], payload[5]]) as usize;
     if size == 0 || size > MAX_DECOMPRESSED_BYTES {
         return None;
     }
-    lz4_flex::decompress(&payload[6..], size).ok()
+    Some(size)
 }
 
 #[cfg(test)]
@@ -390,10 +447,63 @@ mod tests {
     }
 
     fn bundle(inner: &[u8]) -> Vec<u8> {
+        packet(&bundle_payload(inner))
+    }
+
+    fn bundle_payload(inner: &[u8]) -> Vec<u8> {
         let mut payload = vec![0xFF, 0xFF];
         payload.extend_from_slice(&(inner.len() as u32).to_le_bytes());
         payload.extend_from_slice(&lz4_flex::compress(inner));
-        packet(&payload)
+        payload
+    }
+
+    #[test]
+    fn many_small_bundles_share_a_finite_expansion_budget() {
+        let inner = vec![0; MAX_DECOMPRESSED_BYTES];
+        let payload = bundle_payload(&inner);
+        assert!(payload.len() < 8_000, "the input is small but expands to a megabyte");
+        let mut budget = DecompressionBudget::default();
+        let mut expanded = 0;
+        while let Some(data) = budget.decompress(&payload) {
+            assert_eq!(data, inner);
+            expanded += data.len();
+        }
+        assert!(expanded <= MAX_DECOMPRESSED_TOTAL_BYTES);
+        assert!(expanded > MAX_DECOMPRESSED_TOTAL_BYTES - MAX_DECOMPRESSED_BYTES);
+        assert!(budget.decompress(&payload).is_none());
+    }
+
+    #[test]
+    fn a_bundle_past_the_remaining_budget_marks_it_exhausted() {
+        let payload = bundle_payload(&[1; 101]);
+        let mut budget = DecompressionBudget::new(100, 10);
+        assert!(budget.decompress(&payload).is_none());
+        assert!(budget.is_exhausted());
+        assert!(budget.decompress(&bundle_payload(&[1])).is_none());
+    }
+
+    #[test]
+    fn malformed_blocks_do_not_refund_their_allocation_budget() {
+        let mut bad = vec![0xFF, 0xFF];
+        bad.extend_from_slice(&1_024u32.to_le_bytes());
+        bad.push(0xF0); // literal length needs an extension byte that is absent
+        let good = bundle_payload(&vec![1; 1_024]);
+        let mut budget = DecompressionBudget::new(2_048, 10);
+        assert!(budget.decompress(&bad).is_none());
+        assert_eq!(budget.decompress(&good).unwrap().len(), 1_024);
+        assert!(budget.decompress(&good).is_none());
+        assert!(budget.is_exhausted());
+    }
+
+    #[test]
+    fn tiny_and_invalid_bundles_also_exhaust_the_attempt_budget() {
+        let good = bundle_payload(&[1]);
+        let mut budget = DecompressionBudget::new(1_000, 3);
+        assert!(budget.decompress(&[0xFF]).is_none());
+        assert_eq!(budget.decompress(&good), Some(vec![1]));
+        assert_eq!(budget.decompress(&good), Some(vec![1]));
+        assert!(budget.decompress(&good).is_none());
+        assert!(budget.is_exhausted());
     }
 
     fn body(op: u8, len: usize) -> Vec<u8> {

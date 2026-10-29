@@ -111,6 +111,10 @@ impl StreamProcessor {
     /// Parse as many complete packets as possible from the buffer.
     /// Returns the number of bytes consumed.
     pub fn consume_stream(&mut self, buffer: &[u8]) -> usize {
+        self.consume_stream_with_budget(buffer, &mut super::framing::DecompressionBudget::default())
+    }
+
+    fn consume_stream_with_budget(&mut self, buffer: &[u8], budget: &mut super::framing::DecompressionBudget) -> usize {
         // Framing lives in `capture::framing` so the Evidence Slice builder can
         // split a capture the same way this does. See that module.
         let framing = super::framing::walk(buffer);
@@ -119,11 +123,11 @@ impl StreamProcessor {
         for frame in &framing.frames {
             match frame.kind {
                 super::framing::FrameKind::Bundle => {
-                    self.unwrap_bundle(frame.payload(buffer), 1);
+                    self.unwrap_bundle(frame.payload(buffer), 1, budget);
                 }
                 super::framing::FrameKind::Packet => {
                     self.parse_perfect_packet(frame.bytes(buffer));
-                    self.scan_embedded_bundles_for_identity(frame.bytes(buffer));
+                    self.scan_embedded_bundles_for_identity(frame.bytes(buffer), budget);
                 }
             }
         }
@@ -180,9 +184,9 @@ impl StreamProcessor {
     /// level: five copies went unread in one hour of a capture (2026-10-04),
     /// the player levelling 29 to 30 among them. Only identity is read from
     /// these: what else they hold is left as it was, so no fight changes.
-    fn scan_embedded_bundles_for_identity(&self, packet: &[u8]) {
+    fn scan_embedded_bundles_for_identity(&self, packet: &[u8], budget: &mut super::framing::DecompressionBudget) {
         let mut i = 1;
-        while i + 8 < packet.len() {
+        while i + 8 < packet.len() && !budget.is_exhausted() {
             if packet[i] != 0xFF || packet[i + 1] != 0xFF {
                 i += 1;
                 continue;
@@ -195,7 +199,7 @@ impl StreamProcessor {
                     return None;
                 }
                 let end = at + super::framing::frame_size(len.value, len.length)?;
-                let data = super::framing::decompress_bundle(packet.get(i..end)?)?;
+                let data = budget.decompress(packet.get(i..end)?)?;
                 Some((end, data))
             });
             match bundle {
@@ -217,14 +221,14 @@ impl StreamProcessor {
 
     /// `depth` is 1 for a bundle in the stream, one more for each bundle it
     /// sits in. Past `MAX_BUNDLE_DEPTH` it is skipped, as the slice builder does.
-    fn unwrap_bundle(&mut self, payload: &[u8], depth: usize) {
+    fn unwrap_bundle(&mut self, payload: &[u8], depth: usize, budget: &mut super::framing::DecompressionBudget) {
         // payload starts at FF FF
         // Format: FF FF (2) + decompressed_size (4 LE) + LZ4 compressed data
         if payload.len() < 7 || depth > super::framing::MAX_BUNDLE_DEPTH {
             return;
         }
 
-        let decompressed = match super::framing::decompress_bundle(payload) {
+        let decompressed = match budget.decompress(payload) {
             Some(d) => d,
             None => return,
         };
@@ -238,7 +242,7 @@ impl StreamProcessor {
         for frame in &walk.frames {
             match frame.kind {
                 super::framing::FrameKind::Bundle => {
-                    self.unwrap_bundle(frame.payload(&decompressed), depth + 1);
+                    self.unwrap_bundle(frame.payload(&decompressed), depth + 1, budget);
                 }
                 super::framing::FrameKind::Packet => {
                     let inner_packet = frame.bytes(&decompressed);
@@ -2737,6 +2741,7 @@ fn parse_party_roster_at(data: &[u8], at: usize) -> Option<Roster> {
     // and its difficulty tier: Ferocious Horn Den is 600091/600092/600093 for
     // Exploration / Conquest [Normal] / Conquest [Hard].
     let dungeon_id = parse_u32_le(data.get(o..o + 4)?, 0) as i32;
+    let leader_dbid = o + 4 + 2..o + 4 + 2 + 8;
     o += 4 + 2 + 8 + 3; // dungeon_id, 2 pad, leader_dbid, 3 pad
     let count_info = read_varint(data, o);
     if count_info.length <= 0 || !(1..=12).contains(&count_info.value) {
@@ -2747,14 +2752,18 @@ fn parse_party_roster_at(data: &[u8], at: usize) -> Option<Roster> {
     let count = count_info.value;
     let mut members = Vec::new();
     let mut name_fields = Vec::new();
+    let mut dbid_fields = vec![leader_dbid];
+    let mut slots = Vec::new();
     let mut complete = false;
     for _ in 0..count {
         if o + 20 > data.len() {
             break;
         }
         let slot = data[o + 1];
+        slots.push(slot);
         o += 2; // presence_mask, slot
         let dbid = u64::from_le_bytes(data.get(o..o + 8)?.try_into().ok()?);
+        dbid_fields.push(o..o + 8);
         o += 8;
         let server_id = (dbid >> 48) as u16;
         let nick_len = *data.get(o)? as usize;
@@ -2871,7 +2880,7 @@ fn parse_party_roster_at(data: &[u8], at: usize) -> Option<Roster> {
     if members.is_empty() {
         return None;
     }
-    Some(Roster { party_key, members, complete, dungeon_id, name_fields })
+    Some(Roster { party_key, members, complete, dungeon_id, name_fields, dbid_fields, slots, declared_slots: count as u8 })
 }
 
 /// Find a little-endian `u16` equal to `wanted` in `data[from..to]`.
@@ -3470,6 +3479,77 @@ struct Roster {
     dungeon_id: i32,
     /// Each member's name field, in member order.
     name_fields: Vec<std::ops::Range<usize>>,
+    /// The leader and every visited member's stable identity, including vacant slots.
+    dbid_fields: Vec<std::ops::Range<usize>>,
+    slots: Vec<u8>,
+    declared_slots: u8,
+}
+
+fn roster_complete_for_sharing(roster: &Roster) -> bool {
+    roster.complete && roster.slots.first() == Some(&1)
+        && roster.slots.iter().all(|&s| (1..=roster.declared_slots).contains(&s))
+        && roster.slots.windows(2).all(|s| s[0] < s[1])
+}
+
+/// A roster rebuilt only from fields the parser understands. Opaque member
+/// tails are not needed for replay and can hold additional stable identities.
+/// Returning a body lets the caller give it a fresh outer frame length.
+pub fn roster_body_for_sharing(packet: &[u8]) -> Result<Option<Vec<u8>>, ()> {
+    let length = read_varint(packet, 0);
+    let Some(at) = usize::try_from(length.length).ok().filter(|&n| n > 0) else { return Ok(None) };
+    if packet.get(at..at + 2) != Some(&[0x02, 0x97][..]) { return Ok(None); }
+    let roster = parse_party_roster_at(packet, at + 2).ok_or(())?;
+    if !roster_complete_for_sharing(&roster) { return Err(()); }
+    let mut body = vec![0x02, 0x97];
+    body.extend_from_slice(&roster.party_key.to_le_bytes());
+    body.extend_from_slice(&[1, b'.', roster.declared_slots]);
+    body.extend_from_slice(&roster.dungeon_id.to_le_bytes());
+    body.extend_from_slice(&[0; 2]);
+    body.extend_from_slice(&packet[roster.dbid_fields[0].clone()]);
+    body.extend_from_slice(&[0, 0, 0, roster.declared_slots]);
+    for slot in 1..=roster.declared_slots {
+        match roster.members.iter().zip(&roster.name_fields).find(|((_, m), _)| m.slot == slot) {
+            Some(((_, member), name)) => {
+                body.extend_from_slice(&[0x0c, slot]);
+                body.extend_from_slice(&member.dbid.to_le_bytes());
+                body.push(name.len() as u8);
+                body.extend_from_slice(&packet[name.clone()]);
+                body.extend_from_slice(packet.get(name.end..name.end + 4).ok_or(())?);
+                body.extend_from_slice(&(member.level as u32).to_le_bytes());
+                body.extend_from_slice(&(member.gear_score as u32).to_le_bytes());
+                body.extend_from_slice(&member.server_id.to_le_bytes());
+                body.extend_from_slice(&member.server_id.to_le_bytes());
+                body.push(1);
+                body.extend_from_slice(&(member.combat_power as u64).to_le_bytes());
+            },
+            None => {
+                body.extend_from_slice(&[0, slot]);
+                body.extend_from_slice(&[0; 34]);
+            },
+        }
+    }
+    Ok(Some(body))
+}
+
+/// Stable roster identities in a packet, using the same layout as replay.
+/// A framed roster that cannot be fully read is refused for sharing: retaining
+/// its partly understood tail could send another member's original identity.
+pub fn roster_identity_fields(data: &[u8]) -> Result<Vec<std::ops::Range<usize>>, ()> {
+    let length = read_varint(data, 0);
+    let front = usize::try_from(length.length).ok().filter(|&n| n > 0);
+    let mut fields = Vec::new();
+    for i in 0..data.len().saturating_sub(1) {
+        if data[i..i + 2] != [0x02, 0x97] { continue; }
+        match parse_party_roster_at(data, i + 2) {
+            Some(roster) if roster_complete_for_sharing(&roster) => fields.extend(roster.dbid_fields),
+            Some(_) => return Err(()),
+            None if front == Some(i) => return Err(()),
+            None => {},
+        }
+    }
+    fields.sort_by_key(|f| (f.start, f.end));
+    fields.dedup();
+    Ok(fields)
 }
 
 /// Every party roster in `data`.
@@ -4168,6 +4248,53 @@ mod tests {
             p.consume_stream(&stream);
             assert_eq!(!storage.get_combat_snapshot().is_empty(), read, "depth {depth}");
         }
+    }
+
+    #[test]
+    fn sibling_nested_and_embedded_bundles_share_the_same_budget() {
+        let frame = |body: &[u8]| {
+            let mut value = crate::capture::framing::length_value(body.len());
+            let mut out = Vec::new();
+            loop {
+                let byte = (value & 0x7F) as u8;
+                value >>= 7;
+                out.push(byte | if value == 0 { 0 } else { 0x80 });
+                if value == 0 { break; }
+            }
+            out.extend_from_slice(body);
+            out
+        };
+        let bundle = |inner: &[u8]| {
+            let mut body = vec![0xFF, 0xFF];
+            body.extend_from_slice(&(inner.len() as u32).to_le_bytes());
+            body.extend_from_slice(&lz4_flex::compress(inner));
+            frame(&body)
+        };
+        let record = [&[0x04, 0x38][..], &hex("b1ea011600f30a40c0f40063028000010b199b5f01000000ac52d007")].concat();
+        let packed = bundle(&frame(&record));
+        let nested = bundle(&packed);
+        let (storage, mut p) = processor();
+        let mut budget = crate::capture::framing::DecompressionBudget::new(10_000, 1);
+        p.consume_stream_with_budget(&nested, &mut budget);
+        assert!(storage.get_combat_snapshot().is_empty(), "the nested bundle needs a second expansion");
+        let mut budget = crate::capture::framing::DecompressionBudget::new(10_000, 2);
+        p.consume_stream_with_budget(&nested, &mut budget);
+        assert!(!storage.get_combat_snapshot().is_empty(), "the ordinary nested record is preserved with enough budget");
+
+        // Two siblings may not each reset the allowance.
+        let (storage, mut p) = processor();
+        let mut budget = crate::capture::framing::DecompressionBudget::new(10_000, 1);
+        p.consume_stream_with_budget(&[packed.clone(), packed].concat(), &mut budget);
+        let total: i64 = storage.get_combat_snapshot().values().map(|target| target.total_damage).sum();
+        assert_eq!(total, 976, "only the first sibling is expanded");
+
+        // A bundle embedded in a plain packet spends from that same allowance.
+        let empty = bundle(&[0; 100]);
+        let embedded = frame(&[&[0x23, 0x36, 0x01][..], &empty].concat());
+        let (_, mut p) = processor();
+        let mut budget = crate::capture::framing::DecompressionBudget::new(10_000, 2);
+        p.consume_stream_with_budget(&[empty, embedded].concat(), &mut budget);
+        assert!(budget.is_exhausted(), "both the top-level and embedded expansion were charged");
     }
 
     fn hex(s: &str) -> Vec<u8> {

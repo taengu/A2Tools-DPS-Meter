@@ -24,64 +24,36 @@ pub const READ_TIMES_OUT_WHEN_IDLE: bool = true;
 /// opens, and kept (`pcap_capturer`).
 pub const FILTER_CHANGE_KEEPS_QUEUE: bool = false;
 
-/// Npcap puts `wpcap.dll` in System32 only when it is installed in its
-/// WinPcap-compatible mode; otherwise it lives in `System32\Npcap`, where a
-/// plain load does not look. Npcap's guidance for programs is to add that
-/// folder to the DLL search path, so either kind of install works.
-pub fn prepare() {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
-    use windows::Win32::System::LibraryLoader::SetDllDirectoryW;
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
-        let folder = Path::new(&root).join("System32").join("Npcap");
-        let wide: Vec<u16> = folder.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-        // SAFETY: a NUL-terminated path that outlives the call.
-        if let Err(e) = unsafe { SetDllDirectoryW(PCWSTR(wide.as_ptr())) } {
-            tracing::debug!("SetDllDirectoryW({}) failed: {e}", folder.display());
+/// Load only a system Npcap installation, including its dependencies. Neither
+/// the application's directory, the current directory nor PATH is searched.
+pub fn load_library() -> Result<libloading::Library, String> {
+    use libloading::os::windows::{Library, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR, LOAD_LIBRARY_SEARCH_SYSTEM32};
+    let system = super::system_paths::system_directory()?;
+    let mut errors = Vec::new();
+    for path in [system.join("Npcap").join("wpcap.dll"), system.join("wpcap.dll")] {
+        // SAFETY: an absolute OS-owned path, with dependency search restricted
+        // to that DLL's own directory and the Windows system directory.
+        match unsafe { Library::load_with_flags(&path, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32) } {
+            Ok(library) => return Ok(library.into()),
+            Err(error) => errors.push(format!("{}: {error}", path.display())),
         }
-    });
+    }
+    Err(errors.join("; "))
 }
 
 /// Whether the capture library can be loaded at all.
 pub fn library_available() -> bool {
-    prepare();
-    // SAFETY: loading Npcap runs no initialisation we depend on not running.
-    LIBRARIES.iter().any(|name| unsafe { libloading::Library::new(name).is_ok() })
+    load_library().is_ok()
 }
 
 /// Run Npcap's installer and wait until it closes. It needs administrator
-/// rights, which the meter may not have, so Windows is asked to elevate it
-/// (the UAC prompt names Npcap's publisher); that prompt being refused is an
-/// error.
+/// rights, so Windows is asked to elevate the trusted Windows helper. That
+/// helper checks the stored copy's digest before starting verified Npcap.
 pub fn run_installer(installer: &Path) -> Result<(), String> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::{w, PCWSTR};
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{WaitForSingleObject, INFINITE};
-    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-
-    let file: Vec<u16> = installer.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-    let mut info = SHELLEXECUTEINFOW {
-        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
-        fMask: SEE_MASK_NOCLOSEPROCESS,
-        lpVerb: w!("runas"),
-        lpFile: PCWSTR(file.as_ptr()),
-        nShow: SW_SHOWNORMAL.0,
-        ..Default::default()
-    };
-    // SAFETY: `info` and the path it points to live across the call.
-    unsafe { ShellExecuteExW(&mut info) }.map_err(|e| e.to_string())?;
-    if !info.hProcess.is_invalid() {
-        // SAFETY: a process handle ShellExecuteExW opened for us; closed once.
-        unsafe {
-            WaitForSingleObject(info.hProcess, INFINITE);
-            let _ = CloseHandle(info.hProcess);
-        }
-    }
-    Ok(())
+    let guarded = super::installer::LockedFile::open(installer)?;
+    super::installer::verify_npcap(&guarded)?;
+    let hash = guarded.sha256()?;
+    super::updater::run_npcap_installer(guarded.path(), &hash)
 }
 
 /// Devices not worth opening on this OS. None here.

@@ -685,6 +685,7 @@
       "permBossTimers": "Lire les minuteurs des boss de terrain partagés par les joueurs via a2tools.app",
       "permCharacter": "Voir le nom, le serveur, la classe et le niveau de votre personnage",
       "permDecoder": "Lire vos propres données de jeu : {name}",
+      "permDecoderFields": "Lire des données de jeu sélectionnées (peuvent concerner d'autres joueurs) : {name}",
       "permNone": "Rien d'autre qu'afficher sa fenêtre",
       "enabled": "Activé",
       "enabledTip": "Activé : démarre avec le compteur. Désactivé : reste installé mais ne s'exécute pas.",

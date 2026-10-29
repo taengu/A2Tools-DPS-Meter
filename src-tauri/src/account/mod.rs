@@ -41,6 +41,7 @@ const PRODUCTION_URL: &str = "https://a2tools.app";
 /// Every account request is small; a server that has not answered by then
 /// will not.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+pub(crate) const MAX_RESPONSE: usize = 256 * 1024;
 
 /// Where the account lives. `A2TOOLS_API` points the meter at another server
 /// without a rebuild.
@@ -167,10 +168,10 @@ pub async fn start(client: &reqwest::Client, device_label: &str) -> Result<Devic
         .map_err(|e| format!("could not reach a2tools.app: {e}"))?;
 
     let status = response.status();
-    let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(format!("a2tools.app refused the request ({status})"));
     }
+    let text = crate::bounded_http::text(response, MAX_RESPONSE).await?;
     serde_json::from_str::<DeviceGrant>(&text)
         .map_err(|e| format!("could not read the response from a2tools.app: {e}"))
 }
@@ -188,8 +189,10 @@ pub async fn poll_once(client: &reqwest::Client, device_code: &str) -> PollOutco
     {
         Ok(response) => {
             let status = response.status().as_u16();
-            let text = response.text().await.unwrap_or_default();
-            classify(status, &text)
+            match crate::bounded_http::text(response, MAX_RESPONSE).await {
+                Ok(text) => classify(status, &text),
+                Err(why) => PollOutcome::Unreachable(why),
+            }
         }
         Err(e) => PollOutcome::Unreachable(e.to_string()),
     }
@@ -303,7 +306,7 @@ pub async fn whoami(client: &reqwest::Client, app_data_dir: &Path) -> AccountSta
             response.status()
         ));
     }
-    match response.text().await.ok().and_then(|t| serde_json::from_str(&t).ok()) {
+    match crate::bounded_http::text(response, MAX_RESPONSE).await.ok().and_then(|t| serde_json::from_str(&t).ok()) {
         Some(summary) => AccountState::SignedIn(summary),
         None => AccountState::Unavailable("Unexpected reply from a2tools.app.".into()),
     }

@@ -24,6 +24,11 @@ const KEEP_MS: i64 = PRELUDE_MS + LEAD_IN_MS + TAIL_MS + 35 * 60_000;
 /// A ceiling that an hour of real play does not approach (a half-hour capture
 /// is about 3 MB). It exists so nothing unexpected can grow this without bound.
 const MAX_BYTES: usize = 96 * 1024 * 1024;
+const MAX_PACKETS: usize = 100_000;
+
+fn held_bytes(packet: &CapturedPacket) -> usize {
+    std::mem::size_of::<CapturedPacket>() + packet.stream.capacity() + packet.bytes.capacity()
+}
 
 struct Ring {
     packets: VecDeque<CapturedPacket>,
@@ -31,29 +36,35 @@ struct Ring {
 }
 
 static RING: Mutex<Ring> = Mutex::new(Ring { packets: VecDeque::new(), bytes: 0 });
+#[cfg(test)]
+pub(crate) static TEST_SERIAL: Mutex<()> = Mutex::new(());
 
 /// Remember one captured segment. Called for exactly the segments the packet
 /// logger would have been given, and stamped the same way: with the packet's
 /// capture time, as the time of dispatch falls on libpcap's 100 ms read grid.
 pub fn record(cap: &CapturedPayload) {
     let at = cap.capture_time_ms().unwrap_or_else(crate::clock::now_ms);
-    record_at(at, crate::capture::captured_payload::stream_key(cap.src_port, cap.dst_port), &cap.data);
+    record_at(at, cap.stream_key(), &cap.data);
 }
 
 /// Remember one segment of `stream`, captured at `at`.
 pub fn record_at(at: i64, stream: String, data: &[u8]) {
+    if data.len().saturating_add(stream.capacity()).saturating_add(std::mem::size_of::<CapturedPacket>()) > MAX_BYTES {
+        return;
+    }
     let mut ring = RING.lock();
-    ring.bytes += data.len();
-    ring.packets.push_back(CapturedPacket {
+    let packet = CapturedPacket {
         captured_at_ms: at,
         stream,
         bytes: data.to_vec(),
-    });
+    };
+    ring.bytes += held_bytes(&packet);
+    ring.packets.push_back(packet);
     while let Some(front) = ring.packets.front() {
-        if front.captured_at_ms >= at - KEEP_MS && ring.bytes <= MAX_BYTES {
+        if front.captured_at_ms >= at.saturating_sub(KEEP_MS) && ring.bytes <= MAX_BYTES && ring.packets.len() <= MAX_PACKETS {
             break;
         }
-        let gone = ring.packets.pop_front().map(|p| p.bytes.len()).unwrap_or(0);
+        let gone = ring.packets.pop_front().map(|p| held_bytes(&p)).unwrap_or(0);
         ring.bytes -= gone;
     }
 }
@@ -75,7 +86,6 @@ mod tests {
     use super::*;
 
     /// The ring is one for the process; tests that fill it take turns.
-    static SERIAL: Mutex<()> = Mutex::new(());
 
     fn segment(captured_at_ms: i64, data: &[u8]) -> CapturedPayload {
         CapturedPayload {
@@ -93,7 +103,7 @@ mod tests {
 
     #[test]
     fn keeps_recent_segments_and_forgets_old_ones() {
-        let _turn = SERIAL.lock();
+        let _turn = TEST_SERIAL.lock();
         clear();
         let at = 1_791_237_434_407;
         record(&segment(at, &[1, 2, 3]));
@@ -107,7 +117,7 @@ mod tests {
 
     #[test]
     fn a_segment_is_stamped_with_its_capture_time() {
-        let _turn = SERIAL.lock();
+        let _turn = TEST_SERIAL.lock();
         clear();
         // Dispatched on the next 100 ms read, so the clock reads later.
         crate::clock::set_override(Some(1_791_237_434_500));
@@ -118,6 +128,21 @@ mod tests {
         crate::clock::set_override(None);
         let stamps: Vec<i64> = held.iter().map(|p| p.captured_at_ms).collect();
         assert_eq!(stamps, vec![1_791_237_434_407, 1_791_237_434_500]);
+        clear();
+    }
+
+    #[test]
+    fn many_tiny_segments_are_bounded_including_metadata() {
+        let _turn = TEST_SERIAL.lock();
+        clear();
+        for _ in 0..MAX_PACKETS + 1 {
+            record_at(1000, "Client:50000:7777".into(), &[1]);
+        }
+        let ring = RING.lock();
+        assert_eq!(ring.packets.len(), MAX_PACKETS);
+        assert_eq!(ring.bytes, ring.packets.iter().map(held_bytes).sum::<usize>());
+        assert!(ring.bytes > MAX_PACKETS, "metadata counts towards the budget");
+        drop(ring);
         clear();
     }
 }

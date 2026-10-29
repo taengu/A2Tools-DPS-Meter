@@ -295,7 +295,7 @@ pub fn log_packet(cap: &CapturedPayload) {
         use chrono::TimeZone;
         let captured = cap.capture_time_ms().and_then(|ms| chrono::Local.timestamp_millis_opt(ms).single());
         let ts = captured.unwrap_or_else(chrono::Local::now).format("%+");
-        let key = crate::capture::captured_payload::stream_key(cap.src_port, cap.dst_port);
+        let key = cap.stream_key();
         let hex: String = cap.data.iter().map(|b| format!("{:02X}", b)).collect();
         let line = format!("{}|{}|{}\n", ts, key, hex);
         if logger.writer.write_all(line.as_bytes()).is_ok() {

@@ -20,7 +20,9 @@ impl StreamAssembler {
 
     /// Process a TCP chunk. Returns true if any packets were successfully parsed.
     pub fn process_chunk(&mut self, data: &[u8], processor: &mut StreamProcessor) -> bool {
-        self.accumulator.append(data);
+        if self.accumulator.append(data) {
+            self.after_gap = true;
+        }
         let mut parsed_any = false;
 
         if self.after_gap {

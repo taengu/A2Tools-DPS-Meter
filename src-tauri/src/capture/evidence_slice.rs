@@ -15,7 +15,8 @@
 //!    stripped every chat message from a format we only partly understand, but
 //!    we can prove we kept only what is on a published list.
 //! 3. **Blind** — replace every known character name, in place, with a token of
-//!    exactly the same byte length.
+//!    exactly the same byte length. Stable roster identities are replaced with
+//!    per-slice identities, preserving only the server bits replay needs.
 //!
 //! Then a verifier re-reads the result and fails the build if any known name
 //! survived. That check is the point: the allowlist and the blinder are both
@@ -306,8 +307,8 @@ pub struct EvidenceSlice {
     /// milliseconds from the start of the fight. Relative so the slice carries
     /// no wall-clock and no session length.
     pub records: Vec<(i32, Vec<u8>)>,
-    /// token -> roster id, so the server can map a blinded name back to a
-    /// participant without ever having been told the name.
+    /// Name tokens declared by the slice. Values are zero in new slices;
+    /// the field remains readable for compatibility with older containers.
     pub blind_map: HashMap<String, u64>,
     pub stats: SliceStats,
 }
@@ -318,6 +319,10 @@ pub enum SliceError {
     NameLeaked(usize),
     /// Nothing was left after filtering — there is no evidence to send.
     Empty,
+    /// A retained roster could not be completely anonymized.
+    RosterIdentity,
+    ExpansionLimit,
+    EmbeddedIdentity,
 }
 
 impl std::fmt::Display for SliceError {
@@ -331,6 +336,9 @@ impl std::fmt::Display for SliceError {
                 "a character name ({len} bytes) survived blinding; slice discarded"
             ),
             SliceError::Empty => write!(f, "no allowlisted packets in the fight window"),
+            SliceError::RosterIdentity => write!(f, "a roster identity could not be anonymized; slice discarded"),
+            SliceError::ExpansionLimit => write!(f, "the slice exceeded its decompression budget; slice discarded"),
+            SliceError::EmbeddedIdentity => write!(f, "a retained packet contains embedded compressed data that cannot be anonymized; slice discarded"),
         }
     }
 }
@@ -419,6 +427,11 @@ struct Blinder {
     /// One-byte names and the one-byte tokens given (see `one_byte_token`).
     one_byte_taken: HashSet<u8>,
     one_byte_given: HashMap<(String, u64), String>,
+    /// Original stable identities -> per-slice identities. Their server bits
+    /// stay intact because replay uses them to locate the roster's tail.
+    roster_ids: HashMap<u64, u64>,
+    invalid_roster: bool,
+    unsupported_embedded: bool,
 }
 
 impl Blinder {
@@ -427,6 +440,7 @@ impl Blinder {
         blinder.key = key;
         blinder.one_byte_taken = ordered.iter().filter(|(n, _)| n.len() == 1).map(|(n, _)| n.as_bytes()[0]).collect();
         for (name, dbid) in ordered {
+            if **dbid >> 48 != 0 { blinder.roster_id(**dbid); }
             let raw = name.as_bytes();
             if raw.is_empty() {
                 continue;
@@ -449,10 +463,14 @@ impl Blinder {
     fn present(&self, buf: &[u8]) -> Vec<usize> {
         // Without the finder (it could not be built), every name, as before.
         let Some(finder) = &self.finder else { return (0..self.known.len()).collect() };
-        let mut found: Vec<usize> = finder.find_overlapping_iter(buf).map(|m| m.pattern().as_usize()).collect();
-        found.sort_unstable();
-        found.dedup();
-        found
+        let mut present = vec![false; self.known.len()];
+        let mut count = 0;
+        for m in finder.find_overlapping_iter(buf) {
+            let slot = &mut present[m.pattern().as_usize()];
+            if !*slot { *slot = true; count += 1; }
+            if count == present.len() { break; }
+        }
+        present.into_iter().enumerate().filter_map(|(i, found)| found.then_some(i)).collect()
     }
 
     /// A blinder that knows no names and leaves `tokens` alone.
@@ -467,6 +485,9 @@ impl Blinder {
             discovered: HashMap::new(),
             one_byte_taken: HashSet::new(),
             one_byte_given: HashMap::new(),
+            roster_ids: HashMap::new(),
+            invalid_roster: false,
+            unsupported_embedded: false,
         }
     }
 
@@ -500,13 +521,59 @@ impl Blinder {
 
     fn blind(&mut self, buf: &mut [u8]) -> usize {
         let mut replaced = 0;
+        self.unsupported_embedded |= contains_embedded_bundle(buf);
+        let identities = match super::stream_processor::roster_identity_fields(buf) {
+            Ok(fields) => fields.into_iter().filter_map(|range| {
+                let raw = u64::from_le_bytes(buf.get(range.clone())?.try_into().ok()?);
+                Some((range, self.roster_id(raw)))
+            }).collect::<Vec<_>>(),
+            Err(()) => { self.invalid_roster = true; Vec::new() },
+        };
         if !is_event(buf) {
             let fields = super::stream_processor::name_fields(buf);
             replaced += self.blind_fields(buf, &fields);
         }
         replaced += self.blind_known(buf);
         replaced += self.blind_name_shaped(buf);
+        // Restore the whole identity field after name blinding, which must not
+        // accidentally alter a binary identity that happens to contain text.
+        for (range, identity) in identities {
+            buf[range].copy_from_slice(&identity.to_le_bytes());
+        }
         replaced
+    }
+
+    fn canonical_roster(&mut self, packet: Vec<u8>) -> Vec<u8> {
+        match super::stream_processor::roster_body_for_sharing(&packet) {
+            Ok(Some(body)) => frame_packet(&body).unwrap(),
+            Ok(None) => packet,
+            Err(()) => { self.invalid_roster = true; packet },
+        }
+    }
+
+    fn roster_id(&mut self, raw: u64) -> u64 {
+        if raw == 0 { return 0; }
+        if let Some(&id) = self.roster_ids.get(&raw) { return id; }
+        if self.roster_ids.values().any(|&id| id == raw) { self.invalid_roster = true; }
+        const LOW: u64 = (1u64 << 48) - 1;
+        for salt in 0..64u32 {
+            let mut hash = Sha256::new();
+            hash.update(self.key);
+            hash.update(b"a2es-roster-id\0");
+            hash.update(raw.to_le_bytes());
+            hash.update(salt.to_le_bytes());
+            let digest = hash.finalize();
+            let low = u64::from_le_bytes(digest[..8].try_into().unwrap()) & LOW;
+            let id = (raw & !LOW) | low;
+            if low != 0 && id != raw && !self.roster_ids.contains_key(&id)
+                && !self.roster_ids.values().any(|&taken| taken == id)
+            {
+                self.roster_ids.insert(raw, id);
+                return id;
+            }
+        }
+        self.invalid_roster = true;
+        0
     }
 
     /// Pass zero: every name field, at any length. A known name gets its
@@ -607,6 +674,7 @@ impl Blinder {
     /// (Decaying Durvati, 2026-02 capture).
     fn blind_name_shaped(&mut self, buf: &mut [u8]) -> usize {
         let mut replaced = 0;
+        let identities = super::stream_processor::roster_identity_fields(buf).unwrap_or_default();
         // Every buffer handed to the blinder is one framed packet: skip its
         // length and opcode.
         let header = super::stream_processor::read_varint(buf, 0);
@@ -621,7 +689,8 @@ impl Blinder {
                 continue;
             }
             let span = &buf[i + 1..i + 1 + len];
-            if !looks_like_text(span) || self.known_tokens.contains(span) || embedded_header(buf, i) {
+            if identities.iter().any(|r| r.start < i + 1 + len && r.end > i)
+                || !looks_like_text(span) || self.known_tokens.contains(span) || embedded_header(buf, i) {
                 i += 1;
                 continue;
             }
@@ -669,6 +738,67 @@ fn is_event(packet: &[u8]) -> bool {
     header.length > 0 && packet.len() >= o + 2 && EVENT_OPCODES.contains(&[packet[o], packet[o + 1]])
 }
 
+/// The live parser can discover identity bundles inside another plain packet.
+/// Their surrounding layout is not understood well enough to rewrite in
+/// place. Refuse to certify such a retained packet until it has a typed rule.
+fn contains_embedded_bundle(packet: &[u8]) -> bool {
+    for i in 1..packet.len().saturating_sub(6) {
+        if packet[i..i + 2] != [0xff, 0xff] { continue; }
+        let size = u32::from_le_bytes(packet[i + 2..i + 6].try_into().unwrap());
+        if !(1..=1_000_000).contains(&size) { continue; }
+        if (1..=3usize).any(|n| {
+            let Some(at) = i.checked_sub(n) else { return false };
+            let len = super::stream_processor::read_varint(packet, at);
+            len.length == n as i32 && framing::frame_size(len.value, len.length)
+                .is_some_and(|span| at + span <= packet.len() && at + span > i + 6)
+        }) { return true; }
+    }
+    false
+}
+
+/// Match the live parser's expansion grouping before filtering can split one
+/// captured input into several records. Even discarded hosts can consume its
+/// embedded-identity budget and change what later bundles the live parser saw.
+fn input_expansion_fits(buffer: &[u8], total: &mut framing::DecompressionBudget) -> bool {
+    fn decompress(payload: &[u8], call: &mut framing::DecompressionBudget, total: &mut framing::DecompressionBudget) -> Option<Vec<u8>> {
+        total.charge(payload)?;
+        call.decompress(payload)
+    }
+    fn visit(buffer: &[u8], top: bool, depth: usize, call: &mut framing::DecompressionBudget,
+        total: &mut framing::DecompressionBudget)
+    {
+        let frames = if top { framing::walk(buffer).frames } else { framing::walk_inner(buffer).frames };
+        for frame in frames {
+            match frame.kind {
+                FrameKind::Bundle if depth < MAX_BUNDLE_DEPTH => {
+                    if let Some(inner) = decompress(frame.payload(buffer), call, total) { visit(&inner, false, depth + 1, call, total); }
+                },
+                FrameKind::Packet if top => {
+                    let packet = frame.bytes(buffer);
+                    let mut i = 1;
+                    while i + 8 < packet.len() {
+                        if packet[i..i + 2] != [0xff, 0xff] { i += 1; continue; }
+                        let end = (1..=3usize).rev().find_map(|n| {
+                            let at = i.checked_sub(n)?;
+                            let len = super::stream_processor::read_varint(packet, at);
+                            if len.length != n as i32 { return None; }
+                            let end = at + framing::frame_size(len.value, len.length)?;
+                            decompress(packet.get(i..end)?, call, total)?;
+                            Some(end)
+                        });
+                        i = end.unwrap_or(i + 1);
+                    }
+                },
+                _ => {},
+            }
+            if call.is_exhausted() || total.is_exhausted() { break; }
+        }
+    }
+    let mut call = framing::DecompressionBudget::default();
+    visit(buffer, true, 0, &mut call, total);
+    !call.is_exhausted() && !total.is_exhausted()
+}
+
 /// A one-byte token: a letter, so the parser still reads it as a name and
 /// joins the player's records by it (a hex digit is no name to it). Never
 /// the name itself, another one-byte name, or a token already given, so two
@@ -692,35 +822,20 @@ fn one_byte_token(key: &SliceKey, name: &str, dbid: u64, salt: u32, taken: &Hash
 
 /// Each packet of a record, bundles opened: what the parser reads one at a
 /// time.
-fn packets_in(record: &[u8]) -> Vec<Vec<u8>> {
-    fn walk_into(buffer: &[u8], out: &mut Vec<Vec<u8>>, depth: usize, top: bool) {
-        if depth > MAX_BUNDLE_DEPTH {
-            return;
-        }
-        let frames = if top { framing::walk(buffer).frames } else { framing::walk_inner(buffer).frames };
-        for frame in frames {
-            match frame.kind {
-                FrameKind::Packet => out.push(frame.bytes(buffer).to_vec()),
-                FrameKind::Bundle => {
-                    if let Some(inner) = framing::decompress_bundle(frame.payload(buffer)) {
-                        walk_into(&inner, out, depth + 1, false);
-                    }
-                }
-            }
-        }
-    }
+fn packets_in(record: &[u8], budget: &mut framing::DecompressionBudget) -> Option<Vec<Vec<u8>>> {
     let mut out = Vec::new();
-    walk_into(record, &mut out, 0, true);
-    out
+    for_each_packet(record, &mut |packet| out.push(packet.to_vec()), budget)?;
+    Some(out)
 }
 
 /// What every name field of the records holds (event packets aside): where
 /// the leak checks look for names of any length, a one-byte name too. Where a
 /// record holds a name, a chance match is no concern.
-fn name_field_contents(records: &[(i32, Vec<u8>)]) -> HashSet<Vec<u8>> {
+fn name_field_contents(records: &[(i32, Vec<u8>)]) -> Option<HashSet<Vec<u8>>> {
     let mut out = HashSet::new();
+    let mut budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
     for (_, record) in records {
-        for packet in packets_in(record) {
+        for packet in packets_in(record, &mut budget)? {
             if is_event(&packet) {
                 continue;
             }
@@ -729,7 +844,7 @@ fn name_field_contents(records: &[(i32, Vec<u8>)]) -> HashSet<Vec<u8>> {
             }
         }
     }
-    out
+    Some(out)
 }
 
 /// Is `buf[i]` the last byte of an embedded packet's length, followed by a
@@ -783,29 +898,16 @@ fn looks_like_text(span: &[u8]) -> bool {
 /// `a2t-inspect`, both need to see through the compression rather than take a
 /// compressed buffer's silence as evidence of anything.
 pub fn expand(record: &[u8]) -> Vec<u8> {
-    fn walk_into(buffer: &[u8], out: &mut Vec<u8>, depth: usize, top: bool) {
-        if depth > MAX_BUNDLE_DEPTH {
-            return;
-        }
-        let frames = if top {
-            framing::walk(buffer).frames
-        } else {
-            framing::walk_inner(buffer).frames
-        };
-        for frame in frames {
-            match frame.kind {
-                FrameKind::Packet => out.extend_from_slice(frame.bytes(buffer)),
-                FrameKind::Bundle => {
-                    if let Some(inner) = framing::decompress_bundle(frame.payload(buffer)) {
-                        walk_into(&inner, out, depth + 1, false);
-                    }
-                }
-            }
-        }
-    }
-    let mut out = Vec::with_capacity(record.len() * 2);
-    walk_into(record, &mut out, 0, true);
-    out
+    expand_checked(record, &mut framing::DecompressionBudget::default()).unwrap_or_default()
+}
+
+/// Expand only if every nested bundle is readable within the shared budget.
+/// Privacy verification must use this result rather than treating a diagnostic
+/// `expand` that returned no bytes as proof that no name exists inside it.
+pub fn expand_checked(record: &[u8], budget: &mut framing::DecompressionBudget) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    for_each_packet(record, &mut |packet| out.extend_from_slice(packet), budget)?;
+    Some(out)
 }
 
 /// Name-shaped runs a slice still carries that are not among the tokens it
@@ -819,29 +921,16 @@ pub fn expand(record: &[u8]) -> Vec<u8> {
 /// slice blinded by this meter's rules (or by any older, broader ones) counts
 /// zero. Nothing is changed; the count is the answer.
 pub fn unblinded_names(records: &[(i32, Vec<u8>)], blind_map: &HashMap<String, u64>) -> usize {
-    fn walk(buffer: &[u8], top: bool, depth: usize, blinder: &mut Blinder, found: &mut usize) {
-        if depth > MAX_BUNDLE_DEPTH {
-            return;
-        }
-        let frames = if top { framing::walk(buffer).frames } else { framing::walk_inner(buffer).frames };
-        for frame in frames {
-            match frame.kind {
-                FrameKind::Packet => {
-                    let mut packet = frame.bytes(buffer).to_vec();
-                    *found += blinder.blind_name_shaped(&mut packet);
-                }
-                FrameKind::Bundle => {
-                    if let Some(inner) = framing::decompress_bundle(frame.payload(buffer)) {
-                        walk(&inner, false, depth + 1, blinder, found);
-                    }
-                }
-            }
-        }
-    }
     let mut blinder = Blinder::exempting(blind_map.keys().map(|t| t.as_bytes().to_vec()).collect());
     let mut found = 0;
+    let mut budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
     for (_, record) in records {
-        walk(record, true, 0, &mut blinder, &mut found);
+        let complete = for_each_packet(record, &mut |packet| {
+            found += blinder.blind_name_shaped(&mut packet.to_vec());
+        }, &mut budget);
+        // An unread bundle cannot be certified safe. Preserve this count API's
+        // zero-means-safe contract even when the verifier cannot finish.
+        if complete.is_none() { return found.saturating_add(1); }
     }
     found
 }
@@ -872,16 +961,18 @@ pub fn leaked_names(records: &[(i32, Vec<u8>)], names: &[String]) -> usize {
     let mut found = vec![false; names.len()];
     let mut fields: HashSet<Vec<u8>> = HashSet::new();
     let mut plain = Vec::new();
+    let mut budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
     for (_, record) in records {
         plain.clear();
-        for_each_packet(record, &mut |packet| {
+        let complete = for_each_packet(record, &mut |packet| {
             if !is_event(packet) {
                 for field in super::stream_processor::name_fields(packet) {
                     fields.insert(packet[field.range].to_vec());
                 }
             }
             plain.extend_from_slice(packet);
-        });
+        }, &mut budget);
+        if complete.is_none() { return names.len().max(1); }
         match &finder {
             Some(finder) => {
                 for m in finder.find_overlapping_iter(&plain) {
@@ -901,24 +992,26 @@ pub fn leaked_names(records: &[(i32, Vec<u8>)], names: &[String]) -> usize {
 
 /// Each packet of a record, bundles opened, in order: what `packets_in`
 /// lists and `expand` joins, without a copy of each.
-fn for_each_packet(record: &[u8], visit: &mut dyn FnMut(&[u8])) {
-    fn walk_into(buffer: &[u8], visit: &mut dyn FnMut(&[u8]), depth: usize, top: bool) {
+fn for_each_packet(record: &[u8], visit: &mut dyn FnMut(&[u8]), budget: &mut framing::DecompressionBudget) -> Option<()> {
+    fn walk_into(buffer: &[u8], visit: &mut dyn FnMut(&[u8]), depth: usize, top: bool,
+        budget: &mut framing::DecompressionBudget) -> Option<()> {
         if depth > MAX_BUNDLE_DEPTH {
-            return;
+            return None;
         }
         let frames = if top { framing::walk(buffer).frames } else { framing::walk_inner(buffer).frames };
         for frame in frames {
             match frame.kind {
                 FrameKind::Packet => visit(frame.bytes(buffer)),
                 FrameKind::Bundle => {
-                    if let Some(inner) = framing::decompress_bundle(frame.payload(buffer)) {
-                        walk_into(&inner, visit, depth + 1, false);
-                    }
+                    if depth >= MAX_BUNDLE_DEPTH { return None; }
+                    let inner = budget.decompress(frame.payload(buffer))?;
+                    walk_into(&inner, visit, depth + 1, false, budget)?;
                 }
             }
         }
+        Some(())
     }
-    walk_into(record, visit, 0, true);
+    walk_into(record, visit, 0, true, budget)
 }
 
 /// Names this short are only looked for as the game sends a name, after its
@@ -1003,6 +1096,8 @@ fn filter_bundle_inner(
     stats: &mut SliceStats,
     depth: usize,
     keep: Keep,
+    budget: &mut framing::DecompressionBudget,
+    call_budget: &mut framing::DecompressionBudget,
 ) -> Vec<u8> {
     let mut out = Vec::new();
     if depth > MAX_BUNDLE_DEPTH {
@@ -1025,15 +1120,18 @@ fn filter_bundle_inner(
                     }
                     continue;
                 }
+                packet = blinder.canonical_roster(packet);
                 stats.names_blinded += blinder.blind(&mut packet);
                 stats.packets_kept += 1;
                 stats.bytes_kept += packet.len();
                 out.extend_from_slice(&packet);
             }
             FrameKind::Bundle => {
-                if let Some(nested) = framing::decompress_bundle(frame.payload(buffer)) {
+                let payload = frame.payload(buffer);
+                if budget.charge(payload).is_none() { continue; }
+                if let Some(nested) = call_budget.decompress(payload) {
                     stats.bundles_expanded += 1;
-                    out.extend_from_slice(&filter_bundle_inner(&nested, blinder, stats, depth + 1, keep));
+                    out.extend_from_slice(&filter_bundle_inner(&nested, blinder, stats, depth + 1, keep, budget, call_budget));
                 }
             }
         }
@@ -1058,6 +1156,8 @@ fn filter_stream(
     out: &mut Vec<Vec<u8>>,
     stats: &mut SliceStats,
     keep: Keep,
+    budget: &mut framing::DecompressionBudget,
+    call_budget: &mut framing::DecompressionBudget,
 ) -> usize {
     let walk = framing::walk(buffer);
     for frame in &walk.frames {
@@ -1074,17 +1174,20 @@ fn filter_stream(
                     }
                     continue;
                 }
+                packet = blinder.canonical_roster(packet);
                 stats.names_blinded += blinder.blind(&mut packet);
                 stats.packets_kept += 1;
                 stats.bytes_kept += packet.len();
                 out.push(packet);
             }
             FrameKind::Bundle => {
-                let Some(decompressed) = framing::decompress_bundle(frame.payload(buffer)) else {
+                let payload = frame.payload(buffer);
+                if budget.charge(payload).is_none() { continue; }
+                let Some(decompressed) = call_budget.decompress(payload) else {
                     continue;
                 };
                 stats.bundles_expanded += 1;
-                let inner = filter_bundle_inner(&decompressed, blinder, stats, 1, keep);
+                let inner = filter_bundle_inner(&decompressed, blinder, stats, 1, keep, budget, call_budget);
                 if inner.is_empty() {
                     continue;
                 }
@@ -1095,6 +1198,81 @@ fn filter_stream(
         }
     }
     walk.consumed
+}
+
+/// Also replace copies of a recognized roster identity outside its primary
+/// field. The mapping is complete before this pass, so a copy that preceded
+/// its roster is covered too. Bundles retain their packet/context boundaries.
+fn rewrite_roster_ids(records: &mut [(i32, Vec<u8>)], ids: &HashMap<u64, u64>) -> Result<(), SliceError> {
+    if ids.is_empty() { return Ok(()); }
+    let mut entries: Vec<_> = ids.iter().map(|(&raw, &id)| (raw.to_le_bytes(), id.to_le_bytes())).collect();
+    entries.sort_by_key(|(raw, _)| *raw);
+    let finder = AhoCorasick::new(entries.iter().map(|(raw, _)| raw)).map_err(|_| SliceError::RosterIdentity)?;
+    fn rewrite(buffer: &[u8], top: bool, depth: usize, finder: &AhoCorasick,
+        entries: &[([u8; 8], [u8; 8])], budget: &mut framing::DecompressionBudget) -> Option<Vec<u8>>
+    {
+        if depth > MAX_BUNDLE_DEPTH { return None; }
+        let frames = if top { framing::walk(buffer).frames } else { framing::walk_inner(buffer).frames };
+        let mut out = Vec::new();
+        for frame in frames {
+            match frame.kind {
+                FrameKind::Packet => {
+                    let packet = frame.bytes(buffer).to_vec();
+                    let mut packet = match super::stream_processor::roster_body_for_sharing(&packet).ok()? {
+                        Some(body) => frame_packet(&body)?,
+                        None => packet,
+                    };
+                    let matches: Vec<_> = finder.find_iter(&packet).map(|m| (m.start(), m.pattern().as_usize())).collect();
+                    for (at, index) in matches { packet[at..at + 8].copy_from_slice(&entries[index].1); }
+                    if finder.is_match(&packet) { return None; }
+                    out.extend_from_slice(&packet);
+                },
+                FrameKind::Bundle => {
+                    let inner = budget.decompress(frame.payload(buffer))?;
+                    let inner = rewrite(&inner, false, depth + 1, finder, entries, budget)?;
+                    out.extend_from_slice(&rewrap_bundle(&inner)?);
+                },
+            }
+        }
+        Some(out)
+    }
+    let mut budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
+    for (_, record) in records {
+        *record = rewrite(record, true, 0, &finder, &entries, &mut budget).ok_or(SliceError::RosterIdentity)?;
+    }
+    Ok(())
+}
+
+/// Upgrade the privacy of an already stored slice before it leaves the PC.
+/// Old cached slices bypass `build`, so their payload identities and metadata
+/// must be treated just like a newly captured roster at the upload boundary.
+pub fn anonymize_stored_slice(reader: impl std::io::Read, key: SliceKey) -> Result<Vec<u8>, SliceError> {
+    let (mut records, mut blind_map) = decode_from(reader, 32 * 1024 * 1024).ok_or(SliceError::RosterIdentity)?;
+    let ordered: Vec<_> = blind_map.iter().collect();
+    let mut blinder = Blinder::new(key, &ordered);
+    let mut budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
+    for (_, record) in &records {
+        for_each_packet(record, &mut |packet| {
+            let canonical = match super::stream_processor::roster_body_for_sharing(packet) {
+                Ok(body) => body.and_then(|body| frame_packet(&body)),
+                Err(()) => { blinder.invalid_roster = true; None },
+            };
+            let packet = canonical.as_deref().unwrap_or(packet);
+            blinder.unsupported_embedded |= contains_embedded_bundle(packet);
+            match super::stream_processor::roster_identity_fields(packet) {
+                Ok(fields) => for field in fields {
+                    let raw = u64::from_le_bytes(packet[field].try_into().unwrap());
+                    blinder.roster_id(raw);
+                },
+                Err(()) => blinder.invalid_roster = true,
+            }
+        }, &mut budget).ok_or(SliceError::ExpansionLimit)?;
+    }
+    if blinder.invalid_roster { return Err(SliceError::RosterIdentity); }
+    if blinder.unsupported_embedded { return Err(SliceError::EmbeddedIdentity); }
+    rewrite_roster_ids(&mut records, &blinder.roster_ids)?;
+    for id in blind_map.values_mut() { *id = 0; }
+    Ok(encode(&EvidenceSlice { records, blind_map, stats: SliceStats::default() }))
 }
 
 /// Build a slice for one fight.
@@ -1122,9 +1300,9 @@ pub fn build(
 
     let mut blinder = Blinder::new(key, &ordered);
     let mut blind_map: HashMap<String, u64> = HashMap::new();
-    for (name, dbid) in ordered.iter().copied() {
+    for (name, _dbid) in ordered.iter().copied() {
         if let Some(token) = blinder.token_of(name) {
-            blind_map.insert(String::from_utf8_lossy(token).into_owned(), *dbid);
+            blind_map.insert(String::from_utf8_lossy(token).into_owned(), 0);
         }
     }
 
@@ -1136,6 +1314,8 @@ pub fn build(
     // next segment starting mid-packet — the window selects what is *kept*, not
     // what is parsed.
     let mut streams: HashMap<&str, PacketAccumulator> = HashMap::new();
+    let mut budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
+    let mut preflight_budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
 
     for cap in packets {
         let acc = streams
@@ -1147,8 +1327,11 @@ pub fn build(
         // so the stream stays in step.
         let keep = if cap.captured_at_ms < from { Keep::State } else { Keep::All };
         let mut kept = Vec::new();
-        let consumed = filter_stream(acc.snapshot(), &mut blinder, &mut kept, &mut stats, keep);
+        if !input_expansion_fits(acc.snapshot(), &mut preflight_budget) { return Err(SliceError::ExpansionLimit); }
+        let mut call_budget = framing::DecompressionBudget::default();
+        let consumed = filter_stream(acc.snapshot(), &mut blinder, &mut kept, &mut stats, keep, &mut budget, &mut call_budget);
         acc.discard_bytes(consumed);
+        if budget.is_exhausted() || call_budget.is_exhausted() { return Err(SliceError::ExpansionLimit); }
 
         if cap.captured_at_ms < from - PRELUDE_MS || cap.captured_at_ms > to {
             continue;
@@ -1163,6 +1346,9 @@ pub fn build(
     if records.is_empty() {
         return Err(SliceError::Empty);
     }
+    if blinder.invalid_roster { return Err(SliceError::RosterIdentity); }
+    if blinder.unsupported_embedded { return Err(SliceError::EmbeddedIdentity); }
+    rewrite_roster_ids(&mut records, &blinder.roster_ids)?;
 
     // The verifier. Everything above is pattern work; this is what we actually
     // rely on. A name that reaches here means the slice is not safe to send, and
@@ -1178,15 +1364,18 @@ pub fn build(
     let needles: Vec<(usize, Vec<u8>)> = ordered.iter().enumerate()
         .filter_map(|(i, (name, _))| name_needle(name.as_bytes()).map(|needle| (i, needle)))
         .collect();
+    let mut verification_budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
+    let plaintext: Vec<Vec<u8>> = records.iter()
+        .map(|(_, packet)| expand_checked(packet, &mut verification_budget))
+        .collect::<Option<_>>().ok_or(SliceError::ExpansionLimit)?;
     let leaked = match AhoCorasick::new(needles.iter().map(|(_, needle)| needle)) {
-        Ok(finder) => records.iter()
-            .filter_map(|(_, packet)| {
-                finder.find_overlapping_iter(&expand(packet)).map(|m| needles[m.pattern().as_usize()].0).min()
+        Ok(finder) => plaintext.iter()
+            .filter_map(|packet| {
+                finder.find_overlapping_iter(packet).map(|m| needles[m.pattern().as_usize()].0).min()
             })
             .min(),
         // Never pass unchecked: one name at a time, as before.
         Err(_) => {
-            let plaintext: Vec<Vec<u8>> = records.iter().map(|(_, p)| expand(p)).collect();
             ordered.iter().position(|(name, _)| plaintext.iter().any(|buf| name_in(buf, name.as_bytes())))
         }
     };
@@ -1194,7 +1383,7 @@ pub fn build(
         return Err(SliceError::NameLeaked(ordered[first].0.len()));
     }
     // Every name, a one-byte name too, where a record holds one.
-    let fields = name_field_contents(&records);
+    let fields = name_field_contents(&records).ok_or(SliceError::ExpansionLimit)?;
     if let Some((name, _)) = ordered.iter().find(|(name, _)| !name.is_empty() && fields.contains(name.as_bytes())) {
         return Err(SliceError::NameLeaked(name.len()));
     }
@@ -1299,8 +1488,19 @@ pub fn decode(data: &[u8]) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)
 /// they read back: a version 3 bundle is counted wrapped, as version 2 stored
 /// it, so one fight has one size in every version and a limit on it takes or
 /// refuses the fight whichever version carries it.
+/// Containers also have independent hard limits on wire bytes and record count;
+/// empty records are refused before they can bypass the payload-byte limit.
 pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)> {
     use std::io::Read;
+    // Payload bytes alone do not bound the container: an empty v3 record
+    // occupies nine wire bytes and still reserves an entry in `records`.
+    // Keep both the record count and all bytes read finite, including tables.
+    const MAX_RECORDS: usize = 1 << 20;
+    const MAX_CONTAINER_BYTES: usize = 128 * 1024 * 1024;
+    const MAX_METADATA_BYTES: usize = 32 * 1024 * 1024;
+    let max_record_bytes = max_record_bytes.min(MAX_CONTAINER_BYTES);
+    let max_container_bytes = max_record_bytes.saturating_add(MAX_METADATA_BYTES).min(MAX_CONTAINER_BYTES);
+    let mut r = r.by_ref().take(max_container_bytes as u64);
     fn array<const N: usize>(r: &mut impl Read) -> Option<[u8; N]> {
         let mut b = [0u8; N];
         r.read_exact(&mut b).ok()?;
@@ -1323,7 +1523,7 @@ pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option
     bytes(&mut r, op_count * 2)?;
 
     let blind_count = u16::from_le_bytes(array(&mut r)?) as usize;
-    let mut blind_map = HashMap::with_capacity(blind_count);
+    let mut blind_map = HashMap::with_capacity(blind_count.min(1024));
     for _ in 0..blind_count {
         let len = array::<1>(&mut r)?[0] as usize;
         let token = String::from_utf8(bytes(&mut r, len)?).ok()?;
@@ -1332,14 +1532,17 @@ pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option
     }
 
     let rec_count = u32::from_le_bytes(array(&mut r)?) as usize;
-    let mut records = Vec::with_capacity(rec_count.min(1 << 20));
+    if rec_count > MAX_RECORDS { return None; }
+    let mut records = Vec::with_capacity(rec_count.min(4096));
     let mut total = 0usize;
+    let mut budget = framing::DecompressionBudget::new(128 * 1024 * 1024, 65_536);
     for _ in 0..rec_count {
         let dt = i32::from_le_bytes(array(&mut r)?);
         let record = if version >= 3 {
             let kind = array::<1>(&mut r)?[0];
             let len = u32::from_le_bytes(array(&mut r)?) as usize;
-            if len > max_record_bytes {
+            if len == 0 || len > max_record_bytes
+                || (kind == RECORD_PACKET && len > max_record_bytes.saturating_sub(total)) {
                 return None;
             }
             let stored = bytes(&mut r, len)?;
@@ -1350,10 +1553,11 @@ pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option
             }
         } else {
             let len = u16::from_le_bytes(array(&mut r)?) as usize;
+            if len == 0 || len > max_record_bytes.saturating_sub(total) { return None; }
             let record = bytes(&mut r, len)?;
-            if version == 1 { upgrade_v1_record(&record) } else { record }
+            if version == 1 { upgrade_v1_record(&record, &mut budget)? } else { record }
         };
-        total += record.len();
+        total = total.checked_add(record.len())?;
         if total > max_record_bytes {
             return None;
         }
@@ -1368,8 +1572,8 @@ pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option
 /// for a top-level bundle. Each frame keeps exactly the bytes it had then and
 /// gets a length the current walk reads as that span, so the parser sees what
 /// it saw when the slice was made.
-fn upgrade_v1_record(record: &[u8]) -> Vec<u8> {
-    fn reframe(buf: &[u8], top: bool, depth: usize) -> Option<Vec<u8>> {
+fn upgrade_v1_record(record: &[u8], budget: &mut framing::DecompressionBudget) -> Option<Vec<u8>> {
+    fn reframe(buf: &[u8], top: bool, depth: usize, budget: &mut framing::DecompressionBudget) -> Option<Vec<u8>> {
         let mut out = Vec::with_capacity(buf.len() + 8);
         let mut o = 0;
         while o < buf.len() {
@@ -1389,22 +1593,20 @@ fn upgrade_v1_record(record: &[u8]) -> Vec<u8> {
                 break;
             }
             let body = &buf[o + n..o + size];
-            let rewritten = match bundle {
-                true if depth < MAX_BUNDLE_DEPTH => framing::decompress_bundle(body)
-                    .and_then(|inner| reframe(&inner, false, depth + 1))
-                    .and_then(|inner| rewrap_bundle(&inner)),
-                _ => None,
-            };
-            match rewritten {
-                Some(b) => out.extend_from_slice(&b),
-                None => out.extend_from_slice(&frame_packet(body)?),
+            if bundle {
+                if depth >= MAX_BUNDLE_DEPTH { return None; }
+                let inner = budget.decompress(body)?;
+                let inner = reframe(&inner, false, depth + 1, budget)?;
+                out.extend_from_slice(&rewrap_bundle(&inner)?);
+            } else {
+                out.extend_from_slice(&frame_packet(body)?);
             }
             o += size;
         }
         out.extend_from_slice(&buf[o..]);
         Some(out)
     }
-    reframe(record, true, 0).unwrap_or_else(|| record.to_vec())
+    reframe(record, true, 0, budget)
 }
 
 #[cfg(test)]
@@ -1653,15 +1855,153 @@ mod tests {
         build(&[at], 0, 10, names, KEY).unwrap()
     }
 
+    fn identity_roster(ids: [u64; 2]) -> Vec<u8> {
+        let mut body = vec![0x02, 0x97];
+        body.extend_from_slice(&1u32.to_le_bytes());
+        body.extend_from_slice(&[1, b'.', 2]);
+        body.extend_from_slice(&600091u32.to_le_bytes());
+        body.extend_from_slice(&[0; 2]);
+        body.extend_from_slice(&ids[0].to_le_bytes());
+        body.extend_from_slice(&[0, 0, 0, 2]);
+        for (i, (id, name)) in ids.into_iter().zip([b"Alice", b"Bobby"]).enumerate() {
+            body.extend_from_slice(&[0x0c, i as u8 + 1]);
+            body.extend_from_slice(&id.to_le_bytes());
+            body.push(name.len() as u8);
+            body.extend_from_slice(name);
+            body.extend_from_slice(&1u32.to_le_bytes());
+            body.extend_from_slice(&30u32.to_le_bytes());
+            body.extend_from_slice(&100u32.to_le_bytes());
+            body.extend_from_slice(&((id >> 48) as u16).to_le_bytes());
+            body.extend_from_slice(&[0, 0, 1]);
+            body.extend_from_slice(&1000u64.to_le_bytes());
+        }
+        frame_packet(&body).unwrap()
+    }
+
+    #[test]
+    fn serialized_slices_replace_roster_ids_and_earlier_copies_with_per_slice_values() {
+        let ids = [0x0519_12b3_56d7_89efu64, 0x051a_9087_6543_210fu64];
+        let roster = identity_roster(ids);
+        let copy = frame_packet(&[&[0x04, 0x38][..], &ids[0].to_le_bytes()].concat()).unwrap();
+        let bundle = rewrap_bundle(&roster).unwrap();
+        let packets = [CapturedPacket { captured_at_ms: 0, stream: "Client:1".into(), bytes: [copy, bundle].concat() }];
+        let slice = build(&packets, 0, 10, &NameMap::new(), KEY).unwrap();
+        let encoded = encode(&slice);
+        for id in ids {
+            assert!(!encoded.windows(8).any(|b| b == id.to_le_bytes()), "stable identity survived final serialization");
+        }
+        let (records, map) = decode(&encoded).unwrap();
+        assert!(map.values().all(|&id| id == 0));
+        let plain = expand(&records[1].1);
+        let fields = super::super::stream_processor::roster_identity_fields(&plain).unwrap();
+        let anonymized: Vec<_> = fields.iter().map(|r| u64::from_le_bytes(plain[r.clone()].try_into().unwrap())).collect();
+        assert_eq!(anonymized.len(), 3);
+        assert_eq!(anonymized[0], anonymized[1], "the leader/member relationship survives replay");
+        assert_ne!(anonymized[1], anonymized[2]);
+        assert_eq!(anonymized[1] >> 48, ids[0] >> 48);
+        assert_eq!(anonymized[2] >> 48, ids[1] >> 48);
+        assert!(expand(&records[0].1).windows(8).any(|b| b == anonymized[1].to_le_bytes()));
+        let other = build(&packets, 0, 10, &NameMap::new(), [8; 32]).unwrap();
+        assert_ne!(expand(&other.records[1].1), plain, "identities cannot be joined across slices");
+        assert_eq!(unblinded_names(&records, &map), 0);
+    }
+
+    #[test]
+    fn an_incomplete_retained_roster_is_refused() {
+        assert!(matches!(build(&[cap(0, &[0x02, 0x97, 1, 2, 3])], 0, 10, &NameMap::new(), KEY), Err(SliceError::RosterIdentity)));
+    }
+
+    #[test]
+    fn an_early_last_slot_cannot_conceal_another_members_identity() {
+        let ids = [0x0519_12b3_56d7_89efu64, 0x051a_9087_6543_210fu64];
+        for slot in [2, 255] {
+            let mut roster = identity_roster(ids);
+            let fields = super::super::stream_processor::roster_identity_fields(&roster).unwrap();
+            roster[fields[1].start - 1] = slot;
+            let packets = [CapturedPacket { captured_at_ms: 0, stream: "Client:1".into(), bytes: roster }];
+            assert!(matches!(build(&packets, 0, 10, &NameMap::new(), KEY), Err(SliceError::RosterIdentity)));
+        }
+    }
+
+    #[test]
+    fn unknown_roster_tails_are_excluded_from_the_serialized_slice() {
+        let ids = [0x0519_12b3_56d7_89efu64, 0x051a_9087_6543_210fu64];
+        let third = 0x051b_9087_6543_216fu64;
+        let roster = identity_roster(ids);
+        let length = super::super::stream_processor::read_varint(&roster, 0).length as usize;
+        let mut body = roster[length..].to_vec();
+        body.extend_from_slice(&third.to_le_bytes());
+        let slice = slice_of(&[frame_packet(&body).unwrap()], &NameMap::new());
+        assert!(!encode(&slice).windows(8).any(|b| b == third.to_le_bytes()));
+    }
+
+    #[test]
+    fn splitting_one_capture_into_records_cannot_bypass_its_live_expansion_limit() {
+        let mut inner = frame_packet(&[0x04, 0x38, 0]).unwrap();
+        inner.resize(1_000_000, 0);
+        let bundle = rewrap_bundle(&inner).unwrap();
+        let cap = CapturedPacket { captured_at_ms: 0, stream: "Client:1".into(), bytes: bundle.repeat(9) };
+        assert!(matches!(build(&[cap], 0, 10, &NameMap::new(), KEY), Err(SliceError::ExpansionLimit)));
+        // A discarded host's embedded identity blocks also consume the live
+        // input budget before the kept damage bundle that follows it.
+        let mut host = vec![0x99, 0x36];
+        host.extend_from_slice(&bundle.repeat(9));
+        let bytes = [frame_packet(&host).unwrap(), bundle].concat();
+        let cap = CapturedPacket { captured_at_ms: 0, stream: "Client:1".into(), bytes };
+        assert!(matches!(build(&[cap], 0, 10, &NameMap::new(), KEY), Err(SliceError::ExpansionLimit)));
+    }
+
+    #[test]
+    fn a_retained_packet_with_embedded_compressed_identity_is_refused() {
+        let roster = identity_roster([0x0519_12b3_56d7_89ef, 0x051a_9087_6543_210f]);
+        let mut host = vec![0x04, 0x38, 0];
+        host.extend_from_slice(&rewrap_bundle(&roster).unwrap());
+        let packets = [CapturedPacket { captured_at_ms: 0, stream: "Client:1".into(), bytes: frame_packet(&host).unwrap() }];
+        assert!(matches!(build(&packets, 0, 10, &NameMap::new(), KEY), Err(SliceError::EmbeddedIdentity)));
+    }
+
+    #[test]
+    fn overlapping_known_names_are_collected_once_per_pattern() {
+        let names: NameMap = (2..=16).map(|n| ("A".repeat(n), 0)).collect();
+        let ordered: Vec<_> = names.iter().collect();
+        let blinder = Blinder::new(KEY, &ordered);
+        assert_eq!(blinder.present(&vec![b'A'; 1024 * 1024]), (0..ordered.len()).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_cached_slice_is_reanonymized_without_changing_its_name_tokens() {
+        let ids = [0x0519_12b3_56d7_89efu64, 0x051a_9087_6543_210fu64];
+        let mut roster = identity_roster(ids);
+        Blinder::new(KEY, &[]).blind(&mut roster);
+        let fields = super::super::stream_processor::roster_identity_fields(&roster).unwrap();
+        for (field, raw) in fields.into_iter().zip([ids[0], ids[0], ids[1]]) {
+            roster[field].copy_from_slice(&raw.to_le_bytes());
+        }
+        let records = vec![(0, rewrap_bundle(&roster).unwrap())];
+        let before = name_field_contents(&records).unwrap();
+        let old = encode(&EvidenceSlice { records, blind_map: HashMap::from([("token".into(), ids[0])]), stats: Default::default() });
+        let migrated = anonymize_stored_slice(&old[..], [9; 32]).unwrap();
+        for id in ids { assert!(!migrated.windows(8).any(|b| b == id.to_le_bytes())); }
+        let (records, map) = decode(&migrated).unwrap();
+        assert_eq!(name_field_contents(&records).unwrap(), before);
+        assert!(map.values().all(|&id| id == 0));
+    }
+
     /// `blinded` is `source` but for its names: the name fields given, and
     /// the runs a blinder that knows no names changes (text shaped like a
     /// name, which the log service also counts as one).
     fn only_names_changed(source: &[u8], blinded: &[u8], fields: &[std::ops::Range<usize>]) {
+        let canonical = super::super::stream_processor::roster_body_for_sharing(source).unwrap()
+            .and_then(|body| frame_packet(&body));
+        let source = canonical.as_deref().unwrap_or(source);
+        let canonical_fields: Vec<_> = super::super::stream_processor::name_fields(source).into_iter().map(|f| f.range).collect();
+        let fields = if canonical.is_some() { &canonical_fields[..] } else { fields };
         assert_eq!(blinded.len(), source.len());
         let mut shaped = source.to_vec();
         Blinder::new(KEY, &[]).blind_name_shaped(&mut shaped);
+        let identities = super::super::stream_processor::roster_identity_fields(source).unwrap_or_default();
         for (i, (b, s)) in blinded.iter().zip(source).enumerate() {
-            if !fields.iter().any(|f| f.contains(&i)) && shaped[i] == *s {
+            if !fields.iter().chain(&identities).any(|f| f.contains(&i)) && shaped[i] == *s {
                 assert_eq!(b, s, "byte {i} of {source:02x?}");
             }
         }
@@ -1908,7 +2248,7 @@ mod tests {
     /// `leaked_names` as it was: each name looked for in turn.
     fn leaked_names_one_at_a_time(records: &[(i32, Vec<u8>)], names: &[String]) -> usize {
         let plaintext: Vec<Vec<u8>> = records.iter().map(|(_, p)| expand(p)).collect();
-        let fields = name_field_contents(records);
+        let fields = name_field_contents(records).expect("complete traversal");
         names
             .iter()
             .map(|n| n.as_bytes())
@@ -2078,7 +2418,7 @@ mod tests {
 
     #[test]
     fn cjk_names_survive_blinding_as_valid_utf8() {
-        let mut payload = vec![0x02, 0x97];
+        let mut payload = vec![0x04, 0x8D];
         payload.extend_from_slice("九州依然在".as_bytes());
         let mut names = NameMap::new();
         names.insert("九州依然在".into(), 3);
@@ -2122,7 +2462,7 @@ mod tests {
 
     #[test]
     fn round_trips_through_the_container() {
-        let mut payload = vec![0x02, 0x97, 0x01, 0x02, 0x03];
+        let mut payload = vec![0x04, 0x8D, 0x01, 0x02, 0x03];
         payload.extend_from_slice(b"Grandine");
         let mut names = NameMap::new();
         names.insert("Grandine".into(), 0x03f5_0000_0001_b9c0);
@@ -2135,10 +2475,7 @@ mod tests {
         assert_eq!(blind_map, slice.blind_map);
         // Present, not first: the map also holds tokens for name-shaped strings
         // discovered structurally, and HashMap order is not a thing to assert on.
-        assert!(
-            blind_map.values().any(|&d| d == 0x03f5_0000_0001_b9c0),
-            "the roster id survived the round trip"
-        );
+        assert!(blind_map.values().all(|&d| d == 0), "the metadata carries no stable roster ids");
     }
 
     #[test]
@@ -2261,6 +2598,77 @@ mod tests {
         assert_eq!(w.consumed, unpacked.len());
         let got: Vec<_> = w.frames.iter().map(|f| f.payload(&unpacked).to_vec()).collect();
         assert_eq!(got, vec![short.clone(), long.clone()]);
+    }
+
+    #[test]
+    fn expansion_shares_one_budget_across_records_and_nested_siblings() {
+        let packet = frame_packet(&[0x04, 0x38, 1]).unwrap();
+        let bundle = rewrap_bundle(&packet).unwrap();
+        let mut budget = framing::DecompressionBudget::new(packet.len(), 10);
+        assert_eq!(expand_checked(&bundle, &mut budget), Some(packet.clone()));
+        assert!(expand_checked(&bundle, &mut budget).is_none());
+
+        let siblings = [bundle.clone(), bundle].concat();
+        let nested = rewrap_bundle(&siblings).unwrap();
+        let mut budget = framing::DecompressionBudget::new(siblings.len() + packet.len(), 10);
+        assert!(expand_checked(&nested, &mut budget).is_none(), "partial expansion must not certify a record");
+    }
+
+    #[test]
+    fn name_verification_refuses_unreadable_or_over_nested_bundles() {
+        let malformed = frame_packet(&[0xff, 0xff, 40, 0, 0, 0, 0xff]).unwrap();
+        let records = vec![(0, malformed)];
+        assert!(unblinded_names(&records, &HashMap::new()) > 0);
+        assert!(leaked_names(&records, &["Alice".into()]) > 0);
+        assert!(name_field_contents(&records).is_none());
+
+        let mut nested = frame_packet(&[0x04, 0x38, 1]).unwrap();
+        for _ in 0..=MAX_BUNDLE_DEPTH { nested = rewrap_bundle(&nested).unwrap(); }
+        assert!(expand_checked(&nested, &mut framing::DecompressionBudget::default()).is_none());
+        assert!(unblinded_names(&[(0, nested)], &HashMap::new()) > 0);
+    }
+
+    #[test]
+    fn legacy_upgrade_cannot_retain_a_bundle_it_could_not_expand() {
+        // The old one-byte inner frame spans len - 3 bytes; a top-level
+        // bundle spans len - 2. No fallback may return its compressed bytes.
+        let inner = [7, 0x04, 0x38, 1];
+        let mut payload = vec![0xff, 0xff];
+        payload.extend_from_slice(&(inner.len() as u32).to_le_bytes());
+        payload.extend_from_slice(&lz4_flex::compress(&inner));
+        let mut old = vec![(payload.len() + 3) as u8];
+        old.extend_from_slice(&payload);
+        let mut budget = framing::DecompressionBudget::new(0, 10);
+        assert!(upgrade_v1_record(&old, &mut budget).is_none());
+    }
+
+    #[test]
+    fn decode_refuses_unbounded_record_counts_before_reading_records() {
+        struct HeaderOnly(std::io::Cursor<Vec<u8>>);
+        impl std::io::Read for HeaderOnly {
+            fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+                assert!(self.0.position() < self.0.get_ref().len() as u64,
+                    "an impossible record count must be refused before reading a record");
+                std::io::Read::read(&mut self.0, out)
+            }
+        }
+        let mut header = MAGIC.to_vec();
+        header.extend_from_slice(&VERSION.to_le_bytes());
+        header.extend_from_slice(&[0, 0, 0, 0]); // no opcode or name table
+        header.extend_from_slice(&u32::MAX.to_le_bytes());
+        assert!(decode_from(HeaderOnly(std::io::Cursor::new(header)), 32 * 1024 * 1024).is_none());
+    }
+
+    #[test]
+    fn zero_length_records_cannot_evade_the_decoded_size_limit() {
+        let slice = EvidenceSlice {
+            records: vec![(0, Vec::new()); 16],
+            blind_map: HashMap::new(),
+            stats: SliceStats::default(),
+        };
+        let bytes = encode(&slice);
+        assert!(decode_from(&bytes[..], 1024).is_none());
+        assert!(decode_from(&encode_legacy(&slice, 2)[..], 1024).is_none());
     }
 
     #[test]

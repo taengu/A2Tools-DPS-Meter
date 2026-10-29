@@ -18,7 +18,8 @@
     try {
       const found = await invoke("check_for_update", { ask });
       if (found?.state === "offer") pending = true;
-      return { state: found?.state || "failed", latest: found?.latest ? `v${found.latest}` : undefined };
+      return { state: found?.state || "failed", latest: found?.latest ? `v${found.latest}` : undefined,
+        message: typeof found?.message === "string" ? found.message : undefined };
     } catch (e) {
       console.error("[A2Tools] Update check failed:", e);
       return { state: "failed" };

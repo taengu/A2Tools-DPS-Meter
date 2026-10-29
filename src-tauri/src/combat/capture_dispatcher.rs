@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-use crate::capture::captured_payload::CapturedPayload;
+use crate::capture::captured_payload::{CapturedPayload, FlowKey};
 use crate::capture::combat_port_detector::CombatPortDetector;
 use crate::capture::stream_assembler::StreamAssembler;
 use crate::capture::tcp_order::{Piece, TcpOrder};
@@ -17,9 +17,8 @@ use crate::i18n::lookup::{NpcLookup, SkillLookup};
 use crate::platform::window_detector;
 
 /// Pre-lock combat signatures: a cheap gate deciding which packets are worth
-/// running through the parser before a port is locked. The port only actually
-/// locks when the parser extracts *real damage* (see `run`), so this gate just
-/// limits parse attempts — it does not by itself decide the lock.
+/// running through the parser before a port is locked. A sustained rate of
+/// these signatures selects a flow; it does not authenticate the sender.
 ///
 /// The game's per-record terminator `?? 00 36` had leading byte `0x06`
 /// pre-2026-06; the June 2026 update changed it to `0x0E` (`06 00 36` ->
@@ -40,8 +39,12 @@ const COMBAT_SIGNATURES: [&[u8]; 2] = [
 /// only a *high-rate* flow qualifies, not one that slowly drips coincidental matches.
 const SIGNATURE_LOCK_THRESHOLD: u32 = 12;
 /// Sliding window for the signature-rate lock; the THRESHOLD packets must land within
-/// this span. Reset the per-flow count whenever the gap since the last hit exceeds it.
+/// this span, measured from the oldest retained hit rather than the previous one.
 const SIGNATURE_WINDOW_MS: i64 = 3_000;
+const MAX_ACTIVE_FLOWS: usize = 16;
+const FLOW_IDLE_MS: i64 = 30_000;
+const FLOW_SWEEP_MS: i64 = 1_000;
+const MAX_FILTER_FLOWS: usize = 128;
 const TLS_CONTENT_TYPES: [u8; 4] = [0x14, 0x15, 0x16, 0x17];
 const TLS_VERSIONS: [u8; 5] = [0x00, 0x01, 0x02, 0x03, 0x04];
 const WINDOW_CHECK_STOPPED_MS: i64 = 10_000;
@@ -59,21 +62,56 @@ pub(crate) const PORT_MOVE_QUIET_MS: i64 = 5_000;
 /// game, then replayed in order, so its first packets are read too.
 const PORT_MOVE_FLOWS: usize = 6;
 const PORT_MOVE_FLOW_BYTES: usize = 4 * 1024 * 1024;
+const PORT_MOVE_FLOW_PACKETS: usize = 4096;
+
+#[derive(Default)]
+struct SignatureWindow {
+    hits: VecDeque<i64>,
+}
+
+impl SignatureWindow {
+    fn note(&mut self, now: i64) -> bool {
+        // A clock correction starts a fresh window.
+        if self.hits.back().is_some_and(|&last| now < last) {
+            self.hits.clear();
+        }
+        while self.hits.front().is_some_and(|&first| now.saturating_sub(first) > SIGNATURE_WINDOW_MS) {
+            self.hits.pop_front();
+        }
+        self.hits.push_back(now);
+        while self.hits.len() > SIGNATURE_LOCK_THRESHOLD as usize {
+            self.hits.pop_front();
+        }
+        self.ready()
+    }
+
+    fn ready(&self) -> bool {
+        self.hits.len() >= SIGNATURE_LOCK_THRESHOLD as usize
+    }
+}
+
+fn admit_flow(seen: &mut HashMap<FlowKey, i64>, key: &FlowKey, now: i64, limit: usize) -> bool {
+    if !seen.contains_key(key) && seen.len() >= limit {
+        return false;
+    }
+    seen.insert(key.clone(), now);
+    true
+}
 
 /// A connection seen while the locked port was quiet.
 #[derive(Default)]
 struct WaitingFlow {
     packets: Vec<CapturedPayload>,
     bytes: usize,
-    /// Signature hits in the window, and the last one.
-    hits: (u32, i64),
+    hits: SignatureWindow,
+    last_seen: i64,
 }
 
 /// The connections seen while the locked port is quiet, until one sustains
 /// the game's signature rate (see PORT_MOVE_QUIET_MS).
 #[derive(Default)]
 struct WaitingFlows {
-    flows: HashMap<(u16, u16), WaitingFlow>,
+    flows: HashMap<FlowKey, WaitingFlow>,
 }
 
 impl WaitingFlows {
@@ -84,27 +122,24 @@ impl WaitingFlows {
         if looks_like_tls(&cap.data) {
             return None;
         }
-        let key = (cap.src_port.min(cap.dst_port), cap.src_port.max(cap.dst_port));
+        self.flows.retain(|_, flow| now.saturating_sub(flow.last_seen) <= FLOW_IDLE_MS);
+        let key = cap.direction_key();
         if !self.flows.contains_key(&key) && self.flows.len() >= PORT_MOVE_FLOWS {
             return None;
         }
-        let flow = self.flows.entry(key).or_default();
-        if flow.bytes + cap.data.len() > PORT_MOVE_FLOW_BYTES {
+        let flow = self.flows.entry(key.clone()).or_default();
+        if cap.data.len() > PORT_MOVE_FLOW_BYTES.saturating_sub(flow.bytes)
+            || flow.packets.len() >= PORT_MOVE_FLOW_PACKETS {
             return None;
         }
         // The signature only ever comes from the server's side.
         let signed = contains_any(&cap.data, &COMBAT_SIGNATURES);
-        if signed {
-            if now - flow.hits.1 > SIGNATURE_WINDOW_MS {
-                flow.hits.0 = 0;
-            }
-            flow.hits.0 += 1;
-            flow.hits.1 = now;
-        }
+        let ready = signed && flow.hits.note(now);
         let server_port = cap.src_port;
         flow.bytes += cap.data.len();
+        flow.last_seen = now;
         flow.packets.push(cap);
-        if !(signed && flow.hits.0 >= SIGNATURE_LOCK_THRESHOLD) {
+        if !ready {
             return None;
         }
         let packets = self.flows.remove(&key).map(|f| f.packets).unwrap_or_default();
@@ -116,14 +151,6 @@ impl WaitingFlows {
         self.flows.clear();
     }
 }
-/// Once locked, the game's stream on another device takes over the lock when
-/// the locked device has carried nothing from the game's port for this long
-/// and the other one sustains the lock's signature rate. A relay or ping
-/// reducer repeats the stream on a second device while the locked one stays
-/// busy, so it never moves the lock; a VPN connecting mid-session, or an
-/// instance server routed differently, does. Before this the meter waited
-/// STALE_CONNECTION_MS, missing two minutes of a raid.
-const DEVICE_MOVE_QUIET_MS: i64 = 5_000;
 /// While no port is locked, how often to log what the capture is seeing. Before
 /// the lock every gate is silent, so without this a meter that never locks
 /// leaves a log that cannot say why.
@@ -227,22 +254,24 @@ impl CaptureDispatcher {
     }
 
     /// Run the dispatch loop, consuming packets from the channel.
-    pub async fn run(&self, mut receiver: mpsc::Receiver<CapturedPayload>) {
-        let mut assemblers: HashMap<(u16, u16), (StreamAssembler, StreamProcessor, TcpOrder)> = HashMap::new();
+    pub async fn run(&self, receiver: mpsc::Receiver<CapturedPayload>) {
+        self.run_with_window_check(receiver, window_detector::find_aion2_window_title).await;
+    }
+
+    async fn run_with_window_check(&self, mut receiver: mpsc::Receiver<CapturedPayload>, window_title: fn() -> Option<String>) {
+        let mut assemblers: HashMap<FlowKey, (StreamAssembler, StreamProcessor, TcpOrder)> = HashMap::new();
         // Per-flow count of signature-bearing packets seen while still unlocked, used
         // for the no-combat-needed signature lock (see SIGNATURE_LOCK_THRESHOLD).
-        // Per-flow signature-rate tracker: (count_in_window, last_hit_ms).
-        let mut sig_hits: HashMap<(u16, u16), (u32, i64)> = HashMap::new();
+        let mut sig_hits: HashMap<FlowKey, SignatureWindow> = HashMap::new();
+        let mut flow_seen: HashMap<FlowKey, i64> = HashMap::new();
+        let mut last_flow_sweep_ms = 0;
+        let mut locked_flow: Option<FlowKey> = None;
         let mut connections = ConnectionFilter::default();
         let mut last_window_check_ms: i64 = 0;
         let mut is_aion_running = false;
         let mut window_logged: Option<bool> = None;
         let mut unlocked_stats = UnlockedStats::default();
         let mut last_unlocked_report_ms = now_ms();
-        // Locked: when the game's port last sent on the locked device, and the
-        // signature rate of that port on other devices (see DEVICE_MOVE_QUIET_MS).
-        let mut last_on_locked_device_ms: i64 = 0;
-        let mut elsewhere: HashMap<String, (u32, i64)> = HashMap::new();
         // The game server's address, as last told to DataStorage.
         let mut last_game_host: Option<std::net::Ipv4Addr> = None;
         // Wall clock minus capture clock. Npcap sets its clock from the
@@ -270,10 +299,16 @@ impl CaptureDispatcher {
 
             // Check AION window
             let now = now_ms();
+            if now.saturating_sub(last_flow_sweep_ms) >= FLOW_SWEEP_MS {
+                flow_seen.retain(|_, last| now.saturating_sub(*last) <= FLOW_IDLE_MS);
+                assemblers.retain(|key, _| flow_seen.contains_key(key));
+                sig_hits.retain(|key, _| flow_seen.contains_key(key));
+                last_flow_sweep_ms = now;
+            }
             let interval = if is_aion_running { WINDOW_CHECK_RUNNING_MS } else { WINDOW_CHECK_STOPPED_MS };
             if now - last_window_check_ms >= interval {
                 last_window_check_ms = now;
-                let title = window_detector::find_aion2_window_title();
+                let title = window_title();
                 let running = title.is_some();
                 if window_logged != Some(running) {
                     match &title {
@@ -289,6 +324,11 @@ impl CaptureDispatcher {
                     self.ping_tracker.reset();
                     assemblers.clear();
                     sig_hits.clear();
+                    flow_seen.clear();
+                    connections.clear();
+                    locked_flow = None;
+                    waiting.clear();
+                    replay.clear();
                 }
                 is_aion_running = running;
             }
@@ -322,83 +362,61 @@ impl CaptureDispatcher {
                     self.ping_tracker.reset();
                     assemblers.clear();
                     sig_hits.clear();
+                    flow_seen.clear();
+                    connections.clear();
+                    locked_flow = None;
+                    waiting.clear();
+                    replay.clear();
                 }
             }
 
             let current_port = self.port_detector.current_port();
             let locked_device = self.port_detector.current_device();
+            let connection = cap.flow_key();
 
-            // Device filter
-            if let Some(ref dev) = locked_device {
-                // Counted from the lock: a relay's second copy of the stream
-                // right after it doesn't move it.
-                if last_on_locked_device_ms == 0 {
-                    last_on_locked_device_ms = now;
-                }
-                let from_game_port = current_port.is_some_and(|port| cap.src_port == port);
-                if !device_matches(dev, cap.device_name.as_deref()) {
-                    let Some(other) = cap.device_name.as_deref().map(str::trim).filter(|d| !d.is_empty()) else { continue };
-                    if !from_game_port || !contains_any(&cap.data, &COMBAT_SIGNATURES) {
-                        continue;
-                    }
-                    // A device picked in Settings stays the one captured: the
-                    // lock never moves off it to another.
-                    if self.port_detector.preferred_device().is_some_and(|pref| !device_matches(&pref, Some(other))) {
-                        continue;
-                    }
-                    let slot = elsewhere.entry(other.to_string()).or_insert((0, now));
-                    if now - slot.1 > SIGNATURE_WINDOW_MS {
-                        slot.0 = 0;
-                    }
-                    slot.0 += 1;
-                    slot.1 = now;
-                    let quiet = now - last_on_locked_device_ms >= DEVICE_MOVE_QUIET_MS;
-                    if slot.0 < SIGNATURE_LOCK_THRESHOLD || !quiet {
-                        continue;
-                    }
-                    // The stream continues on the other device; its own
-                    // connection gets a fresh assembler below.
-                    self.port_detector.move_device(other);
-                    elsewhere.clear();
-                    assemblers.clear();
-                    last_on_locked_device_ms = now;
-                } else if from_game_port {
-                    last_on_locked_device_ms = now;
-                }
-            } else {
-                last_on_locked_device_ms = 0;
-                elsewhere.clear();
-            }
-
-            // Preferred device filter
-            if current_port.is_none() {
-                if let Some(ref pref) = self.port_detector.preferred_device() {
-                    if !device_matches(pref, cap.device_name.as_deref()) {
-                        continue;
-                    }
+            // A manually selected capture device remains authoritative.
+            if let Some(ref pref) = self.port_detector.preferred_device() {
+                if !device_matches(pref, cap.device_name.as_deref()) {
+                    continue;
                 }
             }
 
-            // Port filter. While the locked port is quiet, another connection
-            // carrying the game's signature rate takes the lock (a server
-            // switch), its packets so far read first (see PORT_MOVE_QUIET_MS).
+            // Follow the complete connection, including its device and both
+            // addresses. An unrelated host using the same ports must not feed
+            // the locked assembler, ping tracker or last-activity clock.
+            // Reconnects, server changes and VPN moves share the same bounded
+            // handoff: the old flow must be quiet and one new flow must sustain
+            // the signature rate before its retained packets are replayed.
             if let Some(port) = current_port {
-                if cap.src_port == port {
-                    self.port_detector.mark_from_port();
-                    waiting.clear();
-                }
-                if cap.src_port != port && cap.dst_port != port {
+                if locked_flow.as_ref().is_some_and(|flow| flow != &connection) {
                     let quiet = self.port_detector.port_quiet_ms(now).is_some_and(|q| q >= PORT_MOVE_QUIET_MS);
                     if !quiet {
                         continue;
                     }
                     if let Some((new_port, packets)) = waiting.offer(cap, now) {
                         self.port_detector.move_port(new_port);
+                        if let Some(device) = packets.last().and_then(|p| p.device_name.as_deref()) {
+                            if locked_device.as_deref().is_none_or(|old| !device_matches(old, Some(device))) {
+                                self.port_detector.move_device(device);
+                            }
+                        }
+                        locked_flow = packets.last().map(CapturedPayload::flow_key);
+                        self.port_detector.mark_from_port();
+                        self.ping_tracker.reset();
                         assemblers.clear();
                         sig_hits.clear();
+                        flow_seen.clear();
+                        connections.clear();
                         replay.extend(packets);
                     }
                     continue;
+                }
+                if cap.src_port != port && cap.dst_port != port {
+                    continue;
+                }
+                if cap.src_port == port {
+                    self.port_detector.mark_from_port();
+                    waiting.clear();
                 }
             }
 
@@ -437,36 +455,29 @@ impl CaptureDispatcher {
                 }
             }
 
-            if !connections.admit(&cap) {
+            if !connections.admit_at(&cap, now) {
                 continue;
             }
 
             // Get or create assembler
-            let a = cap.src_port.min(cap.dst_port);
-            let b = cap.src_port.max(cap.dst_port);
-            let key = (a, b);
+            let key = cap.direction_key();
+            if !admit_flow(&mut flow_seen, &key, now, MAX_ACTIVE_FLOWS) {
+                continue;
+            }
 
-            let (assembler, processor, order) = assemblers.entry(key).or_insert_with(|| {
+            let (assembler, processor, order) = assemblers.entry(key.clone()).or_insert_with(|| {
                 let mut proc = StreamProcessor::new(self.data_storage.clone(), self.skill_lookup.clone(), self.npc_lookup.clone());
                 proc.set_dot_skill_ids(self.dot_skill_ids.clone());
                 (StreamAssembler::new(), proc, TcpOrder::default())
             });
 
             if unlocked {
-                self.port_detector.register_candidate(cap.src_port, key, cap.device_name.as_deref());
+                self.port_detector.register_candidate(cap.src_port, (cap.src_port, cap.dst_port), cap.device_name.as_deref());
                 // Count this signature-bearing packet against its source port (the
                 // signature only ever travels server->client). The lock decision is
                 // made below, after process_chunk, so we don't touch `assemblers`
                 // while the assembler for this flow is still borrowed.
-                // Windowed signature rate: reset the count if too long since the last
-                // hit, so only a sustained high-rate flow (the live game) accumulates.
-                let now = now_ms();
-                let slot = sig_hits.entry(key).or_insert((0, now));
-                if now - slot.1 > SIGNATURE_WINDOW_MS {
-                    slot.0 = 0;
-                }
-                slot.0 += 1;
-                slot.1 = now;
+                sig_hits.entry(key.clone()).or_default().note(now);
             }
 
             // A flow locks the port only by sustaining the game's signature RATE
@@ -491,8 +502,9 @@ impl CaptureDispatcher {
             });
             // The server's bytes in its order (`tcp_order`): late segments put
             // back, retransmitted bytes read once, a hole reported. A payload
-            // with no sequence number (0: a test's) is read as it comes.
-            let pieces = if cap.tcp_seq == 0 {
+            // without TCP metadata (a text replay or a test) is read as it
+            // comes. Sequence zero on a live, addressed segment is valid.
+            let pieces = if !cap.has_tcp_sequence() {
                 vec![Piece::Bytes(cap.data.clone())]
             } else {
                 order.push(cap.tcp_seq, &cap.data, cap.captured_at_ms)
@@ -534,13 +546,18 @@ impl CaptureDispatcher {
             processor.set_override_timestamp(None);
 
             let signature_locked =
-                unlocked && sig_hits.get(&key).map(|(c, _)| *c).unwrap_or(0) >= SIGNATURE_LOCK_THRESHOLD;
+                unlocked && sig_hits.get(&key).is_some_and(SignatureWindow::ready);
             if signature_locked && self.port_detector.current_port().is_none() {
                 self.port_detector.confirm_candidate(cap.src_port, cap.dst_port, cap.device_name.as_deref());
                 // On lock, GC the orphaned candidate assemblers (the relay's
                 // duplicate external flows) so only the locked flow is processed.
                 if self.port_detector.current_port().is_some() {
+                    locked_flow = Some(connection);
+                    // A signature-selected stream that never parses anything
+                    // must still become stale, rather than retain a zero clock.
+                    self.port_detector.mark_packet_parsed();
                     assemblers.retain(|k, _| *k == key);
+                    flow_seen.retain(|k, _| *k == key);
                     sig_hits.clear();
                 }
             }
@@ -568,18 +585,28 @@ fn looks_like_tls(data: &[u8]) -> bool {
 /// inside the game's stream is ever skipped.
 #[derive(Default)]
 struct ConnectionFilter {
-    seen: std::collections::HashSet<(u16, u16)>,
-    tls: std::collections::HashSet<(u16, u16)>,
+    flows: HashMap<FlowKey, (bool, i64)>,
 }
 
 impl ConnectionFilter {
+    #[cfg(test)]
     fn admit(&mut self, cap: &CapturedPayload) -> bool {
-        let connection = (cap.src_port.min(cap.dst_port), cap.src_port.max(cap.dst_port));
-        if self.seen.insert(connection) && is_tls_record(&cap.data) {
-            tracing::info!("Connection {} -> {} carries TLS: not the game, left out", cap.src_port, cap.dst_port);
-            self.tls.insert(connection);
+        self.admit_at(cap, now_ms())
+    }
+
+    fn admit_at(&mut self, cap: &CapturedPayload, now: i64) -> bool {
+        self.flows.retain(|_, (_, last)| now.saturating_sub(*last) <= FLOW_IDLE_MS);
+        let key = cap.flow_key();
+        if !self.flows.contains_key(&key) && self.flows.len() >= MAX_FILTER_FLOWS {
+            return false;
         }
-        !self.tls.contains(&connection)
+        let entry = self.flows.entry(key).or_insert_with(|| (is_tls_record(&cap.data), now));
+        entry.1 = now;
+        !entry.0
+    }
+
+    fn clear(&mut self) {
+        self.flows.clear();
     }
 }
 
@@ -669,6 +696,170 @@ mod tests {
         c.src_port = src;
         c.dst_port = dst;
         c
+    }
+
+    #[tokio::test]
+    async fn an_unrelated_host_with_matching_ports_cannot_replace_the_locked_host() {
+        let _turn = crate::share::ring::TEST_SERIAL.lock();
+        crate::share::ring::clear();
+        let storage = Arc::new(DataStorage::new());
+        let detector = Arc::new(CombatPortDetector::new());
+        let dispatcher = CaptureDispatcher::new(
+            storage.clone(), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()),
+            detector.clone(), Arc::new(PingTracker::new()),
+        );
+        let mut game = flow(13328, 50000, COMBAT_SIGNATURES[0]);
+        game.device_name = Some("Npcap Loopback Adapter".into());
+        game.src_ip = Some("192.0.2.1".parse().unwrap());
+        game.dst_ip = Some("192.0.2.2".parse().unwrap());
+        let (sender, receiver) = mpsc::channel(32);
+        for _ in 0..SIGNATURE_LOCK_THRESHOLD + 1 {
+            sender.send(game.clone()).await.unwrap();
+        }
+        let mut stranger = game.clone();
+        stranger.src_ip = Some("192.0.2.3".parse().unwrap());
+        sender.send(stranger).await.unwrap();
+        let mut other_device = game.clone();
+        other_device.device_name = Some("other device".into());
+        sender.send(other_device).await.unwrap();
+        drop(sender);
+        dispatcher.run_with_window_check(receiver, || Some("AION2 test".into())).await;
+        assert_eq!(detector.current_port(), Some(game.src_port));
+        assert_eq!(storage.game_host(), game.src_ip);
+        assert_eq!(detector.current_device(), game.device_name);
+        crate::share::ring::clear();
+    }
+
+    #[tokio::test]
+    async fn zero_sequence_file_replay_chunks_with_current_timestamps_are_all_read() {
+        let _turn = crate::share::ring::TEST_SERIAL.lock();
+        crate::share::ring::clear();
+        let detector = Arc::new(CombatPortDetector::new());
+        let device = "Npcap Loopback Adapter";
+        detector.register_candidate(13328, (13328, 50000), Some(device));
+        detector.confirm_candidate(13328, 50000, Some(device));
+        let dispatcher = CaptureDispatcher::new(
+            Arc::new(DataStorage::new()), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()),
+            detector, Arc::new(PingTracker::new()),
+        );
+        let (sender, receiver) = mpsc::channel(2);
+        for bytes in [&[0x77][..], &[0x88][..]] {
+            let mut replay = flow(13328, 50000, bytes);
+            replay.device_name = Some(device.into());
+            replay.captured_at_ms = 1_791_237_434_407;
+            assert!(replay.capture_time_ms().is_some());
+            assert!(!replay.has_tcp_sequence());
+            sender.send(replay).await.unwrap();
+        }
+        drop(sender);
+        dispatcher.run_with_window_check(receiver, || Some("AION2 test".into())).await;
+        let packets = crate::share::ring::snapshot();
+        assert_eq!(packets.iter().map(|p| p.bytes.clone()).collect::<Vec<_>>(), vec![vec![0x77], vec![0x88]]);
+        crate::share::ring::clear();
+        let mut live = flow(13328, 50000, &[1]);
+        live.src_ip = Some("192.0.2.1".parse().unwrap());
+        live.dst_ip = Some("192.0.2.2".parse().unwrap());
+        assert!(live.has_tcp_sequence(), "live sequence zero must be ordered");
+    }
+
+    #[test]
+    fn endpoints_devices_and_directions_do_not_share_parser_state() {
+        let mut first = flow(13328, 50000, &[1]);
+        first.src_ip = Some("192.0.2.1".parse().unwrap());
+        first.dst_ip = Some("192.0.2.2".parse().unwrap());
+        let mut other = first.clone();
+        other.src_ip = Some("192.0.2.3".parse().unwrap());
+        assert_ne!(first.flow_key(), other.flow_key());
+        assert_ne!(first.direction_key(), other.direction_key());
+        assert_ne!(first.stream_key(), other.stream_key());
+        other = first.clone();
+        other.device_name = Some("vpn".into());
+        assert_ne!(first.flow_key(), other.flow_key());
+        assert_ne!(first.stream_key(), other.stream_key());
+        let reverse = CapturedPayload {
+            src_ip: first.dst_ip, dst_ip: first.src_ip,
+            src_port: first.dst_port, dst_port: first.src_port,
+            ..first.clone()
+        };
+        assert_eq!(first.flow_key(), reverse.flow_key());
+        assert_ne!(first.direction_key(), reverse.direction_key());
+        assert_eq!(first.stream_key(), first.clone().stream_key());
+        assert_eq!(first.stream_key().rsplit(':').next(), Some("13328"));
+        assert!(!first.stream_key().contains("192.0.2."));
+    }
+
+    #[test]
+    fn a_slow_drip_does_not_accumulate_a_signature_lock() {
+        let mut hits = SignatureWindow::default();
+        let mut waiting = WaitingFlows::default();
+        for i in 0..100 {
+            let now = 1000 + i * (SIGNATURE_WINDOW_MS - 1);
+            assert!(!hits.note(now));
+            assert!(waiting.offer(flow(13328, 50000, COMBAT_SIGNATURES[0]), now).is_none());
+        }
+        let mut hits = SignatureWindow::default();
+        for i in 0..SIGNATURE_LOCK_THRESHOLD {
+            assert_eq!(hits.note(1000 + i as i64 * 100), i + 1 == SIGNATURE_LOCK_THRESHOLD);
+        }
+        assert!(!hits.note(500), "a backwards clock starts a new window");
+    }
+
+    #[test]
+    fn candidates_with_matching_ports_cannot_combine_signature_hits() {
+        let mut waiting = WaitingFlows::default();
+        let mut a = flow(13328, 50000, COMBAT_SIGNATURES[0]);
+        a.src_ip = Some("192.0.2.1".parse().unwrap());
+        let mut b = a.clone();
+        b.src_ip = Some("192.0.2.2".parse().unwrap());
+        for i in 0..6 {
+            assert!(waiting.offer(a.clone(), 1000 + i).is_none());
+            assert!(waiting.offer(b.clone(), 1000 + i).is_none());
+        }
+        for i in 6..11 {
+            assert!(waiting.offer(a.clone(), 1000 + i).is_none());
+        }
+        let (_, packets) = waiting.offer(a.clone(), 1011).expect("one endpoint sustained the rate");
+        assert_eq!(packets.len(), SIGNATURE_LOCK_THRESHOLD as usize);
+        assert!(packets.iter().all(|p| p.src_ip == a.src_ip));
+    }
+
+    #[test]
+    fn flow_tracking_is_bounded_and_idle_tls_classifications_expire() {
+        let mut seen = HashMap::new();
+        let mut filter = ConnectionFilter::default();
+        for port in 1..=1000 {
+            let c = flow(13328, port, &[1]);
+            let admitted = admit_flow(&mut seen, &c.direction_key(), 1000, MAX_ACTIVE_FLOWS);
+            assert_eq!(admitted, port as usize <= MAX_ACTIVE_FLOWS);
+            let filtered = filter.admit_at(&c, 1000);
+            assert_eq!(filtered, port as usize <= MAX_FILTER_FLOWS);
+        }
+        assert_eq!(seen.len(), MAX_ACTIVE_FLOWS);
+        assert_eq!(filter.flows.len(), MAX_FILTER_FLOWS);
+        let tls = flow(13328, 2000, &[0x17, 0x03, 0x03, 0x00, 0x10]);
+        assert!(!filter.admit_at(&tls, 1000 + FLOW_IDLE_MS + 1));
+        assert_eq!(filter.flows.len(), 1);
+        let game = flow(13328, 2000, COMBAT_SIGNATURES[0]);
+        assert!(!filter.admit_at(&game, 1000 + FLOW_IDLE_MS + 2));
+        assert!(filter.admit_at(&game, 1000 + 2 * FLOW_IDLE_MS + 3));
+    }
+
+    #[test]
+    fn handoff_buffers_expire_and_bound_packet_count_as_well_as_bytes() {
+        let mut waiting = WaitingFlows::default();
+        for port in 1..=PORT_MOVE_FLOWS as u16 {
+            waiting.offer(flow(13328, port, &[1]), 1000);
+        }
+        waiting.offer(flow(13328, 1000, &[1]), 1001);
+        assert_eq!(waiting.flows.len(), PORT_MOVE_FLOWS);
+        waiting.offer(flow(13328, 1000, &[1]), 1000 + FLOW_IDLE_MS + 1);
+        assert_eq!(waiting.flows.len(), 1);
+        for _ in 0..PORT_MOVE_FLOW_PACKETS + 10 {
+            waiting.offer(flow(13328, 1000, &[1]), 1000 + FLOW_IDLE_MS + 2);
+        }
+        let state = waiting.flows.values().next().unwrap();
+        assert_eq!(state.packets.len(), PORT_MOVE_FLOW_PACKETS);
+        assert_eq!(state.bytes, PORT_MOVE_FLOW_PACKETS);
     }
 
     /// A server switch: a new connection that sustains the game's signature

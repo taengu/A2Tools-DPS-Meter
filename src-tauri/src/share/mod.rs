@@ -22,7 +22,7 @@
 //!   appears anywhere in the JSON.
 
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Weak};
 
@@ -167,6 +167,26 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
 /// slice by its magic bytes, so slices saved before this still upload.
 pub fn compress_slice(data: &[u8]) -> Result<Vec<u8>, String> {
     zstd::bulk::compress(data, 19).map_err(|e| e.to_string())
+}
+
+const MAX_STORED_SLICE_BYTES: usize = 64 * 1024 * 1024;
+
+/// Cached slices made by older versions can still hold original roster ids.
+/// Apply today's identity transform at the final upload boundary too.
+fn sanitize_compressed_slice(bytes: &[u8], key: evidence_slice::SliceKey) -> Result<Vec<u8>, String> {
+    if bytes.len() > MAX_STORED_SLICE_BYTES { return Err("The saved slice is too large.".into()); }
+    let reader: Box<dyn Read + '_> = if bytes.starts_with(&[0x1f, 0x8b]) {
+        Box::new(flate2::read::GzDecoder::new(bytes))
+    } else if bytes.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
+        let mut decoder = zstd::stream::read::Decoder::new(bytes).map_err(|e| e.to_string())?;
+        decoder.window_log_max(25).map_err(|e| e.to_string())?;
+        Box::new(decoder)
+    } else if bytes.starts_with(evidence_slice::MAGIC) {
+        Box::new(bytes)
+    } else { return Err("The saved slice format is not recognized.".into()); };
+    let encoded = evidence_slice::anonymize_stored_slice(reader.take(MAX_STORED_SLICE_BYTES as u64), key)
+        .map_err(|e| e.to_string())?;
+    compress_slice(&encoded)
 }
 
 /// Gzip a buffer.
@@ -379,8 +399,7 @@ pub fn slice_for(
     packets.sort_by_key(|p| p.captured_at_ms);
 
     let names = resolve_names(&packets);
-    let mut slice = evidence_slice::build(&packets, start, end, &names, slice_key()?).map_err(|e| e.to_string())?;
-    without_roster_ids(&mut slice);
+    let slice = evidence_slice::build(&packets, start, end, &names, slice_key()?).map_err(|e| e.to_string())?;
     let encoded = evidence_slice::encode(&slice);
     Ok((encoded, slice, sources))
 }
@@ -391,19 +410,6 @@ fn slice_key() -> Result<evidence_slice::SliceKey, String> {
     let mut key = [0u8; 32];
     getrandom::fill(&mut key).map_err(|e| format!("no random key for the slice: {e}"))?;
     Ok(key)
-}
-
-/// Blank the roster ids in a slice's blind table before it is written or sent.
-///
-/// The builder records which roster id each blinded name belonged to, so a
-/// service could join uploads to accounts. Nothing does, and a roster id is a
-/// stable handle on a person: every party member's would leave the machine
-/// with every upload, for no purpose. The tokens stay (the parser needs names
-/// to be distinct), the ids do not.
-fn without_roster_ids(slice: &mut evidence_slice::EvidenceSlice) {
-    for id in slice.blind_map.values_mut() {
-        *id = 0;
-    }
 }
 
 pub fn preview(
@@ -451,6 +457,24 @@ pub fn preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_saved_compression_format_gets_the_identity_fix_before_upload() {
+        let raw = 0x0519_12b3_56d7_89efu64;
+        let mut packet = vec![14, 0x04, 0x38];
+        packet.extend_from_slice(&raw.to_le_bytes());
+        let encoded = evidence_slice::encode(&evidence_slice::EvidenceSlice {
+            records: vec![(0, packet)], blind_map: HashMap::from([("token".into(), raw)]), stats: Default::default(),
+        });
+        for saved in [encoded.clone(), gzip(&encoded).unwrap(), compress_slice(&encoded).unwrap()] {
+            let sanitized = sanitize_compressed_slice(&saved, [9; 32]).unwrap();
+            let decoder = zstd::stream::read::Decoder::new(&sanitized[..]).unwrap();
+            let (records, map) = evidence_slice::decode_from(decoder, 32 * 1024 * 1024).unwrap();
+            assert!(map.values().all(|&id| id == 0));
+            assert!(!records[0].1.windows(8).any(|b| b == raw.to_le_bytes()));
+        }
+        assert!(sanitize_compressed_slice(b"not a slice", [9; 32]).is_err());
+    }
     use crate::entity::details_context::{DetailsActorSummary, TargetDetailsResponse};
 
     fn record_with(actors: Vec<DetailsActorSummary>) -> FightRecord {
@@ -711,10 +735,9 @@ pub fn save_slice(
     if !covers(&packets, start, start + record.duration_ms) {
         return Err("no packets in memory for this fight".into());
     }
-    let mut slice =
+    let slice =
         evidence_slice::build(&packets, start, start + record.duration_ms, &names.names, slice_key()?)
             .map_err(|e| e.to_string())?;
-    without_roster_ids(&mut slice);
     let compressed = compress_slice(&evidence_slice::encode(&slice))?;
 
     let dir = slices_dir(app_data_dir);
@@ -977,8 +1000,14 @@ pub async fn upload_detailed(
         }
     };
 
-    let compressed = match std::fs::read(slice_path(app_data_dir, &record.id)) {
-        Ok(bytes) => bytes,
+    let compressed = match std::fs::File::open(slice_path(app_data_dir, &record.id)) {
+        Ok(file) => {
+            let mut bytes = Vec::new();
+            file.take(MAX_STORED_SLICE_BYTES as u64 + 1).read_to_end(&mut bytes)
+                .map_err(|_| UploadFailure::fatal("The saved slice could not be read."))?;
+            if bytes.len() > MAX_STORED_SLICE_BYTES { return Err(UploadFailure::fatal("The saved slice is too large.")); }
+            bytes
+        },
         // Older fights, and fights recorded with packet logging on: cut it
         // from a capture if one covers the fight.
         Err(_) => {
@@ -992,6 +1021,8 @@ pub async fn upload_detailed(
             compress_slice(&encoded).map_err(UploadFailure::fatal)?
         }
     };
+    let compressed = sanitize_compressed_slice(&compressed, slice_key().map_err(UploadFailure::fatal)?)
+        .map_err(UploadFailure::fatal)?;
 
     let meta = read_meta(app_data_dir, &record.id);
     // A guest's upload names nobody, its uploader included: every name goes
@@ -1029,7 +1060,8 @@ pub async fn upload_detailed(
         .await
         .map_err(|e| UploadFailure::retry(format!("Could not reach a2tools.app: {e}")))?;
     let status = response.status();
-    let text = response.text().await.unwrap_or_default();
+    let text = crate::bounded_http::text(response, 64 * 1024).await
+        .map_err(|_| UploadFailure::retry("The upload response was too large or could not be read."))?;
     let reply: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
 
     if status.is_success() {

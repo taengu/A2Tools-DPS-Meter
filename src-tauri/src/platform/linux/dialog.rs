@@ -15,7 +15,7 @@ pub(super) fn on_gtk_thread<T: Send + 'static>(f: impl FnOnce() -> T + Send + 's
     rx.recv().ok()
 }
 
-fn run(title: &str, message: &str, kind: gtk::MessageType, buttons: gtk::ButtonsType) -> gtk::ResponseType {
+fn run(title: &str, message: &str, kind: gtk::MessageType, buttons: gtk::ButtonsType, default_no: bool) -> gtk::ResponseType {
     let (title, message) = (title.to_string(), message.to_string());
     on_gtk_thread(move || {
         let dialog =
@@ -23,6 +23,7 @@ fn run(title: &str, message: &str, kind: gtk::MessageType, buttons: gtk::Buttons
         dialog.set_title(&title);
         // The overlay stays on top; the question must not open behind it.
         dialog.set_keep_above(true);
+        if default_no { dialog.set_default_response(gtk::ResponseType::No); }
         let response = dialog.run();
         dialog.close();
         response
@@ -31,10 +32,14 @@ fn run(title: &str, message: &str, kind: gtk::MessageType, buttons: gtk::Buttons
 }
 
 pub fn ask_yes_no(title: &str, message: &str) -> bool {
-    run(title, message, gtk::MessageType::Question, gtk::ButtonsType::YesNo) == gtk::ResponseType::Yes
+    run(title, message, gtk::MessageType::Question, gtk::ButtonsType::YesNo, false) == gtk::ResponseType::Yes
+}
+
+pub fn ask_yes_no_default_no(title: &str, message: &str) -> bool {
+    run(title, message, gtk::MessageType::Question, gtk::ButtonsType::YesNo, true) == gtk::ResponseType::Yes
 }
 
 pub fn show_error(title: &str, message: &str) {
     tracing::error!("{title}: {message}");
-    run(title, message, gtk::MessageType::Error, gtk::ButtonsType::Ok);
+    run(title, message, gtk::MessageType::Error, gtk::ButtonsType::Ok, false);
 }

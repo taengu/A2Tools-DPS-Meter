@@ -20,6 +20,45 @@ use crate::platform;
 const SITE: &str = "https://npcap.com/";
 
 #[cfg(feature = "online")]
+struct DownloadedInstaller {
+    path: PathBuf,
+}
+
+#[cfg(feature = "online")]
+impl Drop for DownloadedInstaller {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[cfg(feature = "online")]
+async fn store_installer(bytes: &[u8]) -> Result<DownloadedInstaller, String> {
+    use tokio::io::AsyncWriteExt;
+    for _ in 0..4 {
+        let mut random = [0u8; 16];
+        getrandom::fill(&mut random).map_err(|e| e.to_string())?;
+        let tag: String = random.iter().map(|b| format!("{b:02x}")).collect();
+        let path = std::env::temp_dir().join(format!("a2tools-npcap-{tag}.exe"));
+        let mut file = match tokio::fs::OpenOptions::new().write(true).create_new(true).open(&path).await {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        };
+        let stored = async {
+            file.write_all(bytes).await.map_err(|e| e.to_string())?;
+            file.sync_all().await.map_err(|e| e.to_string())
+        }.await;
+        drop(file);
+        if let Err(error) = stored {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(error);
+        }
+        return Ok(DownloadedInstaller { path });
+    }
+    Err("could not reserve a temporary installer file".into())
+}
+
+#[cfg(feature = "online")]
 /// The prompt's words, in the meter's language.
 struct Texts {
     title: String,
@@ -48,13 +87,13 @@ fn texts(data_dir: Option<&Path>, lang: &str) -> Texts {
     };
     Texts {
         title: "A2Tools DPS Meter".into(),
-        ask: text(
+        ask: format!("{}\n\n{}", text(
             "ask",
             "A2Tools DPS Meter needs Npcap to read the game's network traffic, and Npcap is missing or not working.\n\n\
              Install it now? The meter downloads Npcap's installer from npcap.com and opens it. Once Npcap is \
              installed, the meter starts capturing by itself.\n\n\
              Choose No to install it yourself from https://npcap.com/#download",
-        ),
+        ), text("verification", "The meter verifies Nmap Software LLC's digital signature first. Windows may ask permission for Microsoft Windows PowerShell; this helper verifies and runs the protected installer copy.")),
         download_failed: text(
             "downloadFailed",
             "Npcap's installer could not be downloaded ({error}).\n\n\
@@ -87,9 +126,9 @@ fn installer_name(page: &str) -> Option<String> {
 }
 
 #[cfg(feature = "online")]
-async fn fetch_installer(http: &reqwest::Client) -> Result<PathBuf, String> {
+async fn fetch_installer(http: &reqwest::Client) -> Result<DownloadedInstaller, String> {
     let page = http.get(SITE).send().await.and_then(|r| r.error_for_status()).map_err(|e| e.to_string())?;
-    let page = page.text().await.map_err(|e| e.to_string())?;
+    let page = crate::bounded_http::text(page, 1024 * 1024).await?;
     let name = installer_name(&page).ok_or("npcap.com lists no installer")?;
     let response = http
         .get(format!("{SITE}dist/{name}"))
@@ -97,14 +136,12 @@ async fn fetch_installer(http: &reqwest::Client) -> Result<PathBuf, String> {
         .await
         .and_then(|r| r.error_for_status())
         .map_err(|e| e.to_string())?;
-    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    let bytes = crate::bounded_http::bytes(response, 32 * 1024 * 1024).await?;
     // A Windows program, and about the size of one (1.89 is 1.3 MB).
     if bytes.len() < 200_000 || !bytes.starts_with(b"MZ") {
         return Err("the download is not an installer".into());
     }
-    let path = std::env::temp_dir().join(format!("a2tools-{name}"));
-    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
-    Ok(path)
+    store_installer(&bytes).await
 }
 
 /// Called at startup when the capture library did not load.
@@ -169,14 +206,14 @@ fn offer_download(app: tauri::AppHandle, capturer: PcapCapturer) {
                 return;
             }
         };
-        tracing::info!("Running Npcap's installer: {}", installer.display());
+        tracing::info!("Checking and running Npcap's installer: {}", installer.path.display());
         let ran = {
-            let installer = installer.clone();
-            tauri::async_runtime::spawn_blocking(move || platform::pcap::run_installer(&installer))
+            // Cleanup stays on the blocking task too: cancelling this async
+            // caller must not remove the file while its installer is running.
+            tauri::async_runtime::spawn_blocking(move || platform::pcap::run_installer(&installer.path))
                 .await
                 .unwrap_or_else(|e| Err(e.to_string()))
         };
-        let _ = std::fs::remove_file(&installer);
         if let Err(e) = &ran {
             tracing::warn!("Npcap's installer did not run: {e}");
         }
@@ -205,6 +242,18 @@ mod tests {
         assert_eq!(installer_name(two).as_deref(), Some("npcap-1.10.exe"), "newest by version, not by text");
         assert_eq!(installer_name("no installer here"), None);
         assert_eq!(installer_name(r#"href="dist/npcap-sdk.exe""#), None);
+    }
+
+    #[tokio::test]
+    async fn temporary_installers_are_distinct_and_removed_after_use() {
+        let first = store_installer(b"first").await.unwrap();
+        let second = store_installer(b"second").await.unwrap();
+        assert_ne!(first.path, second.path);
+        assert_eq!(std::fs::read(&first.path).unwrap(), b"first");
+        assert_eq!(std::fs::read(&second.path).unwrap(), b"second");
+        let path = first.path.clone();
+        drop(first);
+        assert!(!path.exists());
     }
 
     #[test]

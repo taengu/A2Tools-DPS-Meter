@@ -2,8 +2,8 @@
 //! a2tools.app, which checks it, combines it with other players' and
 //! publishes each server's timers for everyone's Event Timers.
 //!
-//! On by default, with the Supply Requests: Settings' "Sync useful data to
-//! A2Tools" (`shares_data`, "false" turns it off). What is sent: the server,
+//! Opt-in, with the Supply Requests: Settings' "Sync useful data to
+//! A2Tools" (`shares_data`, explicit "true" enables it). What is sent: the server,
 //! the map, and each field boss on it: up (since when) or dead (back when).
 //! Nothing about the player; the site counts reporters by a hash of their
 //! address that changes daily, and keeps no address.
@@ -46,18 +46,18 @@ use crate::capture::boss_map::BossMap;
 use crate::combat::data_storage::{BossEvent, BossEventKind, BossHp};
 
 /// Settings' "Sync useful data to A2Tools": field boss timers and Supply
-/// Requests, on unless turned off.
+/// Requests, off until explicitly enabled.
 pub const SHARE_DATA_KEY: &str = "dpsMeter.shareData";
-/// The two switches it replaced (2.0.78): either turned off keeps it off,
-/// until the player sets the new one.
+/// The two switches it replaced (2.0.78): migrate only when both were
+/// explicitly enabled, until the player sets the new one.
 const OLD_KEYS: [&str; 2] = ["dpsMeter.shareBossTimers", "dpsMeter.shareSupplyRequests"];
 
 /// Whether the meter shares field boss timers and Supply Requests with
 /// a2tools.app, `get` reading a setting.
 pub fn shares_data(get: impl Fn(&str) -> Option<String>) -> bool {
     match get(SHARE_DATA_KEY).as_deref() {
-        Some(v) => v != "false",
-        None => OLD_KEYS.iter().all(|k| get(k).as_deref() != Some("false")),
+        Some(v) => v == "true",
+        None => OLD_KEYS.iter().all(|k| get(k).as_deref() == Some("true")),
     }
 }
 
@@ -186,6 +186,9 @@ pub fn orb_killers_request(server_id: u16, kills: &[crate::capture::abyss_cores:
 }
 
 async fn send_orb_killers(state: &AppState, server: u16, kills: Vec<crate::capture::abyss_cores::OrbKill>) {
+    if !sharing(state) {
+        return;
+    }
     let Some(body) = orb_killers_request(server, &kills, crate::clock::now_ms()) else { return };
     let body = with_host(body, server, state.data_storage.game_host());
     let url = format!("{}/api/boss-timers/cores", crate::account::base_url());
@@ -288,6 +291,9 @@ fn spawn_events(app: tauri::AppHandle) {
                 let requests = [("/api/boss-timers/hp", hp_request(server, &changed)),
                                 ("/api/boss-timers/cores", cores_hp_request(server, &changed, now))];
                 for (path, body) in requests {
+                    if !sharing(&state) {
+                        break;
+                    }
                     let (false, false, Some(body)) = (off, server == 0, body) else { continue };
                     let body = with_host(body, server, state.data_storage.game_host());
                     let url = format!("{}{path}", crate::account::base_url());
@@ -300,7 +306,7 @@ fn spawn_events(app: tauri::AppHandle) {
                         // bar that stayed full on Blooming Korin, 2026-10-22).
                         Ok(res) if !res.status().is_success() => {
                             let status = res.status();
-                            let why = res.text().await.unwrap_or_default();
+                            let why = crate::bounded_http::text(res, 64 * 1024).await.unwrap_or_default();
                             tracing::info!("Boss timers: HP refused ({path}, {status}): {}", why.chars().take(200).collect::<String>());
                         }
                         Ok(_) => {}
@@ -309,6 +315,11 @@ fn spawn_events(app: tauri::AppHandle) {
                 }
             }
             let events = state.data_storage.take_boss_events();
+            if !sharing(&state) {
+                waiting.clear();
+                *orb_killers().lock().unwrap_or_else(|p| p.into_inner()) = Default::default();
+                continue;
+            }
             for event in &events {
                 if let BossEventKind::Killed { at_ms } = event.kind {
                     if crate::capture::abyss_cores::is_core(event.npc) {
@@ -338,6 +349,9 @@ fn spawn_events(app: tauri::AppHandle) {
                 continue;
             }
             for (_, event) in std::mem::take(&mut waiting) {
+                if !sharing(&state) {
+                    break;
+                }
                 let Some((path, body)) = event_request(server, &event) else { continue };
                 let body = with_host(body, server, state.data_storage.game_host());
                 let url = format!("{}{path}", crate::account::base_url());
@@ -381,6 +395,9 @@ pub fn spawn(app: tauri::AppHandle) {
             seq = next;
             let now = crate::clock::now_ms();
             for map in maps.iter().filter(|m| m.header == 0 && now - m.seen_ms <= MAX_AGE_MS) {
+                if !sharing(&state) {
+                    break;
+                }
                 let said = serde_json::to_string(&report(server, map, 0)["bosses"]).unwrap_or_default();
                 if let Some((at, before)) = sent.get(&(server, map.map_id)) {
                     if *before == said && now - at < RESEND_SAME_MS {
@@ -397,7 +414,7 @@ pub fn spawn(app: tauri::AppHandle) {
                 match request.send().await {
                     Ok(res) => {
                         let status = res.status();
-                        let text = res.text().await.unwrap_or_default();
+                        let text = crate::bounded_http::text(res, 64 * 1024).await.unwrap_or_default();
                         tracing::info!("Boss timers: map {} for server {} sent ({status}): {}", map.map_id, server,
                             text.chars().take(300).collect::<String>());
                     }
@@ -431,6 +448,9 @@ async fn send_artifacts(state: &AppState, seq: &mut u64, sent: &mut HashMap<u16,
     if !settled.is_empty() {
         send_orb_killers(state, server, settled).await;
     }
+    if !sharing(state) {
+        return;
+    }
     let said = serde_json::to_string(&artifacts_report(server, &artifacts, 0)).unwrap_or_default();
     if let Some((at, before)) = sent.get(&server) {
         if *before == said && now - at < RESEND_SAME_MS {
@@ -453,18 +473,21 @@ async fn send_artifacts(state: &AppState, seq: &mut u64, sent: &mut HashMap<u16,
 #[cfg(test)]
 mod tests {
     #[test]
-    fn sharing_is_on_unless_turned_off_here_or_before() {
+    fn sharing_requires_an_explicit_choice_here_or_for_both_previous_switches() {
         use std::collections::HashMap;
         let with = |pairs: &[(&str, &str)]| {
             let m: HashMap<String, String> = pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
             super::shares_data(move |k| m.get(k).cloned())
         };
-        assert!(with(&[]), "on by default");
-        assert!(with(&[("dpsMeter.shareSupplyRequests", "true")]));
+        assert!(!with(&[]), "off before a choice");
+        assert!(!with(&[("dpsMeter.shareSupplyRequests", "true")]));
+        assert!(with(&[("dpsMeter.shareSupplyRequests", "true"), ("dpsMeter.shareBossTimers", "true")]));
         assert!(!with(&[("dpsMeter.shareBossTimers", "false")]), "boss timers turned off before: off");
         assert!(!with(&[("dpsMeter.shareSupplyRequests", "false")]), "Supply Requests turned off before: off");
         assert!(with(&[("dpsMeter.shareBossTimers", "false"), ("dpsMeter.shareData", "true")]), "the new switch decides once set");
         assert!(!with(&[("dpsMeter.shareData", "false")]));
+        assert!(!with(&[("dpsMeter.shareData", "yes")]));
+        assert!(!with(&[("dpsMeter.shareData", "")]));
     }
 
     use super::*;

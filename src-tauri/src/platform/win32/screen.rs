@@ -57,7 +57,8 @@ pub fn capture(
 }
 
 fn capture_rect(owner_raw: isize, rect: ScreenRect, png_path: Option<&Path>) -> (bool, bool) {
-    if rect.width <= 0 || rect.height <= 0 {
+    if rect.width <= 0 || rect.height <= 0 || rect.width > 8192 || rect.height > 8192
+        || rect.width as u64 * rect.height as u64 > 16_777_216 {
         return (false, false);
     }
     unsafe {
