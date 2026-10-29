@@ -424,13 +424,13 @@ publisher/path handling and protected-copy checks.
 | Check | Release status |
 | --- | --- |
 | Focused privacy/parser regressions | 53 passed, no failures; one pre-existing real-capture test ignored because its external fixture was unavailable. Full desktop integration remains a separate check. |
-| Frontend production build and full JavaScript tests | Production build passed; all 192 JavaScript tests passed, including fork version, consent and plugin generation regressions. |
-| Windows desktop Rust tests and binary build | All 575 tests passed across 24 test groups; 10 existing external-capture/diagnostic tests were ignored. The optimized Windows binary also built successfully. |
+| Frontend production build and full JavaScript tests | Production build passed; all 200 JavaScript tests passed, including settings hydration, plugin-settings startup, plain-version compatibility, consent and plugin generation regressions. |
+| Windows desktop Rust tests and binary build | The final `cargo test --locked --offline --all-targets` run passed 592 tests across 24 test groups; 10 existing external-capture/diagnostic tests were ignored. This includes the delayed focus-observation and queued click-through lock regressions. The earlier security checkpoint's optimized Windows binary built successfully; the final plain-version binary remains a separate build check. |
 | Desktop build without online features | `cargo check --locked --no-default-features --features desktop --lib` passed. |
 | Parser-only WebAssembly check | `cargo check --locked --lib --no-default-features --target wasm32-unknown-unknown` passed. |
 | Separate log-service tests/WASM check and conversion-tool check | Both server security tests passed, its WebAssembly build check passed, and the separately locked conversion tool passed `cargo check`. |
 | Optimized Linux GLib backport regression and Linux desktop checks | Added the optimized iterator regression to Linux CI. Native Linux results remain pending; Windows tests do not establish Linux results. |
-| MSI creation, installed startup and game-capture smoke check | Windows x64 MSI creation passed for the security checkpoint. The final 2.0.86.1 artifact and its hashes are recorded separately after packaging. Installed startup and live game capture remain pending. |
+| MSI creation, installed startup and game-capture smoke check | The earlier locally named 2.0.86.1 preview installed and captured live game traffic successfully with Npcap administrator-only access enabled. The final normal-name 2.0.86 MSI, its packaged executable hashes, saved-settings relaunch and focus/Alt-Tab retest remain pending. The earlier smoke check does not validate the final follow-up candidate. |
 
 Focused synthetic tests use controlled local inputs. Tests requiring an
 external real capture may remain skipped/ignored when their fixture is not

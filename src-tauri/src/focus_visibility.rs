@@ -1,5 +1,20 @@
 //! Focus visibility policy, independent of native window calls.
 
+/// Queue the observation and its commit together. A queued request carries no
+/// earlier decision: settings and window state are read on the executor that
+/// applies the native action, even if an older request arrives late.
+pub(super) fn dispatch_latest<S: Send + 'static, E>(
+    schedule: impl FnOnce(Box<dyn FnOnce() + Send>) -> Result<(), E>,
+    read_latest: impl FnOnce() -> Option<S> + Send + 'static,
+    commit: impl FnOnce(S) + Send + 'static,
+) -> Result<(), E> {
+    schedule(Box::new(move || {
+        if let Some(snapshot) = read_latest() {
+            commit(snapshot);
+        }
+    }))
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Action {
     Keep,
@@ -31,6 +46,7 @@ impl MainFocusVisibility {
         self.hide_delay = 0;
     }
 
+    #[cfg(test)]
     pub fn delay(&self) -> u8 {
         self.hide_delay
     }
@@ -82,6 +98,98 @@ pub(super) fn may_change_cursor_style(visible: bool, minimized: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn queued_native_work_does_not_hold_a_worker_lock_needed_by_the_main_thread() {
+        use std::sync::{Arc, Barrier, Mutex, mpsc};
+        let applied = Arc::new(Mutex::new(false));
+        let queued = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let (tx, rx) = mpsc::channel::<Box<dyn FnOnce() + Send>>();
+        let worker = {
+            let (applied, queued, release) = (applied.clone(), queued.clone(), release.clone());
+            std::thread::spawn(move || {
+                dispatch_latest(
+                    move |task| {
+                        tx.send(task).unwrap();
+                        queued.wait();
+                        release.wait();
+                        Ok::<_, ()>(())
+                    },
+                    || Some(()),
+                    move |()| *applied.lock().unwrap() = true,
+                ).unwrap();
+            })
+        };
+        queued.wait();
+        // A focus Show can take this lock while native work is queued. Holding
+        // it on the worker before dispatching a GTK operation would deadlock.
+        let available = applied.try_lock().is_ok();
+        release.wait();
+        worker.join().unwrap();
+        assert!(available, "a worker held the input lock while waiting for the main thread");
+        rx.recv().unwrap()();
+        assert!(*applied.lock().unwrap());
+    }
+
+    #[test]
+    fn a_delayed_focus_request_cannot_commit_a_hide_after_disabling() {
+        use std::sync::{Arc, Barrier, Mutex, atomic::{AtomicBool, Ordering}};
+        type Task = Box<dyn FnOnce() + Send>;
+        let enabled = Arc::new(AtomicBool::new(true));
+        let hidden = Arc::new(AtomicBool::new(false));
+        let policy = Arc::new(Mutex::new(MainFocusVisibility::new()));
+        let queue = Arc::new(Mutex::new(Vec::<Task>::new()));
+        let delayed = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let request = |wait: Option<(Arc<Barrier>, Arc<Barrier>)>| {
+            let (enabled, hidden, policy, queue) = (enabled.clone(), hidden.clone(), policy.clone(), queue.clone());
+            let window = hidden.clone();
+            dispatch_latest(
+                move |task| {
+                    if let Some((delayed, release)) = wait {
+                        delayed.wait();
+                        release.wait();
+                    }
+                    queue.lock().unwrap().push(task);
+                    Ok::<_, ()>(())
+                },
+                move || Some((enabled.load(Ordering::SeqCst), hidden.load(Ordering::SeqCst))),
+                move |(enabled, hidden)| {
+                    let action = policy.lock().unwrap().update(enabled, true, false, hidden, 1);
+                    match action {
+                        Action::Hide => window.store(true, Ordering::SeqCst),
+                        Action::Show => window.store(false, Ordering::SeqCst),
+                        Action::Keep => {}
+                    }
+                },
+            ).unwrap();
+        };
+        // Hold the older callback before it reaches the main-thread queue.
+        std::thread::scope(|scope| {
+            scope.spawn(|| request(Some((delayed.clone(), release.clone()))));
+            delayed.wait();
+            enabled.store(false, Ordering::SeqCst);
+            request(None);
+            queue.lock().unwrap().remove(0)();
+            release.wait();
+        });
+        queue.lock().unwrap().remove(0)();
+        assert!(!hidden.load(Ordering::SeqCst), "an old request applied a stale Hide");
+
+        // The same delayed request is harmless after a genuine option-off Show.
+        enabled.store(true, Ordering::SeqCst);
+        request(None);
+        queue.lock().unwrap().remove(0)();
+        assert!(hidden.load(Ordering::SeqCst));
+        request(None);
+        enabled.store(false, Ordering::SeqCst);
+        request(None);
+        queue.lock().unwrap().remove(1)();
+        assert!(!hidden.load(Ordering::SeqCst), "disabling did not restore a focus hide");
+        queue.lock().unwrap().remove(0)();
+        assert!(!hidden.load(Ordering::SeqCst), "late callback hid the restored window");
+    }
 
     #[test]
     fn focus_hides_after_the_delay_and_returns_with_the_game_or_meter() {

@@ -317,23 +317,43 @@ fn load_window_place(app: &tauri::AppHandle, title: &str) -> Option<(i32, i32, i
 /// left the meter up for a moment after an alt-tab (2026-10-17). The check
 /// still runs, for every other desktop and as a fallback.
 fn auto_hide_now(app: &tauri::AppHandle) {
-    let Some(state) = app.try_state::<AppState>() else { return };
-    let Some(window) = app.get_webview_window("main") else { return };
-    let front = platform::window::front_is_ours_or_game();
-    let hidden = !window.is_visible().unwrap_or(true)
-        || window.is_minimized().unwrap_or(false)
-        || platform::window::is_hidden_in_place(&window);
-    let action = MAIN_FOCUS_VISIBILITY.lock().update(
-        state.settings.get("dpsMeter.autoHideMeter").as_deref() == Some("true"),
-        meter_wanted(app) && !HIDDEN_BY_RULE.load(std::sync::atomic::Ordering::Relaxed),
-        front,
-        hidden,
-        1,
-    );
-    match action {
-        FocusAction::Show => show_meter_again(app, &window),
-        FocusAction::Hide => platform::window::minimize_off_top(&window),
-        FocusAction::Keep => {}
+    reconcile_main_focus(app, 1, true);
+}
+
+/// The KDE callback and polling task share one executor for observation,
+/// policy and native visibility. Computing an action on either worker first
+/// could apply an old Hide after a newer option-off Show cleared its owner.
+fn reconcile_main_focus(app: &tauri::AppHandle, wait_ticks: u8, past_startup: bool) {
+    let (schedule_app, read_app, commit_app) = (app.clone(), app.clone(), app.clone());
+    if let Err(error) = focus_visibility::dispatch_latest(
+        move |task| schedule_app.run_on_main_thread(task),
+        move || {
+            let state = read_app.try_state::<AppState>()?;
+            let enabled = state.settings.get("dpsMeter.autoHideMeter").as_deref() == Some("true");
+            if !past_startup && enabled {
+                return None;
+            }
+            let window = read_app.get_webview_window("main")?;
+            let eligible = meter_wanted(&read_app)
+                && !HIDDEN_BY_RULE.load(std::sync::atomic::Ordering::Relaxed);
+            let front = platform::window::front_is_ours_or_game();
+            let hidden = !window.is_visible().unwrap_or(true)
+                || window.is_minimized().unwrap_or(false)
+                || platform::window::is_hidden_in_place(&window);
+            Some((window, enabled, eligible, front, hidden))
+        },
+        move |(window, enabled, eligible, front, hidden)| {
+            // Native getters above run before taking this lock. Drop it again
+            // before window calls, including show_meter_again's owner reset.
+            let action = MAIN_FOCUS_VISIBILITY.lock().update(enabled, eligible, front, hidden, wait_ticks);
+            match action {
+                FocusAction::Show => show_meter_again(&commit_app, &window),
+                FocusAction::Hide => platform::window::minimize_off_top(&window),
+                FocusAction::Keep => {}
+            }
+        },
+    ) {
+        tracing::debug!("Could not reconcile focus visibility: {error}");
     }
 }
 
@@ -407,7 +427,20 @@ fn screenshot_tool(app: &tauri::AppHandle, in_front: bool) {
     }
 }
 
-fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: bool) {
+fn sync_click_through(app: &tauri::AppHandle, lock: &Arc<OverlayLock>, over_button: bool) {
+    let (schedule_app, app, lock) = (app.clone(), app.clone(), lock.clone());
+    // The focus reconciler also runs on this executor. A worker must not hold
+    // `applied` while waiting for GTK when a queued show needs that same lock.
+    if let Err(error) = focus_visibility::dispatch_latest(
+        move |task| schedule_app.run_on_main_thread(task),
+        move || Some((app, lock)),
+        move |(app, lock)| sync_click_through_on_main(&app, &lock, over_button),
+    ) {
+        tracing::debug!("Could not synchronize overlay input: {error}");
+    }
+}
+
+fn sync_click_through_on_main(app: &tauri::AppHandle, lock: &OverlayLock, over_button: bool) {
     use std::sync::atomic::Ordering;
     let main = app.get_webview_window("main");
     let mut applied = lock.applied.lock();
@@ -4237,39 +4270,9 @@ pub fn run() {
                         // plugin options also work while the master is off.
                         let others_auto_hide = meter_auto_hide
                             || (tick_count > 20 && crate::plugins::any_hide_unfocused(&handle));
-                        if let Some(window) = handle.get_webview_window("main") {
-                            let aion_fg = platform::window_detector::is_aion2_foreground();
-                            let is_self_fg = window.is_focused().unwrap_or(false);
-                            let is_visible = window.is_visible().unwrap_or(true);
-                            let is_minimized = window.is_minimized().unwrap_or(false);
-                            if tick_count % 4 == 0 {
-                                tracing::trace!("auto-hide: aion_fg={} self_fg={} visible={} minimized={} hide_delay={}",
-                                    aion_fg, is_self_fg, is_visible, is_minimized, MAIN_FOCUS_VISIBILITY.lock().delay());
-                            }
-                            // Linux hides it in place (transparent, mapped).
-                            let hidden = !is_visible || is_minimized
-                                || platform::window::is_hidden_in_place(&window);
-                            // Restore a focus-owned hide when the option
-                            // turns off, even with another app in front.
-                            // Manual and closed/solo/combat hides keep
-                            // their own ownership and are left alone.
-                            let action = if tick_count > 20 || !on("dpsMeter.autoHideMeter") {
-                                MAIN_FOCUS_VISIBILITY.lock().update(
-                                    meter_auto_hide,
-                                    !hidden_closed && meter_wanted(&handle),
-                                    platform::window::front_is_ours_or_game(),
-                                    hidden,
-                                    3,
-                                )
-                            } else {
-                                FocusAction::Keep
-                            };
-                            match action {
-                                FocusAction::Show => show_meter_again(&handle, &window),
-                                FocusAction::Hide => platform::window::minimize_off_top(&window),
-                                FocusAction::Keep => {}
-                            }
-                        }
+                        // Observe the latest option and hide eligibility on the
+                        // same main-thread task that applies the native action.
+                        reconcile_main_focus(&handle, 3, tick_count > 20);
                         // A master/plugin option can turn off while another
                         // remains on. Release only the windows no current
                         // focus rule owns, even while the desktop is in front.
