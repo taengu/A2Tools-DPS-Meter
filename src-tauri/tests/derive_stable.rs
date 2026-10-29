@@ -15,7 +15,7 @@ const DOTS: &str = include_str!("../../src/data/dot_skill_ids.json");
 fn unpack(body: &[u8]) -> Vec<u8> {
     let mut raw = Vec::new();
     if body.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]) {
-        ruzstd::StreamingDecoder::new(body).unwrap().read_to_end(&mut raw).unwrap();
+        ruzstd::decoding::StreamingDecoder::new(body).unwrap().read_to_end(&mut raw).unwrap();
     } else {
         flate2::read::GzDecoder::new(body).read_to_end(&mut raw).unwrap();
     }

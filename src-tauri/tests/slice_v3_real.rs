@@ -30,12 +30,12 @@ fn real_slices_survive_version_3_and_zstd() {
         let v3 = evidence_slice::encode(&EvidenceSlice { records: records.clone(), blind_map, stats: Default::default() });
         let zst = zstd::bulk::compress(&v3, 19).unwrap();
         let mut back = Vec::new();
-        ruzstd::StreamingDecoder::new(&zst[..]).unwrap().read_to_end(&mut back).unwrap();
+        ruzstd::decoding::StreamingDecoder::new(&zst[..]).unwrap().read_to_end(&mut back).unwrap();
         assert_eq!(back, v3, "ruzstd reads what zstd wrote");
         let (again, _) = evidence_slice::decode(&back).expect("a version 3 slice");
         assert_eq!(again, records, "{}", path.display());
         // As the log service reads each: streamed, limited by the records.
-        let streamed = evidence_slice::decode_from(ruzstd::StreamingDecoder::new(&zst[..]).unwrap(), 24 << 20)
+        let streamed = evidence_slice::decode_from(ruzstd::decoding::StreamingDecoder::new(&zst[..]).unwrap(), 24 << 20)
             .expect("streams within the limit");
         let fight = |r: Result<_, _>| r.map(|f| serde_json::to_value(f).unwrap()).map_err(|e| format!("{e:?}"));
         assert_eq!(

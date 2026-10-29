@@ -10,9 +10,9 @@ publish = false
 # The meter's own slice codec, without Tauri.
 a2tools-dps-meter = { path = "../../src-tauri", default-features = false }
 flate2 = "1"
-zstd = "0.13"
+zstd = "0.14.3"
 # The decoder the log service uses: a converted slice is checked with it.
-ruzstd = "0.7"
+ruzstd = "0.9.1"
 sha2 = "0.11"
 
 [profile.release]

@@ -136,7 +136,7 @@ ed25519-dalek = { version = "2", default-features = false, features = ["std"], o
 flate2 = { version = "1.1.10", optional = true }
 # Evidence slices are compressed with zstd (share::compress_slice); the log
 # service reads it with a pure-Rust decoder.
-zstd = { version = "0.13", default-features = false, optional = true }
+zstd = { version = "0.14.3", default-features = false, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.59", features = [
@@ -150,9 +150,14 @@ windows = { version = "0.59", features = [
     "Win32_Security_Authorization",
     # DPAPI, for encrypting the account token at rest.
     "Win32_Security_Cryptography",
+    "Win32_Security_Cryptography_Catalog",
+    "Win32_Security_Cryptography_Sip",
+    "Win32_Security_WinTrust",
+    "Win32_Storage_FileSystem",
     "Win32_System_Threading",
-    # Npcap's folder on the DLL search path (SetDllDirectoryW).
+    # Restricted Npcap loading and trusted system paths.
     "Win32_System_LibraryLoader",
+    "Win32_System_SystemInformation",
     # ShellExecuteExW, to run Npcap's installer elevated (its struct needs HKEY).
     "Win32_System_Registry",
     # Screenshots: the folder picker (IFileOpenDialog) and the Pictures folder.
@@ -188,6 +193,11 @@ zbus = { version = "5", optional = true }
 
 [dev-dependencies]
 flate2 = "1"
-zstd = { version = "0.13", default-features = false }
+zstd = { version = "0.14.3", default-features = false }
 # The log service's pure-Rust zstd decoder, to check it reads what the meter writes.
-ruzstd = "0.7"
+ruzstd = "0.9.1"
+
+# GTK3/Tauri needs the 0.18 ABI. This copy carries upstream's iterator-safety
+# fix; see vendor/glib-0.18.5/BACKPORT.md for the exact patch and provenance.
+[patch.crates-io]
+glib = { path = "vendor/glib-0.18.5" }

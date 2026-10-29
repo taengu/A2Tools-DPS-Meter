@@ -13,7 +13,8 @@
 use a2tools_dps_meter_lib::capture::evidence_slice;
 use a2tools_dps_meter_lib::rederive::{derive_decoded, Decoded, DeriveError};
 use flate2::read::GzDecoder;
-use ruzstd::StreamingDecoder;
+use futures_util::{Stream, StreamExt};
+use ruzstd::decoding::StreamingDecoder;
 use worker::*;
 
 /// The meter's own data tables, compiled in. Without the NPC table no target
@@ -39,6 +40,9 @@ const MAX_GZIPPED: usize = 16 * 1024 * 1024;
 // peaked at 77 MiB of heap, a 47 MiB one (577 players, 6 minutes) at 191 MiB
 // (2026-10-21). Above this a slice is refused, not run out of memory.
 const MAX_RECORD_BYTES: usize = 36 * 1024 * 1024;
+// Reject a declared Zstandard history window before the decoder allocates it.
+// A decoded-output cap alone does not bound that allocation.
+const MAX_ZSTD_WINDOW: u64 = MAX_RECORD_BYTES as u64;
 
 /// The slice inside an upload: zstd from meters 2.0.67 on, gzip before, told
 /// apart by their magic bytes, so every stored slice still derives. Read as it
@@ -47,7 +51,7 @@ const MAX_RECORD_BYTES: usize = 36 * 1024 * 1024;
 /// A bomb stops at the limit. None for anything that is not a slice.
 fn read_slice(body: &[u8]) -> Option<Decoded> {
     if body.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]) {
-        evidence_slice::decode_from(StreamingDecoder::new(body).ok()?, MAX_RECORD_BYTES)
+        evidence_slice::decode_from(StreamingDecoder::new_with_max_window_size(body, MAX_ZSTD_WINDOW).ok()?, MAX_RECORD_BYTES)
     } else {
         evidence_slice::decode_from(GzDecoder::new(body), MAX_RECORD_BYTES)
     }
@@ -59,7 +63,7 @@ fn looks_like_slice(body: &[u8]) -> bool {
     use std::io::Read;
     let mut magic = [0u8; 4];
     let read = if body.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]) {
-        StreamingDecoder::new(body).ok().is_some_and(|mut r| r.read_exact(&mut magic).is_ok())
+        StreamingDecoder::new_with_max_window_size(body, MAX_ZSTD_WINDOW).ok().is_some_and(|mut r| r.read_exact(&mut magic).is_ok())
     } else {
         GzDecoder::new(body).read_exact(&mut magic).is_ok()
     };
@@ -86,10 +90,12 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         return Response::error("forbidden", 403);
     }
 
-    let body = req.bytes().await?;
-    if body.len() > MAX_GZIPPED {
+    if req.headers().get("content-length")?.and_then(|n| n.parse::<u64>().ok()).is_some_and(|n| n > MAX_GZIPPED as u64) {
         return error("too_large", "The slice is larger than any real fight.", 413);
     }
+    let Some(body) = read_limited_body(req.stream()?, MAX_GZIPPED).await? else {
+        return error("too_large", "The slice is larger than any real fight.", 413);
+    };
     let Some(decoded) = read_slice(&body) else {
         if looks_like_slice(&body) {
             return error("too_large", "The fight's records are larger than this service reads.", 413);
@@ -120,6 +126,19 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         Err(DeriveError::NotASlice) => error("not_a_slice", "Not an Evidence Slice this build reads.", 422),
         Err(DeriveError::NothingDerived) => error("no_fight", "The slice contains no boss fight.", 422),
     }
+}
+
+async fn read_limited_body<S: Stream<Item = Result<Vec<u8>>>>(stream: S, max: usize) -> Result<Option<Vec<u8>>> {
+    futures_util::pin_mut!(stream);
+    let mut body = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        if chunk.len() > max - body.len() {
+            return Ok(None);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(Some(body))
 }
 
 fn error(code: &str, message: &str, status: u16) -> Result<Response> {
@@ -156,4 +175,37 @@ fn base64_decode(text: &str) -> Option<Vec<u8>> {
         }
     }
     Some(out)
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    use futures_util::{stream, FutureExt};
+    use std::{cell::Cell, rc::Rc};
+
+    #[test]
+    fn body_limit_accepts_the_boundary_and_stops_at_the_first_excess_chunk() {
+        let exact = stream::iter([Ok(vec![1, 2]), Ok(vec![3, 4])]);
+        let body = read_limited_body(exact, 4).now_or_never().unwrap().unwrap();
+        assert_eq!(body, Some(vec![1, 2, 3, 4]));
+
+        let polls = Rc::new(Cell::new(0));
+        let seen = polls.clone();
+        let too_large = stream::iter([Ok(vec![1, 2]), Ok(vec![3, 4, 5]), Ok(vec![6])])
+            .inspect(move |_| seen.set(seen.get() + 1));
+        assert!(read_limited_body(too_large, 4).now_or_never().unwrap().unwrap().is_none());
+        assert_eq!(polls.get(), 2, "the remaining body must not be buffered");
+    }
+
+    #[test]
+    fn a_large_zstd_window_is_refused_before_decompression() {
+        // A frame header with a 128 MiB window, before any block bytes.
+        let header = [0x28, 0xB5, 0x2F, 0xFD, 0x00, 0x88];
+        assert!(matches!(
+            StreamingDecoder::new_with_max_window_size(&header[..], MAX_ZSTD_WINDOW),
+            Err(ruzstd::decoding::errors::FrameDecoderError::WindowSizeTooBig { .. })
+        ));
+        assert!(read_slice(&header).is_none());
+        assert!(!looks_like_slice(&header));
+    }
 }

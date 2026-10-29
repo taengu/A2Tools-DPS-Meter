@@ -16,10 +16,11 @@ a2tools-dps-meter = { path = "../src-tauri", default-features = false }
 worker = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+futures-util = "0.3"
 # Pure-Rust inflate; no C toolchain on wasm32.
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 # Pure-Rust zstd decoder, for slices from meters 2.0.67 on (zstd, slice v3).
-ruzstd = "0.7"
+ruzstd = "0.9.1"
 
 [profile.release]
 opt-level = "s"

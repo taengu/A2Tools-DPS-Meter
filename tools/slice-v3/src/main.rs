@@ -44,7 +44,7 @@ fn convert(data: &[u8]) -> Result<Option<Vec<u8>>, String> {
     let zst = zstd::bulk::compress(&v3, 19).map_err(|e| format!("zstd: {e}"))?;
 
     let mut back = Vec::new();
-    ruzstd::StreamingDecoder::new(&zst[..])
+    ruzstd::decoding::StreamingDecoder::new(&zst[..])
         .map_err(|e| format!("ruzstd: {e}"))?
         .read_to_end(&mut back)
         .map_err(|e| format!("ruzstd: {e}"))?;
