@@ -1375,7 +1375,8 @@ pub fn decode(data: &[u8]) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)
 /// never whole. None once the records come to more than `max_record_bytes` as
 /// they read back: a version 3 bundle is counted wrapped, as version 2 stored
 /// it, so one fight has one size in every version and a limit on it takes or
-/// refuses the fight whichever version carries it.
+/// refuses the fight whichever version carries it. The record-count allowance
+/// also scales with this budget, with room for the initial 4,096 records at least.
 pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)> {
     use std::io::Read;
     fn array<const N: usize>(r: &mut impl Read) -> Option<[u8; N]> {
@@ -1409,6 +1410,12 @@ pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option
     }
 
     let rec_count = u32::from_le_bytes(array(&mut r)?) as usize;
+    // Payload bytes alone do not bound a list of tiny records. Charge 32 bytes
+    // per slot (the i32/Vec tuple on 64-bit), fixed across targets so native and
+    // wasm readers accept the same slices. Keep the existing initial allowance.
+    if rec_count > (max_record_bytes / 32).max(1 << 12) {
+        return None;
+    }
     // The count is the sender's word: grow as records arrive, not ahead.
     let mut records = Vec::with_capacity(rec_count.min(1 << 12));
     let mut total = 0usize;
@@ -1436,7 +1443,7 @@ pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option
         if record.is_empty() {
             return None;
         }
-        total += record.len();
+        total = total.checked_add(record.len())?;
         if total > max_record_bytes {
             return None;
         }
@@ -2337,6 +2344,40 @@ mod tests {
         // Cut short: no records invented, nothing read past the end.
         let v3 = encode(&slice);
         assert_eq!(decode_from(&v3[..v3.len() - 1], usize::MAX), None);
+    }
+
+    #[test]
+    fn tiny_records_also_have_a_metadata_limit() {
+        let mut slice = EvidenceSlice {
+            records: vec![(0, vec![0]); 4096],
+            blind_map: HashMap::new(), stats: Default::default(),
+        };
+        for version in 1..=VERSION {
+            let encode_version = |s: &EvidenceSlice| if version == VERSION { encode(s) } else { encode_legacy(s, version) };
+            let bytes = encode_version(&slice);
+            assert_eq!(decode_from(&bytes[..], 4096).unwrap().0, slice.records);
+
+            slice.records.push((0, vec![0]));
+            let bytes = encode_version(&slice);
+            // The payload fits; its growing list of allocations does not.
+            assert!(decode_from(&bytes[..], 4097).is_none());
+            // The allowance scales with the caller's byte budget, rather than
+            // imposing a fixed record count on larger historical captures.
+            assert_eq!(decode_from(&bytes[..], 4097 * 32).unwrap().0, slice.records);
+            slice.records.pop();
+        }
+    }
+
+    #[test]
+    fn an_excessive_record_count_stops_before_reading_records() {
+        let slice = EvidenceSlice { records: Vec::new(), blind_map: HashMap::new(), stats: Default::default() };
+        let mut bytes = encode(&slice);
+        let header_len = bytes.len();
+        bytes[header_len - 4..].copy_from_slice(&u32::MAX.to_le_bytes());
+        bytes.extend_from_slice(&[0; 10]);
+        let mut reader = std::io::Cursor::new(bytes);
+        assert!(decode_from(&mut reader, 36 * 1024 * 1024).is_none());
+        assert_eq!(reader.position(), header_len as u64);
     }
 
     #[test]
