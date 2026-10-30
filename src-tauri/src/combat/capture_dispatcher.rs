@@ -50,6 +50,11 @@ const WINDOW_CHECK_RUNNING_MS: i64 = 60_000;
 /// one whose signature went quiet longest makes room. Spoofed packets that
 /// carry a signature would otherwise grow a parser each (#131).
 const MAX_CANDIDATE_FLOWS: usize = 16;
+// Keep first-segment decisions even when an assembler is discarded. Evicting
+// a TLS decision could admit the middle of that encrypted stream as game data.
+// At the limit, existing connections continue; new ones wait until the game is
+// observed closed or the meter restarts.
+const MAX_TRACKED_CONNECTIONS: usize = 4096;
 pub(crate) const STALE_CONNECTION_MS: i64 = 120_000;
 /// Once locked, a connection on another port takes over the lock when the
 /// locked port has sent nothing for this long and the new one sustains the
@@ -293,6 +298,7 @@ impl CaptureDispatcher {
                     self.ping_tracker.reset();
                     assemblers.clear();
                     sig_hits.clear();
+                    connections = ConnectionFilter::default();
                 }
                 is_aion_running = running;
             }
@@ -580,18 +586,24 @@ fn looks_like_tls(data: &[u8]) -> bool {
 /// inside the game's stream is ever skipped.
 #[derive(Default)]
 struct ConnectionFilter {
-    seen: std::collections::HashSet<(u16, u16)>,
-    tls: std::collections::HashSet<(u16, u16)>,
+    tls: HashMap<(u16, u16), bool>,
 }
 
 impl ConnectionFilter {
     fn admit(&mut self, cap: &CapturedPayload) -> bool {
         let connection = (cap.src_port.min(cap.dst_port), cap.src_port.max(cap.dst_port));
-        if self.seen.insert(connection) && is_tls_record(&cap.data) {
-            tracing::info!("Connection {} -> {} carries TLS: not the game, left out", cap.src_port, cap.dst_port);
-            self.tls.insert(connection);
+        if let Some(&tls) = self.tls.get(&connection) {
+            return !tls;
         }
-        !self.tls.contains(&connection)
+        if self.tls.len() >= MAX_TRACKED_CONNECTIONS {
+            return false;
+        }
+        let tls = is_tls_record(&cap.data);
+        if tls {
+            tracing::info!("Connection {} -> {} carries TLS: not the game, left out", cap.src_port, cap.dst_port);
+        }
+        self.tls.insert(connection, tls);
+        !tls
     }
 }
 
@@ -660,6 +672,25 @@ mod tests {
         // A game segment that happens to start like a TLS header later on is
         // not judged again: its connection is already known as the game's.
         assert!(filter.admit(&seg(50349, &[0x17, 0x03, 0x03, 0x00, 0x10])));
+    }
+
+    #[test]
+    fn connection_limit_preserves_game_and_tls_decisions() {
+        let mut filter = ConnectionFilter::default();
+        let game = flow(13328, 50_000, &[0x24, 0x04, 0x38]);
+        let tls = flow(13328, 50_001, &[0x17, 0x03, 0x03, 0x00, 0x10]);
+        assert!(filter.admit(&game));
+        assert!(!filter.admit(&tls));
+        for port in 1..MAX_TRACKED_CONNECTIONS as u16 {
+            filter.admit(&flow(13328, port, &[0x24, 0x04, 0x38]));
+        }
+        assert_eq!(filter.tls.len(), MAX_TRACKED_CONNECTIONS);
+        for port in 50_002..51_002 {
+            assert!(!filter.admit(&flow(13328, port, &[0x24, 0x04, 0x38])));
+        }
+        assert!(filter.admit(&game), "known game connection continues when full");
+        assert!(!filter.admit(&flow(13328, 50_001, &[0x88, 0x71, 0x04, 0x38])), "TLS continuation stays excluded");
+        assert_eq!(filter.tls.len(), MAX_TRACKED_CONNECTIONS);
     }
 
     fn cap(device: &str, data: &[u8]) -> CapturedPayload {
