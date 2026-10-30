@@ -85,6 +85,8 @@ pub struct AppState {
     /// The header's suspend button: while set, the capture dispatcher drops
     /// every packet. Shared with it (`CaptureDispatcher::use_suspend_flag`).
     pub capture_suspended: Arc<std::sync::atomic::AtomicBool>,
+    /// Cancels driver discovery which is still pending when the app exits.
+    pub capture_startup: Arc<crate::capture::startup::Startup>,
     /// The overlay's click-through lock. See `apply_overlay_lock`.
     pub overlay_lock: Arc<OverlayLock>,
     /// What the last account check found: `None` until one has run, then
@@ -1023,9 +1025,18 @@ async fn stream_overlay_new_key(app: tauri::AppHandle) -> Result<crate::stream_o
 }
 
 #[tauri::command]
-fn get_settings(state: tauri::State<'_, AppState>) -> std::collections::HashMap<String, String> {
-    state.settings.get_all()
+fn get_settings(app: tauri::AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
+    // The configured webview exists before setup runs. Its settings barrier
+    // also protects plugin initialization, which needs the later PluginHost.
+    if app.try_state::<UiStartupReady>().is_none() {
+        return Err("Saved settings are still loading".into());
+    }
+    let state = app.try_state::<AppState>().ok_or("Saved settings are still loading")?;
+    Ok(state.settings.get_all())
 }
+
+/// Published only after all state used by the main and settings pages exists.
+struct UiStartupReady;
 
 /// How often the DPS update is checked for a change: Settings > Advanced,
 /// "Meter update rate", one of `DPS_RATES_MS`.
@@ -3662,6 +3673,9 @@ pub fn run() {
             .on_event(|app, event| {
                 // Flush before normal exit or restart, with Exit as a final safeguard.
                 if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
+                    if let Some(state) = app.try_state::<AppState>() {
+                        state.capture_startup.cancel();
+                    }
                     save_queued_fights(app);
                     flush_settings_before_exit(app);
                 }
@@ -3898,6 +3912,7 @@ pub fn run() {
                     .build()
                     .unwrap_or_default(),
                 capture_suspended: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                capture_startup: Arc::new(crate::capture::startup::Startup::default()),
                 overlay_lock: Arc::new(OverlayLock::default()),
                 #[cfg(feature = "online")]
                 account_seen: Mutex::new(None),
@@ -4029,21 +4044,26 @@ pub fn run() {
                 }
             }
 
-            // Check if Npcap is available before starting capture
-            let npcap_available = platform::pcap::library_available();
-            if !npcap_available {
-                tracing::error!("Npcap is not installed — packet capture disabled");
-            }
-
             // Start capture pipeline
             let (tx, rx) = mpsc::channel::<CapturedPayload>(4096);
-
-            let capturer = PcapCapturer::new(tx, port_detector.clone());
-            if npcap_available {
-                capturer.start();
-            } else {
-                // Offer to install it, and start capturing once it is in.
-                crate::npcap_setup::offer(app.handle().clone(), capturer);
+            let capture_app = app.handle().clone();
+            let capture_detector = port_detector.clone();
+            // Loading Npcap and listing devices can wait for OS permission or
+            // a driver. Neither may prevent setup, native IPC or the UI from
+            // finishing. The missing-driver offer uses its existing async path.
+            if let Err(error) = app.state::<AppState>().capture_startup.spawn(
+                platform::pcap::library_available,
+                move |npcap_available| {
+                    let capturer = PcapCapturer::new(tx, capture_detector);
+                    if npcap_available {
+                        capturer.start();
+                    } else {
+                        tracing::error!("Npcap is not installed — packet capture disabled");
+                        crate::npcap_setup::offer(capture_app, capturer);
+                    }
+                },
+            ) {
+                tracing::error!("Could not start capture initialization worker: {error}");
             }
 
             let mut dispatcher = CaptureDispatcher::new(
@@ -4457,6 +4477,7 @@ pub fn run() {
                 }
             });
 
+            app.manage(UiStartupReady);
             Ok(())
         })
         .invoke_handler({

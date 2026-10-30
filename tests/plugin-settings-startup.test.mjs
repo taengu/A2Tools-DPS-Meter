@@ -83,10 +83,9 @@ test("plugin controls and seen versions wait for the backend snapshot instead of
   assert.deepEqual(JSON.parse(seen.value), { current: "1.2.0", retained: "3.0.0" });
 });
 
-test("a failed native settings read can retain the cached preferences when readiness settles", async () => {
-  // The bridge catches a failed get_settings call and settles readiness while
-  // retaining its local cache; this fixture models that public contract.
-  const page = setup({ cached: { [AUTO_UPDATE]: "true", [SEEN]: JSON.stringify({ retained: "3.0.0" }) } });
+test("an authoritative snapshot can confirm cached preferences while retaining version history", async () => {
+  const saved = { [AUTO_UPDATE]: "true", [SEEN]: JSON.stringify({ retained: "3.0.0" }) };
+  const page = setup({ cached: saved, snapshot: saved });
   page.release();
   await settle();
   assert.equal(page.nodes.get(".pluginAutoUpdateCheckbox").checked, true);

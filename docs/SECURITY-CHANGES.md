@@ -8,10 +8,37 @@ The complete package/advisory inventory is in
 
 ## Candidate packaging, saved settings and focus visibility
 
-The follow-up candidate restores saved settings before the meter and plugin
-settings initialize. New WebViews wait for the native settings snapshot rather
-than applying defaults from an empty or stale local cache. Regression coverage
-includes delayed settings and plugin initialization across a fresh start.
+An installed follow-up initially displayed the saved configuration, but a
+manual close and relaunch still showed defaults and no installed plugins. That
+restart failure invalidated the earlier appearance-based settings check. The
+native settings, installed plugin files and plugin data remained on disk, and
+the latest login remained unchanged; the visible reset did not establish that
+those files had been deleted.
+
+The full HTML/core/bridge regression fixture reproduced the startup failure:
+the first `get_settings` call could be rejected before native setup finished,
+and the bridge treated that failure as completed loading. The UI then started
+from defaults and plugin initialization saw no rows. The fixture executes the
+real application startup rather than replacing `DpsApp.start` with a stub.
+
+The follow-up publishes native UI readiness only after the state needed by the
+meter and plugin settings exists. `get_settings` returns a retryable error
+until that point. The bridge releases its startup barrier only after receiving
+a valid native settings snapshot. Each read has a three-second timeout, late
+responses cannot replace a newer read, and automatic startup makes at most five
+attempts with bounded backoff. If those fail, the page offers **Retry** and
+**Close** instead of starting with defaults. A manual retry can recover after
+native setup becomes ready. UI initialization and default-derived settings
+writes remain held while the authoritative snapshot is unavailable.
+
+Npcap availability probing and capture startup also move to a worker so a slow
+driver or permission check cannot hold the GUI setup thread. Exit cancels work
+still waiting on the probe and prevents that pending result from subsequently
+starting capture or offering an installer. It does not interrupt driver or
+other OS operations already admitted. Five native regressions cover slow,
+missing and cancelled probe paths. The startup asset query tokens are changed
+to select the repaired bridge and initialization code without clearing the
+WebView cache, saved profile or account state.
 
 The master focus-hiding setting covers the meter, plugin panels, dock and
 widgets. Focus-owned hiding is released when the setting is turned off, while
@@ -424,13 +451,13 @@ publisher/path handling and protected-copy checks.
 | Check | Release status |
 | --- | --- |
 | Focused privacy/parser regressions | 53 passed, no failures; one pre-existing real-capture test ignored because its external fixture was unavailable. Full desktop integration remains a separate check. |
-| Frontend production build and full JavaScript tests | Production build passed; all 200 JavaScript tests passed, including settings hydration, plugin-settings startup, plain-version compatibility, consent and plugin generation regressions. |
-| Windows desktop Rust tests and binary build | The final `cargo test --locked --offline --all-targets` run passed 592 tests across 24 test groups; 10 existing external-capture/diagnostic tests were ignored. This includes the delayed focus-observation and queued click-through lock regressions. The earlier security checkpoint's optimized Windows binary built successfully; the final plain-version binary remains a separate build check. |
+| Frontend production build and full JavaScript tests | Production build and all 203 automated JavaScript tests passed, including failed/timed-out settings reads, late-response ordering, manual retry, plugin-settings startup, plain-version compatibility, consent and plugin generation regressions. The complete HTML/core/bridge restart fixture was validated separately, using the real UI startup and synthetic native responses. |
+| Windows desktop Rust tests and binary build | The combined restart follow-up's `cargo test --locked --offline --all-targets` run passed 597 tests across 24 test groups; 10 existing external-capture/diagnostic tests were ignored. This includes the five capture-startup worker tests, delayed focus-observation and queued click-through lock regressions. Optimized binaries and MSI packages have been built for earlier checkpoints; each new artifact requires validation against its exact source commit. |
 | Desktop build without online features | `cargo check --locked --no-default-features --features desktop --lib` passed. |
 | Parser-only WebAssembly check | `cargo check --locked --lib --no-default-features --target wasm32-unknown-unknown` passed. |
 | Separate log-service tests/WASM check and conversion-tool check | Both server security tests passed, its WebAssembly build check passed, and the separately locked conversion tool passed `cargo check`. |
-| Optimized Linux GLib backport regression and Linux desktop checks | Added the optimized iterator regression to Linux CI. Native Linux results remain pending; Windows tests do not establish Linux results. |
-| MSI creation, installed startup and game-capture smoke check | The earlier locally named 2.0.86.1 preview installed and captured live game traffic successfully with Npcap administrator-only access enabled. The final normal-name 2.0.86 MSI, its packaged executable hashes, saved-settings relaunch and focus/Alt-Tab retest remain pending. The earlier smoke check does not validate the final follow-up candidate. |
+| Optimized Linux GLib backport regression and Linux desktop checks | The preceding `2b826a7` checkpoint passed all five developer CI jobs, including Linux desktop tests, four optimized GLib tests and two real keyring tests. The new startup follow-up requires CI on its own commit; those results are recorded with the PR and artifact manifest. Windows tests do not establish Linux results. |
+| MSI creation, installed startup and game-capture smoke check | The earlier locally named 2.0.86.1 preview installed and captured live game traffic with Npcap administrator-only access enabled. A later normal-name 2.0.86 checkpoint initially displayed saved preferences but failed the user's close/relaunch check, so settings persistence was not validated by that installation. Each new candidate requires its own saved-settings/plugin relaunch and focus/Alt-Tab checks. Exact source commits, packaged executable/MSI hashes and subsequent runtime results belong in the PR and artifact manifest; a prior checkpoint's successful launch or game capture does not establish a later candidate's restart behavior. |
 
 Focused synthetic tests use controlled local inputs. Tests requiring an
 external real capture may remain skipped/ignored when their fixture is not

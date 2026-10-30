@@ -123,6 +123,7 @@ function setupBridge({
   const events = new Map();
   const domHandlers = new Map();
   const timers = new Map();
+  const timeouts = new Map();
   const stored = new Map(Object.entries(storage));
   let timerId = 0;
   const window = {
@@ -156,6 +157,18 @@ function setupBridge({
       window: { getCurrentWindow: () => ({ label: view, show: () => calls.push({ command: 'show' }), setFocus() {} }) },
     },
   };
+  const noticeNode = () => {
+    const handlers = new Map();
+    return {
+      style: {}, children: [], attributes: {}, hidden: false,
+      setAttribute(name, value) { this.attributes[name] = value; },
+      addEventListener: (name, callback) => handlers.set(name, callback),
+      append(...children) { this.children.push(...children); },
+      remove() { this.removed = true; },
+      emit: (name) => handlers.get(name)?.(),
+    };
+  };
+  const bodyChildren = [];
   const document = {
     readyState: 'loading', activeElement: null,
     addEventListener(name, callback, options) {
@@ -163,9 +176,9 @@ function setupBridge({
       handlers.push({ callback, capture: options === true || options?.capture === true });
       domHandlers.set(name, handlers);
     }, querySelectorAll: () => [],
-    body: { classList: { contains: () => false, toggle() {} } },
+    body: { children: bodyChildren, appendChild: (child) => bodyChildren.push(child), classList: { contains: () => false, toggle() {} } },
     documentElement: { classList: { add() {}, contains: name => name === 'linux' && linux } },
-    head: { appendChild() {} }, createElement: () => ({}),
+    head: { appendChild() {} }, createElement: noticeNode,
     querySelector: () => null,
   };
   class ClockDate extends Date { static now() { return now(); } }
@@ -176,12 +189,13 @@ function setupBridge({
       getItem: key => stored.get(key) ?? null,
       removeItem: key => stored.delete(key), clear: () => stored.clear(),
     }, console: { log() {}, warn() {}, error() {} },
-    setTimeout() {}, requestAnimationFrame() {}, MutationObserver: class { observe() {} },
+    setTimeout: (callback, ms) => { timeouts.set(++timerId, { callback, ms }); return timerId; },
+    clearTimeout: (id) => timeouts.delete(id), requestAnimationFrame() {}, MutationObserver: class { observe() {} },
     setInterval: callback => { timers.set(++timerId, callback); return timerId; },
     clearInterval: id => timers.delete(id),
   });
   vm.runInContext(bridge, context);
-  return { window, document, calls, timers, listeners, stored, context, domHandlers };
+  return { window, document, calls, timers, timeouts, listeners, stored, context, domHandlers };
 }
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -247,16 +261,101 @@ test('a cold main window gets disk preferences even when localStorage is empty',
   assert.equal(app.started[0].playerLimit, '18');
 });
 
-test('a failed settings read retains the cached fallback and does not block startup', async () => {
-  const app = startupWithPendingSettings('main', {
-    storage: { 'dpsMeter.theme': 'frost', 'dpsMeter.playerLimit': '12' },
-    read: () => Promise.reject(new Error('synthetic settings read failure')),
+test('a legacy bridge without a native readiness promise still initializes', async () => {
+  let loaded;
+  const window = {
+    A2_VIEW: 'main', addEventListener() {},
+    javaBridge: { getSetting: () => 'frost', notifyUiReady() {} }, dpsData: {},
+    i18n: { init: async () => {} },
+  };
+  vm.runInNewContext(core, {
+    window, document: { readyState: 'loading', addEventListener: (_, callback) => { loaded = callback; } },
   });
+  let starts = 0;
+  window.dpsApp.start = () => { starts++; };
+  loaded();
+  await settle();
+  assert.equal(window.a2SettingsReady, undefined);
+  assert.equal(starts, 1);
+});
+
+test('a rejected early read cannot initialize from cached defaults and retries the authoritative snapshot', async () => {
+  let reads = 0;
+  const app = startupWithPendingSettings('main', {
+    storage: { 'dpsMeter.theme': 'aion2', 'dpsMeter.playerLimit': '6' },
+    read: () => ++reads === 1 ? Promise.reject(new Error('backend state not ready'))
+      : { 'dpsMeter.theme': 'frost', 'dpsMeter.playerLimit': '12' },
+  });
+  await settle();
+  assert.equal(reads, 1);
+  assert.deepEqual(app.started, []);
+  assert.deepEqual(app.ready, []);
+  assert.equal(app.calls.filter(({ command }) => command === 'update_settings').length, 0);
+  const [retryId, retry] = [...app.timeouts].find(([, timer]) => timer.ms === 100);
+  app.timeouts.delete(retryId);
+  retry.callback();
   await app.window.a2SettingsReady;
   await settle();
+  assert.equal(reads, 2);
   assert.equal(app.started[0].theme, 'frost');
   assert.equal(app.started[0].playerLimit, '12');
   assert.deepEqual(app.ready, ['main']);
+});
+
+test('persistent read failures stop after bounded retries and offer manual retry without default initialization', async () => {
+  let failing = true, reads = 0, ready = false;
+  const app = startupWithPendingSettings('settings', {
+    read: () => { reads++; return failing ? Promise.reject(new Error('not ready'))
+      : { 'dpsMeter.theme': 'frost', 'dpsMeter.playerLimit': '12' }; },
+  });
+  app.window.a2SettingsReady.then(() => { ready = true; });
+  for (const delay of [100, 250, 500, 1000]) {
+    await settle();
+    const [id, timer] = [...app.timeouts].find(([, entry]) => entry.ms === delay);
+    app.timeouts.delete(id);
+    timer.callback();
+  }
+  await settle();
+  assert.equal(reads, 5);
+  assert.equal(ready, false);
+  assert.deepEqual(app.started, []);
+  assert.equal(app.calls.filter(({ command }) => command === 'update_settings').length, 0);
+  const notice = app.document.body.children.find((node) => node.className === 'settingsLoadNotice');
+  assert.equal(notice.attributes.role, 'alert');
+  assert.match(notice._message.textContent, /has not been reset/);
+  assert.equal(notice._retry.hidden, false);
+  assert.equal([...app.timeouts.values()].filter(({ ms }) => [100, 250, 500, 1000, 3000].includes(ms)).length, 0);
+  failing = false;
+  notice._retry.emit('click');
+  await app.window.a2SettingsReady;
+  await settle();
+  assert.equal(reads, 6);
+  assert.equal(ready, true);
+  assert.equal(notice.removed, true);
+  assert.equal(app.started[0].theme, 'frost');
+  assert.equal(app.started[0].playerLimit, '12');
+});
+
+test('a timed-out read cannot later overwrite the successful retry', async () => {
+  const stale = deferred();
+  let reads = 0;
+  const app = startupWithPendingSettings('main', {
+    read: () => ++reads === 1 ? stale.promise
+      : { 'dpsMeter.theme': 'frost', 'dpsMeter.playerLimit': '12' },
+  });
+  await settle();
+  for (const delay of [3000, 100]) {
+    const [id, timer] = [...app.timeouts].find(([, entry]) => entry.ms === delay);
+    app.timeouts.delete(id);
+    timer.callback();
+    await settle();
+  }
+  await app.window.a2SettingsReady;
+  assert.equal(app.started[0].theme, 'frost');
+  stale.resolve({ 'dpsMeter.theme': 'aion2', 'dpsMeter.playerLimit': '6' });
+  await settle();
+  assert.equal(app.window.javaBridge.getSetting('dpsMeter.theme'), 'frost');
+  assert.equal(app.stored.get('dpsMeter.playerLimit'), '12');
 });
 
 test('the full Linux bridge waits for resize_window before revealing the meter', async () => {

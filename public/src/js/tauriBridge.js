@@ -173,6 +173,57 @@
   let settingsLifecycleGeneration = 0;
   let settingsReadId = 0;
   let settingsReadPromise = null;
+  let settingsStartupRunning = false;
+  let settingsNotice = null;
+  let completeSettingsReady;
+  window.a2SettingsReady = new Promise((resolve) => { completeSettingsReady = resolve; });
+  const startupContainer = document.querySelector(".container");
+  const startupVisibility = startupContainer?.style?.visibility || "";
+  if (startupContainer?.style) startupContainer.style.visibility = "hidden";
+  const finishSettingsStartup = () => {
+    settingsLoaded = true;
+    settingsNotice?.remove?.();
+    settingsNotice = null;
+    if (startupContainer?.style) startupContainer.style.visibility = startupVisibility;
+    completeSettingsReady();
+  };
+  const showSettingsNotice = (failed = false) => {
+    if (settingsLoaded) return;
+    try {
+      if (!settingsNotice && document.body) {
+        const panel = document.createElement("div");
+        panel.className = "settingsLoadNotice";
+        panel.setAttribute("role", "status");
+        panel.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:20px;background:#141923;color:#f3f4f6;font:13px/1.5 system-ui,sans-serif;overflow:auto";
+        const message = document.createElement("div");
+        const actions = document.createElement("div");
+        actions.style.cssText = "display:flex;gap:8px";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "Retry";
+        retry.addEventListener("click", () => { void startSettingsStartup(); });
+        const close = document.createElement("button");
+        close.type = "button";
+        close.textContent = "Close";
+        close.addEventListener("click", () => { invoke("quit_app").catch(() => {}); });
+        actions.append(retry, close);
+        panel.append(message, actions);
+        document.body.appendChild(panel);
+        settingsNotice = panel;
+        panel._message = message;
+        panel._retry = retry;
+      }
+      if (settingsNotice) {
+        settingsNotice._message.textContent = failed
+          ? "Saved settings could not be loaded. Your saved configuration has not been reset. Retry loading it or close the meter."
+          : "Loading saved settings…";
+        settingsNotice._retry.hidden = !failed;
+        settingsNotice.setAttribute("role", failed ? "alert" : "status");
+      }
+    } catch (error) {
+      console.error("[A2Tools] Could not show settings loading status", error);
+    }
+  };
   let settingsRevision = 0;
   let pendingSettingsAccountResult = null;
   const settingsKeyRevisions = new Map();
@@ -232,10 +283,18 @@
   const loadSettings = () => {
     const readId = ++settingsReadId;
     const revision = settingsRevision;
-    const pending = invoke("get_settings").then((s) => {
+    let timeout;
+    let request;
+    try { request = invoke("get_settings"); }
+    catch (error) { request = Promise.reject(error); }
+    const response = Promise.race([
+      request,
+      new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Saved settings read timed out")), 3000); }),
+    ]);
+    const pending = response.then((s) => {
       if (readId !== settingsReadId) return false;
-      settingsLoaded = true;
-      if (!s || typeof s !== "object" || Array.isArray(s)) return false;
+      if (!s || typeof s !== "object" || Array.isArray(s)
+        || Object.values(s).some((value) => typeof value !== "string")) return false;
       const merged = { ...s };
       // An event or local edit after this read began is newer than its snapshot.
       for (const [key, changed] of settingsKeyRevisions) {
@@ -250,21 +309,37 @@
       for (const [key, value] of Object.entries(merged)) {
         try { localStorage.setItem(key, value); } catch {}
       }
+      finishSettingsStartup();
       return true;
-    }).catch(() => {
-      if (readId === settingsReadId) settingsLoaded = true;
+    }).catch((error) => {
+      if (readId === settingsReadId) console.warn("[A2Tools] Saved settings read failed", error);
       return false;
+    }).finally(() => {
+      if (typeof clearTimeout === "function") clearTimeout(timeout);
     });
     settingsReadPromise = pending;
     return pending;
   };
-  loadSettings();
-  window.a2SettingsReady = (async () => {
-    // A reopen during startup can supersede the initial read.
-    let pending;
-    do { pending = settingsReadPromise; await pending; }
-    while (pending !== settingsReadPromise);
-  })();
+  const startSettingsStartup = async () => {
+    if (settingsLoaded || settingsStartupRunning) return;
+    settingsStartupRunning = true;
+    showSettingsNotice();
+    const backoff = [100, 250, 500, 1000];
+    for (let attempt = 0; attempt <= backoff.length && !settingsLoaded; ++attempt) {
+      let pending = loadSettings();
+      await pending;
+      // A reopen can replace this read while startup is waiting.
+      while (!settingsLoaded && pending !== settingsReadPromise) {
+        pending = settingsReadPromise;
+        await pending;
+      }
+      if (settingsLoaded || attempt === backoff.length) break;
+      await new Promise((resolve) => setTimeout(resolve, backoff[attempt]));
+    }
+    settingsStartupRunning = false;
+    if (!settingsLoaded) showSettingsNotice(true);
+  };
+  void startSettingsStartup();
 
   // --- DPS data polling via events ---
   // The Rust backend emits "dps-update" when it changes (checked every 100ms,
@@ -607,7 +682,7 @@
       settingsKeyRevisions.clear();
       try { localStorage.clear(); } catch {}
       settingsCache = {};
-      invoke("clear_settings").catch(() => {});
+      invoke("clear_settings").then(finishSettingsStartup).catch(() => {});
     },
 
     // --- DPS & Combat ---
