@@ -13,6 +13,7 @@
 use a2tools_dps_meter_lib::capture::evidence_slice;
 use a2tools_dps_meter_lib::rederive::{derive_decoded_with, Decoded, DeriveError, Tables};
 use flate2::read::GzDecoder;
+use futures_util::{Stream, StreamExt};
 use ruzstd::decoding::StreamingDecoder;
 use worker::*;
 
@@ -94,10 +95,16 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         return Response::error("forbidden", 403);
     }
 
-    let body = req.bytes().await?;
-    if body.len() > MAX_GZIPPED {
+    // Count actual chunks, including when Content-Length is absent or wrong.
+    // A bodyless request still reaches the existing not_a_slice response.
+    let body = if req.inner().body().is_none() {
+        Some(Vec::new())
+    } else {
+        read_limited_body(req.stream()?, MAX_GZIPPED).await?
+    };
+    let Some(body) = body else {
         return error("too_large", "The slice is larger than any real fight.", 413);
-    }
+    };
     let Some(decoded) = read_slice(&body) else {
         if looks_like_slice(&body) {
             return error("too_large", "The fight's records are larger than this service reads.", 413);
@@ -128,6 +135,19 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         Err(DeriveError::NotASlice) => error("not_a_slice", "Not an Evidence Slice this build reads.", 422),
         Err(DeriveError::NothingDerived) => error("no_fight", "The slice contains no boss fight.", 422),
     }
+}
+
+async fn read_limited_body<S: Stream<Item = Result<Vec<u8>>>>(stream: S, max: usize) -> Result<Option<Vec<u8>>> {
+    futures_util::pin_mut!(stream);
+    let mut body = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        if chunk.len() > max - body.len() {
+            return Ok(None);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(Some(body))
 }
 
 fn error(code: &str, message: &str, status: u16) -> Result<Response> {
@@ -164,4 +184,37 @@ fn base64_decode(text: &str) -> Option<Vec<u8>> {
         }
     }
     Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_util::{stream, FutureExt};
+    use std::cell::Cell;
+
+    #[test]
+    fn streamed_body_accepts_empty_and_exact_limit() {
+        let empty = read_limited_body(stream::empty(), 4).now_or_never().unwrap().unwrap();
+        assert_eq!(empty, Some(Vec::new()));
+        let exact = stream::iter([Ok(vec![1, 2]), Ok(vec![]), Ok(vec![3, 4])]);
+        let body = read_limited_body(exact, 4).now_or_never().unwrap().unwrap();
+        assert_eq!(body, Some(vec![1, 2, 3, 4]));
+    }
+
+    #[test]
+    fn streamed_body_stops_at_the_first_excess_chunk() {
+        let polls = Cell::new(0);
+        let chunks = stream::iter([Ok(vec![1, 2]), Ok(vec![3, 4, 5]), Ok(vec![6])])
+            .inspect(|_| polls.set(polls.get() + 1));
+        assert!(read_limited_body(chunks, 4).now_or_never().unwrap().unwrap().is_none());
+        assert_eq!(polls.get(), 2);
+        let single = stream::iter([Ok(vec![0; 5])]);
+        assert!(read_limited_body(single, 4).now_or_never().unwrap().unwrap().is_none());
+    }
+
+    #[test]
+    fn streamed_body_propagates_read_errors() {
+        let chunks = stream::iter([Ok(vec![1]), Err(Error::RustError("read failed".into()))]);
+        assert!(matches!(read_limited_body(chunks, 4).now_or_never().unwrap(), Err(Error::RustError(_))));
+    }
 }

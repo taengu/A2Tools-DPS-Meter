@@ -23,6 +23,7 @@ version = "0.1.0"
 dependencies = [
  "a2tools-dps-meter",
  "flate2",
+ "futures-util",
  "ruzstd",
  "serde",
  "serde_json",
