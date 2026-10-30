@@ -28,6 +28,10 @@ const MAX_FIELDS: usize = 32;
 const MAX_LIST: u64 = 4096;
 /// How deep lists may nest.
 const MAX_DEPTH: u8 = 2;
+/// Shared by all fields and nested lists in one decoded event. Per-list
+/// limits alone allow millions of empty objects from a small frame.
+const MAX_VALUES: usize = 16_384;
+const MAX_KEY_BYTES: usize = 1024 * 1024;
 /// Frame types no decoder may read, for any plugin: another player coming
 /// into view (`44 36`, `45 36`) and players' movement (`1e`-`20 37`,
 /// `28`-`2a 37`). A plugin may tell you about your game, never that someone
@@ -122,7 +126,8 @@ impl Decoder {
     /// Decode a frame's body (the bytes after its type) into the fields.
     pub fn decode(&self, body: &[u8]) -> Option<Value> {
         let mut pos = 0;
-        decode_fields(&self.fields, body, &mut pos).map(Value::Object)
+        let mut budget = Budget { values: MAX_VALUES - 1, key_bytes: MAX_KEY_BYTES };
+        decode_fields(&self.fields, body, &mut pos, &mut budget).map(Value::Object)
     }
 }
 
@@ -193,7 +198,20 @@ fn number(kind: &str, body: &[u8], pos: &mut usize) -> Option<u64> {
     })
 }
 
-fn decode_fields(fields: &[FieldSpec], body: &[u8], pos: &mut usize) -> Option<Map<String, Value>> {
+struct Budget {
+    values: usize,
+    key_bytes: usize,
+}
+
+impl Budget {
+    fn take(&mut self, values: usize, key_bytes: usize) -> Option<()> {
+        self.values = self.values.checked_sub(values)?;
+        self.key_bytes = self.key_bytes.checked_sub(key_bytes)?;
+        Some(())
+    }
+}
+
+fn decode_fields(fields: &[FieldSpec], body: &[u8], pos: &mut usize, budget: &mut Budget) -> Option<Map<String, Value>> {
     let mut out = Map::new();
     for field in fields {
         let kind = field.kind.as_str();
@@ -201,7 +219,9 @@ fn decode_fields(fields: &[FieldSpec], body: &[u8], pos: &mut usize) -> Option<M
             take(body, pos, n.parse().ok()?)?;
             continue;
         }
-        let name = field.name.clone().unwrap_or_default();
+        let name = field.name.as_deref().unwrap_or_default();
+        budget.take(1, name.len())?;
+        let name = name.to_owned();
         match kind {
             "i32" => {
                 let v = i32::from_le_bytes(take(body, pos, 4)?.try_into().ok()?);
@@ -212,10 +232,14 @@ fn decode_fields(fields: &[FieldSpec], body: &[u8], pos: &mut usize) -> Option<M
                 if count > MAX_LIST {
                     return None;
                 }
+                // Every entry creates an object, even when its layout is empty.
+                // Charge them before reserving the array; child fields share
+                // this same budget instead of receiving a fresh allowance.
+                budget.take(count as usize, 0)?;
                 let inner = field.fields.as_deref().unwrap_or(&[]);
                 let mut items = Vec::with_capacity(count as usize);
                 for _ in 0..count {
-                    items.push(Value::Object(decode_fields(inner, body, pos)?));
+                    items.push(Value::Object(decode_fields(inner, body, pos, budget)?));
                 }
                 out.insert(name, Value::Array(items));
             }
@@ -321,6 +345,50 @@ mod tests {
     fn a_short_frame_decodes_to_nothing() {
         let d = spec(r#"{"name":"x","opcode":"0D 90","fields":[{"name":"a","type":"u32"}]}"#);
         assert!(d.decode(&[1, 2]).is_none());
+    }
+
+    #[test]
+    fn nested_and_sibling_lists_share_the_value_budget() {
+        let d = spec(r#"{"name":"x","opcode":"0D 90","fields":[
+            {"name":"a","type":"list","count":"u8","fields":[
+                {"name":"b","type":"list","count":"u8","fields":[]}]},
+            {"name":"c","type":"list","count":"u8","fields":[]}]}"#);
+        // 2 arrays + 2 outer objects + 2 inner arrays + 4 inner objects
+        // + 2 sibling objects = 12 values, excluding the root object.
+        let body = [2, 2, 2, 2];
+        let mut exact = Budget { values: 12, key_bytes: MAX_KEY_BYTES };
+        let decoded = decode_fields(&d.fields, &body, &mut 0, &mut exact).unwrap();
+        assert_eq!(decoded["a"][1]["b"], serde_json::json!([{}, {}]));
+        assert_eq!(decoded["c"], serde_json::json!([{}, {}]));
+        assert_eq!(exact.values, 0);
+        let mut short = Budget { values: 11, key_bytes: MAX_KEY_BYTES };
+        assert!(decode_fields(&d.fields, &body, &mut 0, &mut short).is_none());
+    }
+
+    #[test]
+    fn repeated_field_names_share_the_byte_budget() {
+        let d = spec(r#"{"name":"x","opcode":"0D 90","fields":[
+            {"name":"a","type":"list","count":"u8","fields":[
+                {"name":"long-name","type":"u8"}]}]}"#);
+        let mut exact = Budget { values: MAX_VALUES, key_bytes: 1 + 2 * 9 };
+        assert!(decode_fields(&d.fields, &[2, 3, 4], &mut 0, &mut exact).is_some());
+        assert_eq!(exact.key_bytes, 0);
+        let mut short = Budget { values: MAX_VALUES, key_bytes: 1 + 2 * 9 - 1 };
+        assert!(decode_fields(&d.fields, &[2, 3, 4], &mut 0, &mut short).is_none());
+    }
+
+    #[test]
+    fn the_decode_budget_resets_for_each_frame() {
+        let d = spec(r#"{"name":"x","opcode":"0D 90","fields":[
+            {"name":"a","type":"list","count":"u8","fields":[
+                {"name":"b","type":"list","count":"u16","fields":[]}]}]}"#);
+        let mut body = vec![4];
+        for _ in 0..4 {
+            body.extend((MAX_LIST as u16).to_le_bytes());
+        }
+        assert!(d.decode(&body).is_none());
+        assert_eq!(d.decode(&[0]), Some(serde_json::json!({"a": []})));
+        assert!(d.decode(&[1, 0, 16]).is_some()); // One full-sized list still works.
     }
 
     #[test]
