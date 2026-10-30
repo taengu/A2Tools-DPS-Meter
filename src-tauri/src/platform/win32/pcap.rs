@@ -24,30 +24,9 @@ pub const READ_TIMES_OUT_WHEN_IDLE: bool = true;
 /// opens, and kept (`pcap_capturer`).
 pub const FILTER_CHANGE_KEEPS_QUEUE: bool = false;
 
-/// Npcap puts `wpcap.dll` in System32 only when it is installed in its
-/// WinPcap-compatible mode; otherwise it lives in `System32\Npcap`, where a
-/// plain load does not look. Npcap's guidance for programs is to add that
-/// folder to the DLL search path, so either kind of install works. System32
-/// as Windows knows it, not as `%SystemRoot%` says (anything can set that;
-/// #131).
-pub fn prepare() {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
-    use windows::Win32::System::LibraryLoader::SetDllDirectoryW;
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let Some(system) = system32() else {
-            tracing::warn!("Npcap: Windows named no System32 folder");
-            return;
-        };
-        let folder = system.join("Npcap");
-        let wide: Vec<u16> = folder.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-        // SAFETY: a NUL-terminated path that outlives the call.
-        if let Err(e) = unsafe { SetDllDirectoryW(PCWSTR(wide.as_ptr())) } {
-            tracing::debug!("SetDllDirectoryW({}) failed: {e}", folder.display());
-        }
-    });
-}
+/// Loading uses explicit paths and flags, without changing the process's DLL
+/// search path.
+pub fn prepare() {}
 
 /// The System32 folder, from Windows.
 fn system32() -> Option<std::path::PathBuf> {
@@ -65,21 +44,20 @@ fn system32() -> Option<std::path::PathBuf> {
 /// Load the capture library `name` by its full path: from `System32\Npcap`,
 /// else System32 itself (Npcap's WinPcap-compatible mode), never by the
 /// usual search, which goes on into PATH when Npcap isn't installed, and
-/// PATH has folders the user can write (audit L1). Its own dependency
-/// (Packet.dll) is looked for next to it first.
+/// PATH has folders the user can write (audit L1). Dependencies (Packet.dll)
+/// may come only from that DLL's directory or System32.
 ///
 /// # Safety
 /// Loading a library runs its initialisation, as `libloading::Library::new`.
 pub unsafe fn load(name: &str) -> Result<libloading::Library, libloading::Error> {
-    use libloading::os::windows::{Library, LOAD_WITH_ALTERED_SEARCH_PATH};
-    prepare();
-    let Some(system) = system32() else {
-        return unsafe { Library::load_with_flags(name, LOAD_WITH_ALTERED_SEARCH_PATH) }.map(Into::into);
-    };
+    use libloading::os::windows::{Library, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR, LOAD_LIBRARY_SEARCH_SYSTEM32};
+    // Never fall back to an ambient search if Windows cannot name its folder.
+    let system = system32().ok_or(libloading::Error::LoadLibraryExWUnknown)?;
+    let flags = LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32;
     let npcap = system.join("Npcap").join(name);
-    match unsafe { Library::load_with_flags(&npcap, LOAD_WITH_ALTERED_SEARCH_PATH) } {
+    match unsafe { Library::load_with_flags(&npcap, flags) } {
         Ok(lib) => Ok(lib.into()),
-        Err(_) => unsafe { Library::load_with_flags(system.join(name), LOAD_WITH_ALTERED_SEARCH_PATH) }.map(Into::into),
+        Err(_) => unsafe { Library::load_with_flags(system.join(name), flags) }.map(Into::into),
     }
 }
 
