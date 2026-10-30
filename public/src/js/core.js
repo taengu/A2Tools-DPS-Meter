@@ -1783,6 +1783,7 @@ class DpsApp {
       const totalDamage = Math.trunc(Number(isObj ? value.amount : 0)) || 0;
       const hps = Math.trunc(Number(isObj ? value.hps : 0)) || 0;
       const healAmount = Math.trunc(Number(isObj ? value.healAmount : 0)) || 0;
+      const damageReceived = Math.trunc(Number(isObj ? value.damageReceived : 0)) || 0;
       // Stagger taken off the target's gauge in the fight (combat/stagger.rs).
       const stagger = Math.trunc(Number(isObj ? value.stagger : 0)) || 0;
       // The same by skill code, for the tooltip in Stagger mode.
@@ -1812,6 +1813,7 @@ class DpsApp {
         totalDamage,
         hps,
         healAmount,
+        damageReceived,
         stagger,
         staggerSkills,
         damageContribution,
@@ -5621,7 +5623,7 @@ class DpsApp {
 
   /** The display modes after DPS, in the menu's order. */
   displayModes() {
-    return ["totalDamage", "hps", "totalHeal", "stagger"];
+    return ["totalDamage", "damageReceived", "hps", "totalHeal", "stagger"];
   }
 
   setDisplayMode(mode, { persist = false } = {}) {
@@ -5641,6 +5643,7 @@ class DpsApp {
   metricLabels(mode) {
     return {
       totalDamage: ["header.display.total", "DMG", "header.display.ariaDamage", "Showing total damage", "header.display.names.totalDamage", "Total damage"],
+      damageReceived: ["header.display.damageReceived", "TAKEN", "header.display.ariaDamageReceived", "Showing damage taken", "header.display.names.damageReceived", "Damage taken"],
       hps: ["header.display.hps", "HPS", "header.display.ariaHps", "Showing healing per second", "header.display.names.hps", "Healing per second"],
       totalHeal: ["header.display.totalHeal", "HEAL", "header.display.ariaHeal", "Showing total healing", "header.display.names.totalHeal", "Total healing"],
       stagger: ["header.display.stagger", "STAG", "header.display.ariaStagger", "Showing stagger dealt", "header.display.names.stagger", "Stagger"],
@@ -6476,6 +6479,10 @@ class DpsApp {
         value: totalDamage,
         text: this.formatAbbreviatedNumber(totalDamage),
       };
+    }
+    if (mode === "damageReceived") {
+      const received = Number(row?.damageReceived) || 0;
+      return { value: received, text: this.formatAbbreviatedNumber(received) };
     }
     if (mode === "hps") {
       const hps = Number(row?.hps) || 0;

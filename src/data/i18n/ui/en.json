@@ -4,8 +4,10 @@
     "display": {
       "dps": "DPS",
       "total": "DMG",
+      "damageReceived": "TAKEN",
       "ariaDps": "Showing DPS",
       "ariaDamage": "Showing total damage",
+      "ariaDamageReceived": "Showing damage taken",
       "hps": "HPS",
       "totalHeal": "HEAL",
       "stagger": "STAG",
@@ -15,6 +17,7 @@
       "names": {
         "dps": "Damage per second",
         "totalDamage": "Total damage",
+        "damageReceived": "Damage taken",
         "hps": "Healing per second",
         "totalHeal": "Total healing",
         "stagger": "Stagger",

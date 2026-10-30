@@ -404,6 +404,22 @@ impl DpsCalculator {
             }
         }
 
+        // Incoming hits are stored on the player in the same target aggregates.
+        // Do this before orphan merges so their received damage moves with the row.
+        for &tid in &target_ids {
+            if let Some(target) = combat_data.get(&tid) {
+                for (&actor_id, actor) in &target.actors {
+                    if actor.damage_received <= 0 { continue; }
+                    let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
+                    let nickname = resolve_nickname(raw_uid, &nickname_data, &summon_data);
+                    let uid = *canonical.get(&nickname).unwrap_or(&raw_uid);
+                    if let Some(entry) = dps_data.map.get_mut(&uid) {
+                        entry.damage_received += actor.damage_received;
+                    }
+                }
+            }
+        }
+
         // Orphan summon inference: attribute an entity that is really a summon to
         // the player who owns it, for the summons the spawn packet never covered.
         //

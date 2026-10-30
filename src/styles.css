@@ -15,6 +15,7 @@
      Stagger is the game's own aqua. */
   --metric-dps: #ffd166;
   --metric-totalDamage: #ff9a76;
+  --metric-damageReceived: #f28b82;
   --metric-hps: #7ee2a8;
   --metric-totalHeal: #c3f27a;
   --metric-stagger: #5ce8ec;
@@ -1072,11 +1073,13 @@ html:not(.hoverStale) .list .item:hover { background: rgba(255, 255, 255, 0.075)
 .list .item .dps [data-metric] { text-align: right; box-sizing: content-box; }
 .list .item .dps [data-metric="dps"] { min-width: var(--mw-dps, 0); }
 .list .item .dps [data-metric="totalDamage"] { min-width: var(--mw-totalDamage, 0); }
+.list .item .dps [data-metric="damageReceived"] { min-width: var(--mw-damageReceived, 0); }
 .list .item .dps [data-metric="hps"] { min-width: var(--mw-hps, 0); }
 .list .item .dps [data-metric="totalHeal"] { min-width: var(--mw-totalHeal, 0); }
 .list .item .dps [data-metric="stagger"] { min-width: var(--mw-stagger, 0); }
 body:not(.noStatColours) .list .item .dps [data-metric="dps"] { color: var(--metric-dps); }
 body:not(.noStatColours) .list .item .dps [data-metric="totalDamage"] { color: var(--metric-totalDamage); }
+body:not(.noStatColours) .list .item .dps [data-metric="damageReceived"] { color: var(--metric-damageReceived); }
 body:not(.noStatColours) .list .item .dps [data-metric="hps"] { color: var(--metric-hps); }
 body:not(.noStatColours) .list .item .dps [data-metric="totalHeal"] { color: var(--metric-totalHeal); }
 body:not(.noStatColours) .list .item .dps [data-metric="stagger"] { color: var(--metric-stagger); }
@@ -1300,6 +1303,7 @@ body.mainPlayerDpsBold :is(.meter, .barPreviewPanel) .item .content .dps > p {
 .footerBtns .targetModeBtn { min-width: 44px; }
 body:not(.noStatColours) .footerBtns .metricToggleBtn[data-metric="dps"] { color: var(--metric-dps); }
 body:not(.noStatColours) .footerBtns .metricToggleBtn[data-metric="totalDamage"] { color: var(--metric-totalDamage); }
+body:not(.noStatColours) .footerBtns .metricToggleBtn[data-metric="damageReceived"] { color: var(--metric-damageReceived); }
 body:not(.noStatColours) .footerBtns .metricToggleBtn[data-metric="hps"] { color: var(--metric-hps); }
 body:not(.noStatColours) .footerBtns .metricToggleBtn[data-metric="totalHeal"] { color: var(--metric-totalHeal); }
 body:not(.noStatColours) .footerBtns .metricToggleBtn[data-metric="stagger"] { color: var(--metric-stagger); }
@@ -1393,6 +1397,7 @@ body:not(.noStatColours) .footerBtns .metricToggleBtn[data-metric="stagger"] { c
 /* Each metric's name in its colour; dimmer while it isn't shown. */
 .metricMenuItem[data-metric="dps"] { --m: var(--metric-dps); }
 .metricMenuItem[data-metric="totalDamage"] { --m: var(--metric-totalDamage); }
+.metricMenuItem[data-metric="damageReceived"] { --m: var(--metric-damageReceived); }
 .metricMenuItem[data-metric="hps"] { --m: var(--metric-hps); }
 .metricMenuItem[data-metric="totalHeal"] { --m: var(--metric-totalHeal); }
 .metricMenuItem[data-metric="stagger"],

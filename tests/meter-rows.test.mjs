@@ -43,7 +43,7 @@ test("one metric sorts, others ride along as columns; stagger always offered", (
   const dps = app("Mine");
   dps.updateDisplayToggleLabel = () => {};
   dps.extraMetrics = [];
-  assert.deepEqual(Array.from(dps.displayModes()), ["totalDamage", "hps", "totalHeal", "stagger"]);
+  assert.deepEqual(Array.from(dps.displayModes()), ["totalDamage", "damageReceived", "hps", "totalHeal", "stagger"]);
   const rows = dps.buildRowsFromMapObject({ 5: { ...row("Mine", 10), stagger: 35 }, 6: row("Other", 20) });
   assert.deepEqual(Array.from(rows, (r) => r.stagger).sort(), [0, 35]);
   dps.setDisplayMode("stagger");
@@ -65,6 +65,15 @@ test("one metric sorts, others ride along as columns; stagger always offered", (
   // The old "both" no longer exists as a mode.
   dps.setDisplayMode("both");
   assert.equal(dps.displayMode, "dps");
+});
+
+test("damage taken is available as a live row metric", () => {
+  const dps = app("Mine");
+  const [mine] = dps.buildRowsFromMapObject({ 5: { ...row("Mine", 10), damageReceived: 12345 } });
+  assert.equal(mine.damageReceived, 12345);
+  dps.formatAbbreviatedNumber = (value) => String(value);
+  const metric = dps.metricFor(mine, "damageReceived");
+  assert.deepEqual([metric.value, metric.text], [12345, "12345"]);
 });
 
 test("in Stagger mode a row's tooltip lists its stagger by skill, most first", () => {

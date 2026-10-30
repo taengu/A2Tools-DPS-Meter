@@ -1898,6 +1898,7 @@ impl DataStorage {
                     actor_data.damage_received += dmg;
                     actor_data.hits_received += 1;
                     actor_data.received.note(pdp.specials());
+                    self.damage_generation.fetch_add(1, Ordering::Relaxed);
                 }
             }
             return;
@@ -4142,8 +4143,10 @@ mod tests {
             s.append_damage(hit(200, t, 1_000 + i as i64, 500, false));
         }
         let taken = |s: &DataStorage, t: i32| s.get_combat_snapshot_light()[&t].actors[&100].damage_received;
+        let before_hit = s.damage_generation();
         s.append_damage(with_skill(hit(810, 100, 3_000, 300, false), 1_200_001));
         assert_eq!(taken(&s, 810), 300, "on the fight with the mob that hit you");
+        assert!(s.damage_generation() > before_hit, "incoming damage refreshes the live meter");
 
         // A mob you never hit: the fight you were in last.
         s.append_mob(900, 1);
