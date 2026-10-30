@@ -324,7 +324,10 @@
     "diagnostics": "診斷",
     "device": {
       "label": "網路介面卡",
-      "autoDetect": "自動偵測"
+      "autoDetect": "自動偵測",
+      "mirrored": "擷取從另一台電腦鏡像的流量",
+      "mirroredHint": "用於專用 SPAN/鏡像網卡：在下方選擇網卡，然後重新啟動統計器。即使沒有 IP 位址，也會在該網卡上啟用混雜模式擷取。無需本機遊戲視窗；不套用依據本機遊戲焦點或關閉狀態的隱藏規則。",
+      "chooseMirrored": "選擇鏡像網卡"
     },
     "advanced": "進階",
     "bossLogs": "啟用每場Boss記錄",

@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 use crate::capture::captured_payload::{CapturedPayload, FlowKey};
+use crate::capture::mode::CaptureMode;
 use crate::capture::combat_port_detector::CombatPortDetector;
 use crate::capture::stream_assembler::StreamAssembler;
 use crate::capture::tcp_order::{Piece, TcpOrder};
@@ -221,6 +222,7 @@ pub struct CaptureDispatcher {
     ping_tracker: Arc<PingTracker>,
     dot_skill_ids: std::collections::HashSet<i32>,
     suspended: Arc<AtomicBool>,
+    capture_mode: CaptureMode,
 }
 
 impl CaptureDispatcher {
@@ -239,11 +241,16 @@ impl CaptureDispatcher {
             ping_tracker,
             dot_skill_ids: std::collections::HashSet::new(),
             suspended: Arc::new(AtomicBool::new(false)),
+            capture_mode: CaptureMode::Local,
         }
     }
 
     pub fn set_dot_skill_ids(&mut self, ids: std::collections::HashSet<i32>) {
         self.dot_skill_ids = ids;
+    }
+
+    pub fn set_capture_mode(&mut self, mode: CaptureMode) {
+        self.capture_mode = mode;
     }
 
     /// Share the "suspended" switch with whoever flips it (the header's
@@ -309,10 +316,11 @@ impl CaptureDispatcher {
             if now - last_window_check_ms >= interval {
                 last_window_check_ms = now;
                 let title = window_title();
-                let running = title.is_some();
+                let running = self.capture_mode.game_available(title.is_some());
                 if window_logged != Some(running) {
                     match &title {
                         Some(t) => info!("AION2 window found: {:?}", t),
+                        None if self.capture_mode.is_mirrored() => info!("Mirrored capture: no local AION2 window required"),
                         None => info!(
                             "No AION2 window found (looking for a title starting with \"AION2\", or a window owned by AION2.exe); packets are ignored until there is one"
                         ),
@@ -638,6 +646,54 @@ fn device_matches(locked: &str, packet_device: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn mirrored_capture_dispatches_the_selected_stream_without_a_local_window() {
+        let _turn = crate::share::ring::TEST_SERIAL.lock();
+        for mode in [CaptureMode::Local, CaptureMode::Mirrored] {
+            crate::share::ring::clear();
+            let storage = Arc::new(DataStorage::new());
+            let detector = Arc::new(CombatPortDetector::new());
+            let device = "Npcap Loopback Adapter [mirror-nic]";
+            detector.set_preferred_device(Some(device.into()));
+            let mut dispatcher = CaptureDispatcher::new(
+                storage.clone(), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()),
+                detector.clone(), Arc::new(PingTracker::new()),
+            );
+            dispatcher.set_capture_mode(mode);
+            let mut game = flow(13328, 50000, COMBAT_SIGNATURES[0]);
+            game.device_name = Some(device.into());
+            game.src_ip = Some("192.0.2.1".parse().unwrap());
+            game.dst_ip = Some("192.0.2.2".parse().unwrap());
+            let (sender, receiver) = mpsc::channel(32);
+            for n in 0..SIGNATURE_LOCK_THRESHOLD + 1 {
+                game.tcp_seq = n * game.data.len() as u32 + 1;
+                sender.send(game.clone()).await.unwrap();
+            }
+            let mut stranger = game.clone();
+            stranger.src_ip = Some("192.0.2.3".parse().unwrap());
+            stranger.tcp_seq += game.data.len() as u32;
+            sender.send(stranger).await.unwrap();
+            let mut other_device = game.clone();
+            other_device.device_name = Some("other mirror adapter".into());
+            other_device.tcp_seq += game.data.len() as u32;
+            sender.send(other_device).await.unwrap();
+            drop(sender);
+            dispatcher.run_with_window_check(receiver, || None).await;
+            let packets = crate::share::ring::snapshot();
+            if mode.is_mirrored() {
+                assert_eq!(detector.current_port(), Some(game.src_port));
+                assert_eq!(storage.game_host(), game.src_ip);
+                assert_eq!(detector.current_device(), game.device_name);
+                assert_eq!(packets.len(), SIGNATURE_LOCK_THRESHOLD as usize + 1,
+                    "mirrored capture must retain the locked endpoint and adapter boundary");
+            } else {
+                assert!(detector.current_port().is_none());
+                assert!(packets.is_empty(), "local capture still requires the game window");
+            }
+        }
+        crate::share::ring::clear();
+    }
 
     #[test]
     fn a_tls_record_header_is_told_from_game_bytes() {

@@ -324,7 +324,10 @@
     "diagnostics": "Diagnostics",
     "device": {
       "label": "Network adapter",
-      "autoDetect": "Auto-detect"
+      "autoDetect": "Auto-detect",
+      "mirrored": "Capture traffic mirrored from another PC",
+      "mirroredHint": "For a dedicated SPAN/mirror adapter: select it below, then restart the meter. Enables promiscuous capture on that adapter, including without an IP address; no local game window is required. Local-game focus and closed-window hiding are ignored.",
+      "chooseMirrored": "Select mirror adapter"
     },
     "advanced": "Advanced",
     "bossLogs": "Enable per-boss logs",

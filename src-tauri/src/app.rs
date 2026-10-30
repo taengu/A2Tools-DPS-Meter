@@ -23,6 +23,7 @@ use tokio::sync::mpsc;
 use crate::capture::captured_payload::CapturedPayload;
 use crate::capture::combat_port_detector::CombatPortDetector;
 use crate::capture::pcap_capturer::PcapCapturer;
+use crate::capture::mode::{CaptureMode, SETTING_KEY as MIRRORED_CAPTURE_KEY};
 use crate::combat::capture_dispatcher::CaptureDispatcher;
 use crate::combat::data_storage::DataStorage;
 use crate::combat::dps_calculator::DpsCalculator;
@@ -329,7 +330,8 @@ fn reconcile_main_focus(app: &tauri::AppHandle, wait_ticks: u8, past_startup: bo
         move |task| schedule_app.run_on_main_thread(task),
         move || {
             let state = read_app.try_state::<AppState>()?;
-            let enabled = state.settings.get("dpsMeter.autoHideMeter").as_deref() == Some("true");
+            let mirrored = CaptureMode::from_setting(state.settings.get(MIRRORED_CAPTURE_KEY).as_deref()).is_mirrored();
+            let enabled = !mirrored && state.settings.get("dpsMeter.autoHideMeter").as_deref() == Some("true");
             if !past_startup && enabled {
                 return None;
             }
@@ -1478,10 +1480,17 @@ fn reset_auto_detection(state: tauri::State<'_, AppState>) {
 }
 
 #[tauri::command]
-async fn get_available_devices() -> Vec<String> {
+async fn get_available_devices(app: tauri::AppHandle, mirrored: Option<bool>) -> Vec<String> {
+    // An explicit flag lets the form list an unnumbered adapter immediately,
+    // even while its saved-setting command is still crossing the IPC bridge.
+    let mode = match mirrored {
+        Some(true) => CaptureMode::Mirrored,
+        Some(false) => CaptureMode::Local,
+        None => CaptureMode::from_setting(app.state::<AppState>().settings.get(MIRRORED_CAPTURE_KEY).as_deref()),
+    };
     // Device discovery can block in the OS/pcap library. Keep it off the UI loop.
-    tauri::async_runtime::spawn_blocking(|| {
-        crate::capture::pcap_capturer::list_device_labels().unwrap_or_default()
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::capture::pcap_capturer::list_device_labels_for_mode(mode).unwrap_or_default()
     }).await.unwrap_or_default()
 }
 
@@ -3844,6 +3853,7 @@ pub fn run() {
             // uploads on by itself, audit H3).
             let new_install = !app_data_dir.join("settings.json").exists();
             let settings = Settings::new(app_data_dir.clone());
+            let capture_mode = CaptureMode::from_setting(settings.get(MIRRORED_CAPTURE_KEY).as_deref());
             platform::window::set_main_anchor(platform::meter_anchor::Anchor::from_setting(
                 settings.get(METER_ANCHOR_KEY).as_deref(),
             ));
@@ -3871,8 +3881,9 @@ pub fn run() {
             // A capture device the player picked by hand (Settings, Auto-detect
             // off) is kept across restarts: it was held in memory only, so a
             // VPN adapter chosen over auto-detection was lost (#39).
-            if settings.get("dpsMeter.autoDetectDevice").as_deref() == Some("false") {
-                if let Some(device) = settings.get("dpsMeter.manualDevice").filter(|d| !d.trim().is_empty()) {
+            if capture_mode.is_mirrored() || settings.get("dpsMeter.autoDetectDevice").as_deref() == Some("false") {
+                let device_key = if capture_mode.is_mirrored() { "dpsMeter.mirroredDevice" } else { "dpsMeter.manualDevice" };
+                if let Some(device) = settings.get(device_key).filter(|d| !d.trim().is_empty()) {
                     port_detector.set_preferred_device(Some(device));
                 }
             }
@@ -4038,7 +4049,7 @@ pub fn run() {
             // Start capture pipeline
             let (tx, rx) = mpsc::channel::<CapturedPayload>(4096);
 
-            let capturer = PcapCapturer::new(tx, port_detector.clone());
+            let capturer = PcapCapturer::with_mode(tx, port_detector.clone(), capture_mode);
             if npcap_available {
                 capturer.start();
             } else {
@@ -4054,6 +4065,7 @@ pub fn run() {
                 ping_tracker.clone(),
             );
             dispatcher.set_dot_skill_ids(dot_ids);
+            dispatcher.set_capture_mode(capture_mode);
             dispatcher.use_suspend_flag(capture_suspended);
 
             // Run dispatcher in background
@@ -4205,8 +4217,9 @@ pub fn run() {
                         // last damage the meter counted, back with the next
                         // hit; no keybind needed (#106, a headless stream).
                         let on = |key: &str| state.settings.get(key).as_deref() == Some("true");
+                        let mirrored = CaptureMode::from_setting(state.settings.get(MIRRORED_CAPTURE_KEY).as_deref()).is_mirrored();
                         if tick_count % 4 == 0 {
-                            let closed = on("dpsMeter.hideWhenGameClosed") && !platform::window_detector::find_aion2_window();
+                            let closed = !mirrored && on("dpsMeter.hideWhenGameClosed") && !platform::window_detector::find_aion2_window();
                             let solo = on("dpsMeter.hideWhenSolo") && state.data_storage.get_party_members().len() < 2;
                             closed_or_solo = closed || solo;
                         }
@@ -4239,7 +4252,7 @@ pub fn run() {
                                     MAIN_FOCUS_VISIBILITY.lock().clear();
                                     platform::window::minimize_off_top(window);
                                 } else if wanted
-                                    && !(on("dpsMeter.autoHideMeter")
+                                    && !(!mirrored && on("dpsMeter.autoHideMeter")
                                         && !platform::window::front_is_ours_or_game())
                                 {
                                     // Hidden by the player meanwhile, it stays
@@ -4263,13 +4276,13 @@ pub fn run() {
                         // of combat); the rest below doesn't: Ping's icon
                         // stayed over the browser with the meter hidden while
                         // solo (Hirai).
-                        let meter_auto_hide = tick_count > 20
+                        let meter_auto_hide = !mirrored && tick_count > 20
                             && state.settings.get("dpsMeter.autoHideMeter")
                                 .unwrap_or_default() == "true";
                         // The master covers every plugin surface. Individual
                         // plugin options also work while the master is off.
-                        let others_auto_hide = meter_auto_hide
-                            || (tick_count > 20 && crate::plugins::any_hide_unfocused(&handle));
+                        let others_auto_hide = !mirrored && (meter_auto_hide
+                            || (tick_count > 20 && crate::plugins::any_hide_unfocused(&handle)));
                         // Observe the latest option and hide eligibility on the
                         // same main-thread task that applies the native action.
                         reconcile_main_focus(&handle, 3, tick_count > 20);

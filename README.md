@@ -66,6 +66,15 @@ If OBS runs on a second PC, it cannot capture the meter's window on the game PC.
 
 The overlay shows the boss, the fight timer and the rows the meter shows (name, class, DPS, damage, share), and updates a few times a second. It is read-only and only reachable with the key; **New key** cuts off every link handed out before. Add `&lang=ko` (or `en`, `de`, `ja`, …) to the URL to change the language of its few labels. Add `&rows=5` to show at most five rows, so they always fit the height you gave the source (about 0.43 × its width for five rows, plus 0.07 × width for each more); you stay on it, in the last row if you are below the cut. **Your name on stream** sets the name the overlay shows for you; leave it blank to show your character name. Turn the setting off and the meter stops listening.
 
+## Capturing from another PC
+
+A dedicated monitoring PC can receive the game's traffic from a switch
+SPAN/mirror port. Enable **Capture traffic mirrored from another PC** in
+Settings, explicitly select the mirror adapter, and restart the meter. This
+mode accepts adapters without IP addresses, uses promiscuous capture only on
+the selected adapter, and does not require a local game window. See the
+[mirrored-capture setup](docs/mirrored-capture.md).
+
 ## Building from Source
 
 ### Prerequisites

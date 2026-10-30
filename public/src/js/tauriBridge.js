@@ -202,17 +202,27 @@
     });
   };
   let devicesLoading = null;
+  let devicesMode = null;
   let devicesLoadedAt = 0;
   const DEVICES_STALE_MS = 10000;
   const loadDevices = () => {
-    if (!devicesLoading) {
-      devicesLoading = invoke("get_available_devices")
+    const mirrored = (settingsCache["dpsMeter.mirroredCapture"] ?? localStorage.getItem("dpsMeter.mirroredCapture")) === "true";
+    if (!devicesLoading || devicesMode !== mirrored) {
+      if (devicesMode !== mirrored) {
+        window._cachedDevices = [];
+        devicesLoadedAt = 0;
+      }
+      devicesMode = mirrored;
+      const request = invoke("get_available_devices", { mirrored })
         .then((devices) => {
-          window._cachedDevices = devices;
-          devicesLoadedAt = Date.now();
+          if (devicesLoading === request && devicesMode === mirrored) {
+            window._cachedDevices = devices;
+            devicesLoadedAt = Date.now();
+          }
           return devices;
         })
-        .finally(() => { devicesLoading = null; });
+        .finally(() => { if (devicesLoading === request) devicesLoading = null; });
+      devicesLoading = request;
     }
     return devicesLoading;
   };

@@ -324,7 +324,10 @@
     "diagnostics": "Diagnóstico",
     "device": {
       "label": "Adaptador de rede",
-      "autoDetect": "Detecção automática"
+      "autoDetect": "Detecção automática",
+      "mirrored": "Capturar tráfego espelhado de outro PC",
+      "mirroredHint": "Para um adaptador SPAN/espelhamento dedicado: selecione-o abaixo e reinicie o medidor. Ativa a captura promíscua nesse adaptador, mesmo sem endereço IP. Não exige uma janela local do jogo; o foco e o fechamento do jogo local não ocultam o medidor.",
+      "chooseMirrored": "Selecionar adaptador espelhado"
     },
     "advanced": "Avançado",
     "bossLogs": "Ativar registros por chefe",

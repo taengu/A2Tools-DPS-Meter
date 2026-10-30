@@ -11,6 +11,7 @@ use tracing::{error, info, warn};
 
 use super::captured_payload::CapturedPayload;
 use super::combat_port_detector::CombatPortDetector;
+use super::mode::CaptureMode;
 
 fn now_ms() -> i64 {
     SystemTime::now()
@@ -82,6 +83,10 @@ struct DeviceInfo {
 }
 
 impl DeviceInfo {
+    fn capture_label(&self, mode: CaptureMode) -> String {
+        if mode.is_mirrored() { format!("{} [{}]", self.label(), self.name) } else { self.label().to_string() }
+    }
+
     fn label(&self) -> &str {
         if self.description.is_empty() {
             &self.name
@@ -223,7 +228,7 @@ impl PcapLib {
         Ok(devices)
     }
 
-    fn open_live_handle(&self, name: &str) -> Result<PcapT, String> {
+    fn open_live_handle(&self, name: &str, mode: CaptureMode) -> Result<PcapT, String> {
         let c_name = CString::new(name).map_err(|e| format!("Invalid device name: {}", e))?;
         let mut errbuf = [0u8; 256];
 
@@ -231,7 +236,7 @@ impl PcapLib {
             (self.open_live)(
                 c_name.as_ptr(),
                 65535,  // snaplen
-                0,      // not promiscuous: only this machine's own traffic
+                mode.promiscuous(), // Only the explicitly selected mirror adapter may be promiscuous.
                 100,    // timeout ms
                 errbuf.as_mut_ptr() as *mut c_char,
             )
@@ -355,6 +360,7 @@ pub struct PcapCapturer {
 
 /// What the capture threads and the device watcher share.
 struct Shared {
+    mode: CaptureMode,
     /// Devices with a capture thread (or one about to start), by name. A
     /// thread takes its device out again when it ends, so a device that goes
     /// away and comes back (a VPN reconnecting) is captured again.
@@ -385,10 +391,15 @@ const IDLE_WAIT_MS: u64 = 20;
 
 impl PcapCapturer {
     pub fn new(sender: mpsc::Sender<CapturedPayload>, port_detector: Arc<CombatPortDetector>) -> Self {
+        Self::with_mode(sender, port_detector, CaptureMode::Local)
+    }
+
+    pub fn with_mode(sender: mpsc::Sender<CapturedPayload>, port_detector: Arc<CombatPortDetector>, mode: CaptureMode) -> Self {
         Self {
             running: Arc::new(AtomicBool::new(false)),
             sender,
             shared: Arc::new(Shared {
+                mode,
                 active: Mutex::default(),
                 failed: Mutex::default(),
                 dropped: AtomicU64::new(0),
@@ -421,15 +432,21 @@ impl PcapCapturer {
             }
         };
 
-        // Only capture on devices that have addresses, and that this OS does not
-        // rule out (Linux's catch-all "any" would duplicate every packet).
+        // Mirrored capture can use an unnumbered interface, but only the one
+        // selected explicitly. OS pseudo-devices still stay out.
+        let selected = self.shared.port_detector.preferred_device();
         let devices: Vec<_> = devices
             .into_iter()
-            .filter(|d| d.has_addresses && !crate::platform::pcap::skip_device(&d.name))
+            .filter(|d| self.shared.mode.captures_device(d.has_addresses, &d.capture_label(self.shared.mode), selected.as_deref())
+                && !crate::platform::pcap::skip_device(&d.name))
             .collect();
 
         if devices.is_empty() {
-            error!("No capture devices found with addresses");
+            if self.shared.mode.is_mirrored() {
+                error!("No mirror adapter available: select the dedicated adapter in Settings, then restart the meter");
+            } else {
+                error!("No capture devices found with addresses");
+            }
             self.running.store(false, Ordering::SeqCst);
             return;
         }
@@ -520,7 +537,9 @@ impl PcapCapturer {
                 }
                 let Ok(devices) = pcap.find_all_devs() else { continue };
                 for device in devices {
-                    if !device.has_addresses || crate::platform::pcap::skip_device(&device.name) {
+                    let selected = shared.port_detector.preferred_device();
+                    if !shared.mode.captures_device(device.has_addresses, &device.capture_label(shared.mode), selected.as_deref())
+                        || crate::platform::pcap::skip_device(&device.name) {
                         continue;
                     }
                     if shared.failed.lock().unwrap_or_else(|p| p.into_inner()).contains(&device.name) {
@@ -547,12 +566,16 @@ impl PcapCapturer {
 
 /// List available capture device labels (for the settings UI dropdown).
 pub fn list_device_labels() -> Result<Vec<String>, String> {
+    list_device_labels_for_mode(CaptureMode::Local)
+}
+
+pub fn list_device_labels_for_mode(mode: CaptureMode) -> Result<Vec<String>, String> {
     let pcap = PcapLib::load().map_err(|e| e.to_string())?;
     let devices = pcap.find_all_devs().map_err(|e| e.to_string())?;
     Ok(devices
         .into_iter()
-        .filter(|d| d.has_addresses && !crate::platform::pcap::skip_device(&d.name))
-        .map(|d| d.label().to_string())
+        .filter(|d| mode.lists_device(d.has_addresses) && !crate::platform::pcap::skip_device(&d.name))
+        .map(|d| d.capture_label(mode))
         .collect())
 }
 
@@ -563,7 +586,7 @@ fn start_capture_thread(
     running: Arc<AtomicBool>,
     shared: Arc<Shared>,
 ) {
-    let label = device.label().to_string();
+    let label = device.capture_label(shared.mode);
     let dev_name = device.name.clone();
 
     std::thread::spawn(move || {
@@ -573,7 +596,7 @@ fn start_capture_thread(
                 shared.failed.lock().unwrap_or_else(|p| p.into_inner()).insert(dev_name.clone());
             }
         };
-        let handle = match pcap.open_live_handle(&dev_name) {
+        let handle = match pcap.open_live_handle(&dev_name, shared.mode) {
             Ok(h) => h,
             Err(e) => {
                 warn!("Failed to open capture on {}: {}", label, e);
@@ -603,11 +626,16 @@ fn start_capture_thread(
             nonblocking = unsafe { (f.setnonblock)(handle, 1, errbuf.as_mut_ptr() as *mut c_char) } == 0;
         }
         while running.load(Ordering::SeqCst) {
+            if shared.mode.is_mirrored() && !shared.mode.captures_device(
+                device.has_addresses, &label, shared.port_detector.preferred_device().as_deref(),
+            ) {
+                break;
+            }
             let now = now_ms();
             if pcap.filter.is_some() && !filter_failed && !shared.unfiltered.load(Ordering::Relaxed) {
                 if now - last_game_check >= GAME_CHECK_MS {
                     last_game_check = now;
-                    game_open = crate::platform::window_detector::find_aion2_window_title().is_some();
+                    game_open = shared.mode.game_available(crate::platform::window_detector::find_aion2_window_title().is_some());
                 }
                 let locked = shared.port_detector.locked_port_now().is_some();
                 if net.note(game_open, locked, now) && !shared.unfiltered.swap(true, Ordering::Relaxed) {
@@ -838,6 +866,19 @@ fn parse_tcp_payload(frame: &[u8], link_type: c_int, device_name: &str) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mirrored_adapter_selection_distinguishes_identical_descriptions() {
+        let first = DeviceInfo { name: "nic-a".into(), description: "Ethernet".into(), has_addresses: false, is_loopback: false };
+        let second = DeviceInfo { name: "nic-b".into(), ..first.clone() };
+        assert_eq!(first.capture_label(CaptureMode::Local), second.capture_label(CaptureMode::Local));
+        let selected = first.capture_label(CaptureMode::Mirrored);
+        assert_ne!(selected, second.capture_label(CaptureMode::Mirrored));
+        assert!(CaptureMode::Mirrored.captures_device(false, &selected, Some(&selected)));
+        assert!(!CaptureMode::Mirrored.captures_device(false, &second.capture_label(CaptureMode::Mirrored), Some(&selected)));
+        let case_only = DeviceInfo { name: "NIC-A".into(), ..first.clone() };
+        assert!(!CaptureMode::Mirrored.captures_device(false, &case_only.capture_label(CaptureMode::Mirrored), Some(&selected)));
+    }
 
     /// IPv4 + TCP from 10.0.0.2:51000 to 193.202.112.99:13328, payload "hi".
     fn ipv4_tcp() -> Vec<u8> {

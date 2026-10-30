@@ -324,7 +324,10 @@
     "diagnostics": "진단",
     "device": {
       "label": "네트워크 어댑터",
-      "autoDetect": "자동 감지"
+      "autoDetect": "자동 감지",
+      "mirrored": "다른 PC에서 미러링한 트래픽 캡처",
+      "mirroredHint": "전용 SPAN/미러 어댑터를 아래에서 선택한 뒤 미터를 다시 시작하세요. IP 주소가 없어도 해당 어댑터에서 무차별 모드 캡처를 사용합니다. 로컬 게임 창이 필요 없으며, 로컬 게임 포커스 및 종료에 따른 숨기기는 적용되지 않습니다.",
+      "chooseMirrored": "미러 어댑터 선택"
     },
     "advanced": "고급",
     "bossLogs": "보스별 로그 활성화",

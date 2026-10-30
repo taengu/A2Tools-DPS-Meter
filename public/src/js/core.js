@@ -328,6 +328,7 @@ class DpsApp {
    *  device saved by an older version, before the switch itself was saved,
    *  also means it was off. */
   readAutoDetectDevice() {
+    if (this.safeGetSetting("dpsMeter.mirroredCapture") === "true") return false;
     const saved = this.safeGetSetting("dpsMeter.autoDetectDevice");
     if (saved === "false") return false;
     if (saved === "true") return true;
@@ -867,7 +868,10 @@ class DpsApp {
 
   checkAion2WindowTitle() {
     const title = window.javaBridge?.getAion2WindowTitle?.();
-    const running = typeof title === "string" && title.trim().length > 0;
+    const mirrored = this.safeGetSetting("dpsMeter.mirroredCapture") === "true";
+    // Mirrored capture is eligible without a local window; the connection
+    // status still says Connecting until received traffic locks a game port.
+    const running = mirrored || (typeof title === "string" && title.trim().length > 0);
     if (running !== this.aionRunning) {
       this.aionRunning = running;
       this.refreshConnectionInfo();
@@ -880,6 +884,7 @@ class DpsApp {
     }
     if (!running) return;
     this.syncCharacterNameFromGame();
+    if (mirrored) return;
     const detectedName = this.parseCharacterNameFromWindowTitle(title);
     // Act on the title only when it changes. It is not kept current (a new
     // character keeps the title of the session it was created in), so a title
@@ -2817,6 +2822,7 @@ class DpsApp {
     this.defaultMeterModeDropdownMenu = document.querySelector(".defaultMeterModeDropdownMenu");
     this.resetDetectBtn = document.querySelector(".resetDetectBtn");
     this.autoDetectDeviceCheckbox = document.querySelector(".autoDetectDeviceCheckbox");
+    this.mirroredCaptureCheckbox = document.querySelector(".mirroredCaptureCheckbox");
     this.deviceDropdownBtn = document.querySelector(".deviceDropdownBtn");
     this.deviceDropdownMenu = document.querySelector(".deviceDropdownMenu");
     this.characterNameInput = document.querySelector(".characterNameInput");
@@ -3588,6 +3594,14 @@ class DpsApp {
     // Device selection: auto-detect checkbox + manual device dropdown. Both
     // are saved (#39): unticking Auto-detect, and the device picked, were held
     // nowhere, so reopening Settings ticked it again and lost the choice.
+    this._syncCaptureMode();
+    this.mirroredCaptureCheckbox?.addEventListener("change", () => {
+      this.safeSetSetting("dpsMeter.mirroredCapture", String(this.mirroredCaptureCheckbox.checked));
+      this._syncCaptureMode();
+      this._updateDeviceDropdownState();
+      window.javaBridge?.setManualDevice?.(this._autoDetectDevice ? "" : this.safeGetSetting(this._deviceSettingKey()) || "");
+      this._loadDeviceDropdown();
+    });
     this._autoDetectDevice = this.readAutoDetectDevice();
     if (this.autoDetectDeviceCheckbox) {
       this.autoDetectDeviceCheckbox.checked = this._autoDetectDevice;
@@ -3601,7 +3615,7 @@ class DpsApp {
           window.javaBridge?.setManualDevice?.("");
           this.refreshConnectionInfo();
         } else {
-          const saved = this.safeGetSetting("dpsMeter.manualDevice");
+          const saved = this.safeGetSetting(this._deviceSettingKey());
           if (saved) window.javaBridge?.setManualDevice?.(saved);
           this._loadDeviceDropdown();
         }
@@ -5233,7 +5247,8 @@ class DpsApp {
   // which happens only while the window is shown.
   refreshSettingsStatus() {
     const title = window.javaBridge?.getAion2WindowTitle?.();
-    this.aionRunning = typeof title === "string" && title.trim().length > 0;
+    this.aionRunning = this.safeGetSetting("dpsMeter.mirroredCapture") === "true"
+      || (typeof title === "string" && title.trim().length > 0);
     if (this.aionRunning) this.syncCharacterNameFromGame();
     this.refreshConnectionInfo();
   }
@@ -5291,7 +5306,7 @@ class DpsApp {
     this.trainSelectionMode = this.settingsSelections.trainSelectionMode;
     this.detailsMonitor = this.getDetailsMonitorSetting();
 
-    this._autoDetectDevice = this.readAutoDetectDevice();
+    this._syncCaptureMode();
     if (this.autoDetectDeviceCheckbox) this.autoDetectDeviceCheckbox.checked = this._autoDetectDevice;
     this._updateDeviceDropdownState();
     this._loadDeviceDropdown();
@@ -6721,7 +6736,8 @@ class DpsApp {
       (rawIp === "127.0.0.1" || rawIp === "::1"
         ? this.i18n?.t("connection.loopback", "Local Loopback") ?? "Local Loopback"
         : rawIp);
-    const hasPort = Number.isFinite(Number(info?.port));
+    const numericPort = Number(info?.port);
+    const hasPort = info?.port != null && Number.isInteger(numericPort) && numericPort >= 1 && numericPort <= 65535;
     this.isDetectingPort = this.aionRunning && !hasPort;
     const port = hasPort
       ? String(info.port)
@@ -6768,16 +6784,46 @@ class DpsApp {
   }
 
   _updateDeviceDropdownState() {
-    const disabled = this._autoDetectDevice;
+    const disabled = this._autoDetectDevice || !!this._deviceDropdownLoading;
     if (this.deviceDropdownBtn) this.deviceDropdownBtn.disabled = disabled;
     if (disabled && this.deviceDropdownMenu) this.deviceDropdownMenu.classList.remove("isOpen");
+  }
+
+  _deviceSettingKey() {
+    return this.safeGetSetting("dpsMeter.mirroredCapture") === "true"
+      ? "dpsMeter.mirroredDevice" : "dpsMeter.manualDevice";
+  }
+
+  _syncCaptureMode() {
+    const mirrored = this.safeGetSetting("dpsMeter.mirroredCapture") === "true";
+    if (this.mirroredCaptureCheckbox) this.mirroredCaptureCheckbox.checked = mirrored;
+    this._autoDetectDevice = this.readAutoDetectDevice();
+    if (this.autoDetectDeviceCheckbox) {
+      this.autoDetectDeviceCheckbox.disabled = mirrored;
+      this.autoDetectDeviceCheckbox.checked = this._autoDetectDevice;
+    }
   }
 
   // The device list comes from the backend asynchronously, so fill the dropdown
   // once it has arrived rather than from whatever the cache held at the time.
   _loadDeviceDropdown() {
-    const populate = () =>
-      this._populateDeviceDropdown(this.safeGetSetting("dpsMeter.manualDevice") || null);
+    const request = this._deviceDropdownRequest = (this._deviceDropdownRequest || 0) + 1;
+    const settingKey = this._deviceSettingKey();
+    this._deviceDropdownLoading = true;
+    if (this.deviceDropdownMenu) {
+      this.deviceDropdownMenu.innerHTML = "";
+      this.deviceDropdownMenu.classList.remove("isOpen");
+    }
+    this._updateDeviceDropdownState();
+    const textEl = this.deviceDropdownBtn?.querySelector(".settingsDropdownText");
+    if (textEl) textEl.textContent = this.safeGetSetting(settingKey) || (settingKey === "dpsMeter.mirroredDevice"
+      ? this.i18n?.t?.("settings.device.chooseMirrored", "Select mirror adapter") || "Select mirror adapter"
+      : this.i18n?.t?.("settings.device.label", "Network adapter") || "Network adapter");
+    const populate = () => {
+      if (request !== this._deviceDropdownRequest || settingKey !== this._deviceSettingKey()) return;
+      this._deviceDropdownLoading = false;
+      this._populateDeviceDropdown(this.safeGetSetting(this._deviceSettingKey()) || null);
+    };
     const load = window.javaBridge?.loadAvailableDevices?.();
     if (!load) {
       populate();
@@ -6790,7 +6836,19 @@ class DpsApp {
     if (!this.deviceDropdownBtn || !this.deviceDropdownMenu) return;
     const raw = window.javaBridge?.getAvailableDevices?.();
     const devices = typeof raw === "string" ? this.safeParseJSON(raw, []) : [];
-    if (!Array.isArray(devices) || devices.length === 0) return;
+    const mirrored = this.safeGetSetting("dpsMeter.mirroredCapture") === "true";
+    const textEl = this.deviceDropdownBtn.querySelector(".settingsDropdownText");
+    this.deviceDropdownMenu.innerHTML = "";
+    if (!Array.isArray(devices) || devices.length === 0) {
+      if (textEl) textEl.textContent = mirrored
+        ? this.i18n?.t?.("settings.device.chooseMirrored", "Select mirror adapter") || "Select mirror adapter"
+        : this.i18n?.t?.("settings.device.label", "Network adapter") || "Network adapter";
+      this.deviceDropdownMenu.classList.remove("isOpen");
+      this.deviceDropdownBtn.disabled = true;
+      return;
+    }
+    this.deviceDropdownBtn.disabled = !!this._autoDetectDevice;
+    const settingKey = this._deviceSettingKey();
     const options = devices.map((d) => ({ value: d, label: d }));
     // When auto-detect is on, show the currently locked device; otherwise show the manual selection
     const connRaw = window.javaBridge?.getConnectionInfo?.();
@@ -6798,10 +6856,9 @@ class DpsApp {
     const lockedDevice = typeof connInfo?.device === "string" && connInfo.device.trim() ? connInfo.device : "";
     // Unticking auto-detect leaves capture where it is until a device is picked,
     // so show that device rather than whichever happens to be listed first.
-    const selected = this._autoDetectDevice
+    const selected = mirrored ? (currentDevice || "") : (this._autoDetectDevice
       ? (lockedDevice || currentDevice || devices[0])
-      : (currentDevice || lockedDevice || devices[0]);
-    this.deviceDropdownMenu.innerHTML = "";
+      : (currentDevice || lockedDevice || devices[0]));
     options.forEach((opt) => {
       const item = document.createElement("button");
       item.type = "button";
@@ -6810,7 +6867,8 @@ class DpsApp {
       item.textContent = opt.label;
       if (opt.value === selected) item.classList.add("isActive");
       item.addEventListener("click", () => {
-        this.safeSetSetting("dpsMeter.manualDevice", opt.value);
+        if (this._deviceDropdownLoading || settingKey !== this._deviceSettingKey()) return;
+        this.safeSetSetting(settingKey, opt.value);
         window.javaBridge?.setManualDevice?.(opt.value);
         this.deviceDropdownMenu.classList.remove("isOpen");
         const textEl = this.deviceDropdownBtn.querySelector(".settingsDropdownText");
@@ -6822,8 +6880,7 @@ class DpsApp {
       });
       this.deviceDropdownMenu.appendChild(item);
     });
-    const textEl = this.deviceDropdownBtn.querySelector(".settingsDropdownText");
-    if (textEl) textEl.textContent = selected;
+    if (textEl) textEl.textContent = selected || this.i18n?.t?.("settings.device.chooseMirrored", "Select mirror adapter") || "Select mirror adapter";
     this.deviceDropdownBtn.onclick = (event) => {
       if (this.deviceDropdownBtn.disabled) return;
       event.stopPropagation();

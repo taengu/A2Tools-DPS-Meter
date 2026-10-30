@@ -324,7 +324,10 @@
     "diagnostics": "Diagnose",
     "device": {
       "label": "Netzwerkadapter",
-      "autoDetect": "Automatisch"
+      "autoDetect": "Automatisch",
+      "mirrored": "Gespiegelten Datenverkehr eines anderen PCs erfassen",
+      "mirroredHint": "Für einen eigenen SPAN-/Mirror-Adapter: unten auswählen, dann das Meter neu starten. Aktiviert den Promiscuous-Modus auf diesem Adapter, auch ohne IP-Adresse. Kein lokales Spielfenster nötig; Ausblenden nach Spielfokus oder geschlossenem Spiel entfällt.",
+      "chooseMirrored": "Mirror-Adapter wählen"
     },
     "advanced": "Erweitert",
     "bossLogs": "Logs pro Boss aktivieren",

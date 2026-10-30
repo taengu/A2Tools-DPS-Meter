@@ -502,6 +502,14 @@
                       </div>
                     </div>
                   </div>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.device.mirrored">Capture traffic mirrored from another PC</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="mirroredCaptureCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <div class="settingsHint" data-i18n="settings.device.mirroredHint">For a dedicated SPAN/mirror adapter: select it below, then restart the meter. Enables promiscuous capture on that adapter, including without an IP address; no local game window is required. Local-game focus and closed-window hiding are ignored.</div>
                   <div class="settingsRow settingsRowSelect settingsRowWide">
                     <div class="settingsInfo">
                       <div class="settingsLabel" data-i18n="settings.device.label" title="The network connection the meter reads game traffic from. Auto-detect finds it; pick one by hand if you use a VPN." data-i18n-title="settings.tips.device">Network adapter</div>

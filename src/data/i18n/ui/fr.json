@@ -324,7 +324,10 @@
     "diagnostics": "Diagnostics",
     "device": {
       "label": "Carte réseau",
-      "autoDetect": "Détection auto"
+      "autoDetect": "Détection auto",
+      "mirrored": "Capturer le trafic dupliqué depuis un autre PC",
+      "mirroredHint": "Pour un adaptateur SPAN/miroir dédié : sélectionnez-le ci-dessous, puis redémarrez le compteur. Active la capture en mode promiscuité sur cet adaptateur, même sans adresse IP. Aucune fenêtre de jeu locale requise ; le masquage selon le focus ou la fermeture du jeu local est ignoré.",
+      "chooseMirrored": "Choisir l’adaptateur miroir"
     },
     "advanced": "Avancé",
     "bossLogs": "Activer les journaux par boss",

@@ -324,7 +324,10 @@
     "diagnostics": "诊断",
     "device": {
       "label": "网络适配器",
-      "autoDetect": "自动检测"
+      "autoDetect": "自动检测",
+      "mirrored": "捕获从另一台电脑镜像的流量",
+      "mirroredHint": "用于专用 SPAN/镜像网卡：在下方选择网卡，然后重启统计器。即使没有 IP 地址，也会在该网卡上启用混杂模式捕获。无需本机游戏窗口；不应用基于本机游戏焦点或关闭状态的隐藏规则。",
+      "chooseMirrored": "选择镜像网卡"
     },
     "advanced": "高级",
     "bossLogs": "启用每场Boss日志",
