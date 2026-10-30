@@ -31,7 +31,7 @@ pub mod boss_live {
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
@@ -248,6 +248,9 @@ struct Loaded {
     decoders: Vec<Decoder>,
     /// Installed from the signed catalog, not a developer folder.
     reviewed: bool,
+    enabled: bool,
+    generation: u64,
+    enabled_after_ms: Option<i64>,
 }
 
 /// What Settings lists.
@@ -309,12 +312,16 @@ pub(crate) fn disabled(app: &tauri::AppHandle) -> Vec<String> {
 
 fn set_disabled(app: &tauri::AppHandle, id: &str, off: bool) {
     let Some(state) = app.try_state::<AppState>() else { return };
+    let Ok(host) = host(app) else { return };
+    // Serialize the setting and event admission with reload and dispatch.
+    let mut loaded = host.loaded.write().unwrap_or_else(|p| p.into_inner());
     let mut ids = disabled(app);
     ids.retain(|x| x != id);
     if off {
         ids.push(id.to_string());
     }
     state.settings.set(DISABLED_KEY, &serde_json::to_string(&ids).unwrap_or_default());
+    host.set_enabled(&mut loaded, id, !off);
 }
 
 /// Turn a plugin on (it starts now and with every start of the meter) or off
@@ -343,6 +350,8 @@ pub async fn plugin_set_enabled(app: tauri::AppHandle, id: String, enabled: bool
         // window's going), but one in the plugin dock has none to close, and
         // Event Timers' icons stayed on screen after it was turned off.
         widgets::close_all(&app, &id);
+        boss_live::forget_plugin(&app, &id);
+        fps::forget_plugin(&id);
     }
     tracing::info!("Plugins: {id} {}", if enabled { "enabled" } else { "disabled" });
     let host = host(&app)?;
@@ -390,6 +399,7 @@ struct Pending {
     /// can tell how old an event is however long it waited.
     read_ms: i64,
     plugin: String,
+    generation: u64,
     event: String,
     data: Value,
 }
@@ -410,6 +420,7 @@ pub struct PluginHost {
     seq: Mutex<u64>,
     run: String,
     flusher: AtomicBool,
+    generation: AtomicU64,
     /// Plugins closed with their window's ×, this run: a reload (an install,
     /// Check for updates, a folder added) does not start them again.
     closed: Mutex<HashSet<String>>,
@@ -430,6 +441,7 @@ impl Default for PluginHost {
             seq: Mutex::new(0),
             run,
             flusher: AtomicBool::new(false),
+            generation: AtomicU64::new(1),
             closed: Mutex::default(),
         }
     }
@@ -576,10 +588,24 @@ fn load_folder(dir: &Path) -> Result<Loaded, String> {
         }
         decoders.push(decoder);
     }
-    Ok(Loaded { manifest, dir: dir.to_path_buf(), decoders, reviewed: false })
+    Ok(Loaded { manifest, dir: dir.to_path_buf(), decoders, reviewed: false, enabled: true, generation: 0, enabled_after_ms: None })
 }
 
 impl PluginHost {
+    /// The loaded lock also covers queueing and flushing. A batch already
+    /// taken by the flusher belongs to the old generation after a toggle.
+    fn set_enabled(&self, loaded: &mut [Loaded], id: &str, enabled: bool) {
+        if let Some(plugin) = loaded.iter_mut().find(|l| l.manifest.id == id && l.enabled != enabled) {
+            plugin.enabled = enabled;
+            plugin.generation = self.generation.fetch_add(1, Ordering::Relaxed);
+            // Built-in events may be polled after they happened. Don't admit
+            // one from the disabled interval just because it is queued later.
+            plugin.enabled_after_ms = enabled.then(|| chrono::Utc::now().timestamp_millis());
+            self.pending.lock().unwrap_or_else(|p| p.into_inner()).retain(|p| p.plugin != id);
+            self.log.lock().unwrap_or_else(|p| p.into_inner()).remove(id);
+        }
+    }
+
     /// Load the installed plugins, and in developer mode the folders the
     /// settings list. A developer folder wins over an installed copy of the
     /// same plugin, so its author tests their own files.
@@ -641,7 +667,20 @@ impl PluginHost {
         }
         let any_decoders = loaded.iter().any(|l| !l.decoders.is_empty());
         tracing::info!("Plugins: {} loaded (developer mode {})", loaded.len(), if dev { "on" } else { "off" });
-        *self.loaded.write().unwrap_or_else(|p| p.into_inner()) = loaded;
+        {
+            let mut before = self.loaded.write().unwrap_or_else(|p| p.into_inner());
+            let off = disabled(app);
+            for plugin in &mut loaded {
+                plugin.enabled = !off.contains(&plugin.manifest.id);
+                if let Some(old) = before.iter().find(|l| l.manifest.id == plugin.manifest.id && l.enabled == plugin.enabled) {
+                    plugin.generation = old.generation;
+                    plugin.enabled_after_ms = old.enabled_after_ms;
+                } else {
+                    plugin.generation = self.generation.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            *before = loaded;
+        }
         *self.errors.write().unwrap_or_else(|p| p.into_inner()) = errors;
 
         if !self.flusher.swap(true, Ordering::SeqCst) {
@@ -775,7 +814,7 @@ impl PluginHost {
         let Some(opcode) = packet.get(at..at + 2) else { return };
         let body = &packet[at + 2..];
         let loaded = self.loaded.read().unwrap_or_else(|p| p.into_inner());
-        for plugin in loaded.iter() {
+        for plugin in loaded.iter().filter(|l| l.enabled) {
             for d in plugin.decoders.iter().filter(|d| d.opcode == opcode) {
                 let Some(data) = d.decode(body) else { continue };
                 // Only the player's own doings, for a decoder that asks so.
@@ -795,6 +834,7 @@ impl PluginHost {
                         .map(|d| d.as_millis() as i64)
                         .unwrap_or_default(),
                     plugin: plugin.manifest.id.clone(),
+                    generation: plugin.generation,
                     event: format!("decoded:{}", d.name),
                     data,
                 });
@@ -816,10 +856,10 @@ impl PluginHost {
         // load sent thousands, one by one, to every listening page: the
         // plugin process went past 1.3 GB for those minutes (2026-10-29).
         let mut batches: HashMap<String, Vec<Value>> = HashMap::new();
+        let loaded = self.loaded.read().unwrap_or_else(|p| p.into_inner());
         for item in ready {
-            let allowed = self
-                .with(&item.plugin, |l| l.manifest.permissions.iter().any(|p| p == "events:character"))
-                .unwrap_or(false);
+            let Some(plugin) = loaded.iter().find(|l| accepts_event(l, &item)) else { continue };
+            let allowed = plugin.manifest.permissions.iter().any(|p| p == "events:character");
             let seq = {
                 let mut seq = self.seq.lock().unwrap_or_else(|p| p.into_inner());
                 *seq += 1;
@@ -856,9 +896,9 @@ impl PluginHost {
     /// An unnumbered event to every loaded plugin (pluginHost.js hands it
     /// straight on).
     fn tell_all(&self, app: &tauri::AppHandle, event: &str, data: Value) {
-        let ids: Vec<String> =
-            self.loaded.read().unwrap_or_else(|p| p.into_inner()).iter().map(|l| l.manifest.id.clone()).collect();
-        for id in ids {
+        let loaded = self.loaded.read().unwrap_or_else(|p| p.into_inner());
+        for plugin in loaded.iter().filter(|l| l.enabled) {
+            let id = &plugin.manifest.id;
             let msg = serde_json::json!({ "plugin": id, "event": event, "data": data });
             emit_plugin(app, &id, msg);
         }
@@ -867,21 +907,17 @@ impl PluginHost {
     /// A numbered event (see `flush`) to the plugins with a permission.
     /// `read_ms` is when it happened (unix ms).
     fn queue_permitted(&self, permission: &str, event: &str, read_ms: i64, data: Value) {
-        let ids: Vec<String> = self
-            .loaded
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .iter()
-            .filter(|l| l.manifest.permissions.iter().any(|p| p == permission))
-            .map(|l| l.manifest.id.clone())
-            .collect();
+        let loaded = self.loaded.read().unwrap_or_else(|p| p.into_inner());
         let mut pending = self.pending.lock().unwrap_or_else(|p| p.into_inner());
-        for plugin in ids {
+        for plugin in loaded.iter().filter(|l| l.enabled
+            && l.enabled_after_ms.is_none_or(|at| read_ms > at)
+            && l.manifest.permissions.iter().any(|p| p == permission)) {
             pending.push(Pending {
                 at: Instant::now(),
                 settle: false,
                 read_ms,
-                plugin,
+                plugin: plugin.manifest.id.clone(),
+                generation: plugin.generation,
                 event: event.to_string(),
                 data: data.clone(),
             });
@@ -891,15 +927,9 @@ impl PluginHost {
 
     /// An unnumbered event to the plugins with a permission.
     fn tell_permitted(&self, app: &tauri::AppHandle, permission: &str, event: &str, data: Value) {
-        let ids: Vec<String> = self
-            .loaded
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .iter()
-            .filter(|l| l.manifest.permissions.iter().any(|p| p == permission))
-            .map(|l| l.manifest.id.clone())
-            .collect();
-        for id in ids {
+        let loaded = self.loaded.read().unwrap_or_else(|p| p.into_inner());
+        for plugin in loaded.iter().filter(|l| l.enabled && l.manifest.permissions.iter().any(|p| p == permission)) {
+            let id = &plugin.manifest.id;
             let msg = serde_json::json!({ "plugin": id, "event": event, "data": data });
             emit_plugin(app, &id, msg);
         }
@@ -909,15 +939,9 @@ impl PluginHost {
     /// an unnumbered event straight on).
     fn tell_character(&self, app: &tauri::AppHandle, who: Option<Value>) {
         let Some(who) = who else { return };
-        let ids: Vec<String> = self
-            .loaded
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .iter()
-            .filter(|l| l.manifest.permissions.iter().any(|p| p == "events:character"))
-            .map(|l| l.manifest.id.clone())
-            .collect();
-        for id in ids {
+        let loaded = self.loaded.read().unwrap_or_else(|p| p.into_inner());
+        for plugin in loaded.iter().filter(|l| l.enabled && l.manifest.permissions.iter().any(|p| p == "events:character")) {
+            let id = &plugin.manifest.id;
             let event = serde_json::json!({ "plugin": id, "event": "character", "data": who });
             emit_plugin(app, &id, event);
         }
@@ -999,6 +1023,10 @@ async fn repair_held(app: &tauri::AppHandle, host: &Arc<PluginHost>, catalog: &c
         let _ = app.emit_to("settings", "plugins-changed", ());
     }
     changed
+}
+
+fn accepts_event(plugin: &Loaded, event: &Pending) -> bool {
+    plugin.enabled && plugin.manifest.id == event.plugin && plugin.generation == event.generation
 }
 
 fn info(l: &Loaded) -> PluginInfo {
@@ -2114,7 +2142,9 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
         widgets::close_all(&app, &id);
     }
     let host = host(&app)?;
-    let manifest = host.with(&id, |l| l.manifest.clone()).ok_or("plugin not loaded")?;
+    let loaded = host.loaded.read().unwrap_or_else(|p| p.into_inner());
+    let plugin = loaded.iter().find(|l| l.manifest.id == id && l.enabled).ok_or("plugin not enabled")?;
+    let manifest = &plugin.manifest;
     let replay: Vec<Value> = host
         .log
         .lock()
@@ -2124,7 +2154,7 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
         .unwrap_or_default();
     let character =
         if manifest.permissions.iter().any(|p| p == "events:character") { character(&app) } else { None };
-    let reviewed = host.with(&id, |l| l.reviewed).unwrap_or(false);
+    let reviewed = plugin.reviewed;
     let language = app.try_state::<AppState>().and_then(|s| s.settings.get("dpsMeter.language")).unwrap_or_else(|| "en".into());
     Ok(serde_json::json!({
         "manifest": manifest,
@@ -2263,7 +2293,7 @@ pub async fn plugin_screenshot(
 }
 
 fn require(app: &tauri::AppHandle, id: &str, permission: &str) -> Result<(), String> {
-    let has = host(app)?.with(id, |l| l.manifest.permissions.iter().any(|p| p == permission)).unwrap_or(false);
+    let has = host(app)?.with(id, |l| l.enabled && l.manifest.permissions.iter().any(|p| p == permission)).unwrap_or(false);
     if has { Ok(()) } else { Err(format!("the plugin lacks the {permission:?} permission")) }
 }
 
@@ -2853,11 +2883,68 @@ mod tests {
     }
 
     fn event(plugin: &str, name: &str, settle: bool, at: Instant) -> Pending {
-        Pending { at, settle, read_ms: 0, plugin: plugin.into(), event: name.into(), data: serde_json::Value::Null }
+        Pending { at, settle, read_ms: 0, plugin: plugin.into(), generation: 0, event: name.into(), data: serde_json::Value::Null }
     }
 
     fn names(events: &[Pending]) -> Vec<&str> {
         events.iter().map(|p| p.event.as_str()).collect()
+    }
+
+    fn event_host() -> super::PluginHost {
+        let host = super::PluginHost::default();
+        *host.loaded.write().unwrap() = ["a", "b"].into_iter().map(|id| super::Loaded {
+            manifest: serde_json::from_value(serde_json::json!({
+                "id": id, "name": id, "version": "1", "apiVersion": 2,
+                "permissions": ["events:death-recap"],
+            })).unwrap(),
+            dir: Default::default(), decoders: Vec::new(), reviewed: true, enabled: true, generation: 0, enabled_after_ms: None,
+        }).collect();
+        host
+    }
+
+    #[test]
+    fn disabling_stops_collection_and_clears_only_that_plugins_replay() {
+        let host = event_host();
+        host.queue_permitted("events:death-recap", "before", 0, serde_json::Value::Null);
+        for id in ["a", "b"] {
+            host.log.lock().unwrap().insert(id.into(), (["{}".into()].into(), 2));
+        }
+        host.set_enabled(&mut host.loaded.write().unwrap(), "a", false);
+        assert_eq!(names(&host.pending.lock().unwrap()), ["before"]);
+        assert!(!host.log.lock().unwrap().contains_key("a"));
+        assert!(host.log.lock().unwrap().contains_key("b"));
+        host.queue_permitted("events:death-recap", "while-off", 0, serde_json::Value::Null);
+        assert!(host.pending.lock().unwrap().iter().all(|p| p.plugin == "b"));
+        host.set_enabled(&mut host.loaded.write().unwrap(), "a", true);
+        let cutoff = host.with("a", |l| l.enabled_after_ms.unwrap()).unwrap();
+        host.queue_permitted("events:death-recap", "polled-after", cutoff, serde_json::Value::Null);
+        host.queue_permitted("events:death-recap", "after", cutoff + 1, serde_json::Value::Null);
+        let pending = host.pending.lock().unwrap();
+        let resumed: Vec<_> = pending.iter().filter(|p| p.plugin == "a").collect();
+        assert_eq!(resumed.len(), 1);
+        assert_eq!(resumed[0].event, "after");
+    }
+
+    #[test]
+    fn disabling_rejects_a_detached_batch_even_after_reenabling() {
+        let host = event_host();
+        host.queue_permitted("events:death-recap", "before", 0, serde_json::Value::Null);
+        let ready = take_ready(&mut host.pending.lock().unwrap(), Instant::now());
+        host.set_enabled(&mut host.loaded.write().unwrap(), "a", false);
+        host.set_enabled(&mut host.loaded.write().unwrap(), "a", true);
+        let loaded = host.loaded.read().unwrap();
+        let accepted: Vec<_> = ready.iter().filter(|p| loaded.iter().any(|l| super::accepts_event(l, p))).collect();
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(accepted[0].plugin, "b");
+    }
+
+    #[test]
+    fn closing_a_window_does_not_disable_its_event_collection() {
+        let host = event_host();
+        host.closed.lock().unwrap().insert("a".into());
+        host.queue_permitted("events:death-recap", "closed", 0, serde_json::Value::Null);
+        let pending = host.pending.lock().unwrap();
+        assert_eq!(pending.iter().filter(|p| p.plugin == "a").count(), 1);
     }
 
     /// A soul pickup (immediate) goes at once, unless the login's pet list,
