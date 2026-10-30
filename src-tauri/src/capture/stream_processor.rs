@@ -5369,6 +5369,38 @@ mod tests {
         assert_eq!(me.gear_score, Some(383));
     }
 
+    #[test]
+    fn switching_self_records_keeps_the_new_characters_server() {
+        let (storage, processor) = processor();
+        let first = hex("3336ed745e91c12837064e616963686118051e000000011c0000007f0100007f0100001c000000d002040000000000");
+        let second = hex("3336ef295fa1c128370b4e756c6c63657074696f6e080924000000022d000000f8070000f80700002d000000");
+        processor.scan_masked_identity(&first);
+        assert_eq!(storage.self_record_server(), 1304);
+        processor.scan_masked_identity(&second);
+        assert_eq!(storage.local_character_name().as_deref(), Some("Nullception"));
+        assert_eq!(storage.self_record_server(), 2312);
+        // A later loot record must not replace the current self record.
+        storage.note_player_server("Nullception", 1304);
+        assert_eq!(storage.local_profile().server_id, 2312);
+        assert_eq!(storage.stated_server("Nullception"), Some(2312));
+    }
+
+    #[test]
+    fn a_self_record_updates_the_server_even_when_the_name_is_unchanged() {
+        let (storage, processor) = processor();
+        let first = hex("3336ed745e91c12837064e616963686118051e000000011c0000007f0100007f0100001c000000d002040000000000");
+        let mut moved = first.clone();
+        let after_name = moved.windows(b"Naicha".len()).position(|w| w == b"Naicha").unwrap() + b"Naicha".len();
+        moved[after_name..after_name + 2].copy_from_slice(&2312u16.to_le_bytes());
+        processor.scan_masked_identity(&first);
+        storage.note_player_server("Naicha", 1304);
+        processor.scan_masked_identity(&moved);
+        assert_eq!(storage.local_character_name().as_deref(), Some("Naicha"));
+        assert_eq!(storage.self_record_server(), 2312);
+        assert_eq!(storage.own_server(), 2312);
+        assert_eq!(storage.local_profile().server_id, 2312);
+    }
+
     /// The start of another self record (2026-10-11): Nullception, server
     /// 2312, level 45, gear score 2040 as the character sheet showed it.
     #[test]

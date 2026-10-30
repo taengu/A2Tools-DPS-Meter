@@ -768,6 +768,9 @@ struct Inner {
     /// and comes back with the next self record: a fight saved in between is
     /// still yours, on your server. See `fight_server_id`.
     self_server: u16,
+    /// Who that self record named. A newly identified character must not
+    /// inherit the previous one's server while waiting for its self record.
+    self_server_owner: Option<String>,
     /// The class and level your own self record last stated, with the name it
     /// was for, so a character switch does not carry the last one's over.
     self_profile: Option<(String, Option<JobClass>, Option<u32>)>,
@@ -885,6 +888,7 @@ impl DataStorage {
                 loot_identity: LootIdentity::default(),
                 player_servers: HashMap::new(),
                 self_server: 0,
+                self_server_owner: None,
                 self_profile: None,
                 self_gear_score: None,
                 self_combat_power: None,
@@ -1127,7 +1131,9 @@ impl DataStorage {
     }
 
     pub fn set_local_character_name(&self, name: Option<String>) {
-        self.inner.write().local_character_name = name;
+        let mut inner = self.inner.write();
+        forget_foreign_self_server(&mut inner, name.as_deref());
+        inner.local_character_name = name;
     }
 
     pub fn local_character_name(&self) -> Option<String> {
@@ -1412,7 +1418,9 @@ impl DataStorage {
     /// that states none (a tutorial character), which forgets the last one.
     pub fn note_self_server(&self, server_id: u16) {
         if server_id == 0 || crate::capture::servers::exists(server_id) {
-            self.inner.write().self_server = server_id;
+            let mut inner = self.inner.write();
+            inner.self_server = server_id;
+            inner.self_server_owner = inner.local_character_name.clone();
         }
     }
 
@@ -1513,6 +1521,13 @@ impl DataStorage {
     /// guess from the party or the connection.
     pub fn own_server(&self) -> u16 {
         let inner = self.inner.read();
+        // A transferred character keeps its original id. A later loot record
+        // may therefore name the old server, while the self record states the
+        // current one. Use that same authoritative value for live profiles and
+        // reports as for saved fights (#128).
+        if inner.self_server != 0 {
+            return inner.self_server;
+        }
         let local = inner.local_character_name.as_deref().map(str::trim);
         if let Some(&server) = local.and_then(|n| inner.player_servers.get(n)) {
             return server;
@@ -3291,7 +3306,18 @@ fn own_list(inner: &mut Inner, whole_list: bool) {
     }
 }
 
+fn forget_foreign_self_server(inner: &mut Inner, name: Option<&str>) {
+    let name = name.map(str::trim).filter(|name| !name.is_empty());
+    if let (Some(name), Some(owner)) = (name, inner.self_server_owner.as_deref()) {
+        if name != owner.trim() {
+            inner.self_server = 0;
+            inner.self_server_owner = None;
+        }
+    }
+}
+
 fn set_game_identity(inner: &mut Inner, id: i64, name: Option<String>) {
+    forget_foreign_self_server(inner, name.as_deref());
     inner.loot_identity.local_from_scope = false;
     inner.loot_identity.local_from_stats = false;
     inner.loot_identity.stats_streak = None;
@@ -4539,6 +4565,75 @@ mod tests {
         assert!(s.take_combat_reset_requested(), "an open-world party: someone else on the meter");
     }
     #[test]
+    fn a_new_character_named_by_loot_does_not_inherit_the_previous_server() {
+        let s = DataStorage::new();
+        s.set_local_identity_from_game(5100, Some("First".into()));
+        s.note_self_server(2109);
+
+        // A new entity can be a zone move or a character switch. The own-stats
+        // records establish the entity before its self record has arrived.
+        own_stats(&s, 6200, 3);
+        s.note_party_scope(6200);
+        assert!(s.note_loot_owner(900, 6200, "Second"));
+        assert_eq!(s.local_character_name().as_deref(), Some("Second"));
+
+        // No self record has placed Second on a server. First's last server
+        // must not be used to file Second's fight.
+        assert_eq!(s.self_record_server(), 0);
+        assert_eq!(s.stated_server("Second"), Some(0));
+        assert_eq!(s.own_server(), 0);
+        s.set_local_character_name(None);
+        assert_eq!(s.self_record_server(), 0, "a later unnamed transition must not restore First's server");
+        s.set_local_identity_from_game(6200, Some("Second".into()));
+        s.note_self_server(2101);
+        assert_eq!(s.self_record_server(), 2101);
+        assert_eq!(s.stated_server("Second"), Some(2101));
+    }
+
+    #[test]
+    fn the_same_character_named_by_loot_keeps_its_stated_server() {
+        let s = DataStorage::new();
+        s.set_local_identity_from_game(5100, Some("Same".into()));
+        s.note_self_server(2109);
+        own_stats(&s, 6200, 3);
+        assert_eq!(s.self_record_server(), 2109, "the existing zone-move behaviour");
+        s.note_party_scope(6200);
+        assert!(s.note_loot_owner(900, 6200, "Same"));
+        assert_eq!(s.self_record_server(), 2109);
+        assert_eq!(s.stated_server("Same"), Some(2109));
+    }
+
+    #[test]
+    fn a_transient_blank_name_keeps_the_same_characters_server() {
+        let s = DataStorage::new();
+        s.set_local_identity_from_game(5100, Some("Same".into()));
+        s.note_self_server(2109);
+        s.set_local_character_name(None);
+        assert_eq!(s.self_record_server(), 2109);
+        s.set_local_character_name(Some("  ".into()));
+        assert_eq!(s.self_record_server(), 2109);
+        s.set_local_character_name(Some(" Same ".into()));
+        assert_eq!(s.self_record_server(), 2109);
+        s.set_local_character_name(Some("Other".into()));
+        assert_eq!(s.self_record_server(), 0);
+    }
+
+    #[test]
+    fn a_new_self_record_sets_its_server_after_binding_the_character() {
+        let s = DataStorage::new();
+        s.set_local_identity_from_game(5100, Some("First".into()));
+        s.note_self_server(2109);
+        // scan_masked_identity binds the new name before note_self_server.
+        s.set_local_identity_from_game(6200, Some("Second".into()));
+        assert_eq!(s.self_record_server(), 0);
+        s.note_self_server(2101);
+        assert_eq!(s.self_record_server(), 2101);
+        assert_eq!(s.stated_server("Second"), Some(2101));
+        s.note_self_server(99);
+        assert_eq!(s.self_record_server(), 2101, "an invalid server is not accepted");
+    }
+
+    #[test]
     fn a_moved_character_is_filed_under_the_server_its_records_state() {
         // An Israphel player whose id was made on Nemon (#128).
         let s = DataStorage::new();
@@ -4552,6 +4647,8 @@ mod tests {
         s.note_player_server("Arid", 2109);
         assert_eq!(s.stated_server("Arid"), Some(2101));
         assert_eq!(s.self_record_server(), 2101);
+        assert_eq!(s.own_server(), 2101);
+        assert_eq!(s.local_profile().server_id, 2101);
         // Someone else: what a loot record stated, else nothing (the roster's).
         s.note_player_server("Other", 1102);
         assert_eq!(s.stated_server("Other"), Some(1102));
