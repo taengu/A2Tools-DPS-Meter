@@ -1739,11 +1739,53 @@ fn package_hash_matches(expected: &str, actual_hex: &str) -> bool {
 }
 
 #[cfg(feature = "online")]
-async fn download_and_install_update(app: &tauri::AppHandle, url: &str, expected_sha256: &str) -> Result<(), String> {
+async fn save_update_package(
+    mut response: reqwest::Response,
+    path: &std::path::Path,
+    cap: u64,
+    mut progress: impl FnMut(u64),
+) -> Result<String, String> {
     use tokio::io::AsyncWriteExt;
-    use futures_util::StreamExt;
     use sha2::{Digest, Sha256};
 
+    let total_size = response.content_length().unwrap_or(0);
+    if total_size > cap {
+        return Err(format!("update package is larger than {cap} bytes"));
+    }
+    let mut file = tokio::fs::File::create(path).await.map_err(|e| e.to_string())?;
+    let result = async {
+        let mut downloaded: u64 = 0;
+        let mut last_pct: u64 = 0;
+        let mut hasher = Sha256::new();
+        while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+            // Count bytes even when the server omits Content-Length. Check
+            // before writing, so the partial file cannot grow beyond the cap.
+            if chunk.len() as u64 > cap - downloaded {
+                return Err(format!("update package is larger than {cap} bytes"));
+            }
+            hasher.update(&chunk);
+            file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+            downloaded += chunk.len() as u64;
+            if total_size > 0 {
+                let pct = (downloaded.saturating_mul(100) / total_size).min(100);
+                if pct != last_pct {
+                    last_pct = pct;
+                    progress(pct);
+                }
+            }
+        }
+        file.flush().await.map_err(|e| e.to_string())?;
+        Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+    }.await;
+    drop(file);
+    if result.is_err() {
+        let _ = tokio::fs::remove_file(path).await;
+    }
+    result
+}
+
+#[cfg(feature = "online")]
+async fn download_and_install_update(app: &tauri::AppHandle, url: &str, expected_sha256: &str) -> Result<(), String> {
     // Only a package the manifest vouches for is installed.
     if expected_sha256.trim().is_empty() {
         tracing::warn!("Update manifest has no SHA-256 for {url}; not installing it");
@@ -1765,33 +1807,13 @@ async fn download_and_install_update(app: &tauri::AppHandle, url: &str, expected
     if !response.status().is_success() {
         return Err(format!("HTTP {}", response.status()));
     }
-    let total_size = response.content_length().unwrap_or(0);
     let msi_path = update_download_path(&url_owned)?;
-
-    let mut file = tokio::fs::File::create(&msi_path).await.map_err(|e| e.to_string())?;
-    let mut downloaded: u64 = 0;
-    let mut stream = response.bytes_stream();
-    let mut last_pct: u64 = 0;
-    let mut hasher = Sha256::new();
-
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| e.to_string())?;
-        hasher.update(&chunk);
-        file.write_all(&chunk).await.map_err(|e| e.to_string())?;
-        downloaded += chunk.len() as u64;
-        if total_size > 0 {
-            let pct = (downloaded * 100 / total_size).min(100);
-            if pct != last_pct {
-                last_pct = pct;
-                let _ = app_clone.emit("download-progress", pct);
-                tracing::info!("Download: {}%", pct);
-            }
-        }
-    }
-    file.flush().await.map_err(|e| e.to_string())?;
-    drop(file);
-
-    let actual: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    // Current Windows and Linux packages are below 24 MB; allow ample room
+    // for growth while bounding a bad CDN response before checksum validation.
+    let actual = save_update_package(response, &msi_path, 256 * 1024 * 1024, |pct| {
+        let _ = app_clone.emit("download-progress", pct);
+        tracing::info!("Download: {}%", pct);
+    }).await?;
     if !package_hash_matches(expected_sha256, &actual) {
         let _ = tokio::fs::remove_file(&msi_path).await;
         tracing::warn!("Update package {} has SHA-256 {actual}, the manifest says {}; deleted, not installed", msi_path.display(), expected_sha256.trim());
@@ -4689,6 +4711,43 @@ mod tests {
         assert!(!super::package_hash_matches(&actual.replace('9', "8"), actual));
         assert!(!super::package_hash_matches("", actual));
         assert!(!super::package_hash_matches("9f86d081", "9f86d081"));
+    }
+
+    #[cfg(feature = "online")]
+    #[tokio::test]
+    async fn update_downloads_are_capped_and_failed_partial_files_are_removed() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let cases: &[(&[u8], bool)] = &[
+            (b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ntest", true),
+            (b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nte\r\n2\r\nst\r\n0\r\n\r\n", true),
+            (b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\ntest!", false),
+            (b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nte\r\n3\r\nst!\r\n0\r\n\r\n", false),
+            (b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\ntest!", false),
+            (b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nte", false),
+        ];
+        let http = reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(5)).build().unwrap();
+        for &(reply, succeeds) in cases {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = [0u8; 2048];
+                let _ = socket.read(&mut request).await;
+                let _ = socket.write_all(reply).await;
+            });
+            let response = http.get(url).send().await.unwrap();
+            let path = super::update_download_path("https://cdn.a2tools.app/test.msi").unwrap();
+            let result = super::save_update_package(response, &path, 4, |_| {}).await;
+            server.await.unwrap();
+            assert_eq!(result.is_ok(), succeeds, "{result:?}");
+            if succeeds {
+                assert_eq!(std::fs::read(&path).unwrap(), b"test");
+                assert_eq!(result.unwrap(), "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
+                std::fs::remove_file(path).unwrap();
+            } else {
+                assert!(!path.exists(), "a failed download left a partial file");
+            }
+        }
     }
 
     #[test]
