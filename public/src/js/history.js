@@ -258,7 +258,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
       sortEl.replaceChildren(...[
         ["newest", t("history.sortNewest", "Newest")],
         ["fastest", t("history.sortFastest", "Fastest kill")],
-        ["partyDps", t("history.sortPartyDps", "Party DPS")],
+        ["partyDps", t("history.recordedDps", "Recorded DPS")],
         ["myDps", t("history.sortMyDps", "Your DPS")],
       ].map(([v, label]) => option(v, label, v === sortBy)));
     }
@@ -300,7 +300,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
     }
   };
 
-  // Damage per second over the fight: the party's, and yours.
+  // Damage per second over the fight: all recorded damage, and yours.
   const partyDps = (f) => (Number(f.durationMs) > 0 ? (Number(f.totalDamage) || 0) * 1000 / Number(f.durationMs) : 0);
   const myDps = (f) => (Number(f.durationMs) > 0 ? (Number(f.myDamage) || 0) * 1000 / Number(f.durationMs) : 0);
   // What the search matches: the boss and its dungeon, in the shown language.
@@ -548,8 +548,8 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
 
     if (!grouped) metaEl.appendChild(timeEl);
     metaEl.appendChild(durEl);
-    // The party's DPS, and yours with your share of the damage; the damage
-    // alone where the fight has no length yet.
+    // Recorded DPS, and yours with your share of the recorded damage; the
+    // damage alone where the fight has no length yet.
     if (Number(fight.durationMs) > 0) {
       const stat = (cls, label, value) => {
         const el = document.createElement("span");
@@ -559,7 +559,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
         el.append(`${label} `, b);
         return el;
       };
-      metaEl.appendChild(stat("historyRowParty", t("history.party", "Party"), partyDps(fight)));
+      metaEl.appendChild(stat("historyRowParty", t("history.recordedDps", "Recorded DPS"), partyDps(fight)));
       if (Number(fight.myDamage) > 0 && youIn(fight)) {
         const mine = stat("historyRowMine", t("history.you", "You"), myDps(fight));
         const share = Number(fight.totalDamage) > 0 ? Math.round(Number(fight.myDamage) * 100 / Number(fight.totalDamage)) : 0;
