@@ -56,7 +56,10 @@ pub fn bring_forward(window: &tauri::WebviewWindow) {
 pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     let Some(hwnd) = hwnd_of(window) else { return };
     unsafe {
-        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        // A focus-hidden tool may be maximized or snapped. Keep that size;
+        // only a minimized window needs its normal placement restored.
+        let shown = if IsIconic(hwnd).as_bool() { SW_SHOWNOACTIVATE } else { SW_SHOWNA };
+        let _ = ShowWindow(hwnd, shown);
         let _ = SetWindowPos(
             hwnd, Some(HWND_TOPMOST),
             0, 0, 0, 0,
