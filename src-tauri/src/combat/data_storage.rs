@@ -2210,12 +2210,22 @@ impl DataStorage {
         let by_me = {
             let inner = self.inner.read();
             let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok())?;
-            if victim == me || !(inner.known_player_ids.contains(&victim) || self.death_recaps.lock().knows(victim)) {
+            if victim == me {
+                return None;
+            }
+            let player = inner.known_player_ids.contains(&victim) || self.death_recaps.lock().knows(victim);
+            if !player {
+                // A mob's loot record, unless you had just hit it.
+                if let Some(age) = self.kda.lock().hit_age(victim, at_ms) {
+                    tracing::info!("KDA: {victim} died {age} ms after your hit, not known as a player");
+                }
                 return None;
             }
             killer == me
         };
-        self.kda.lock().player_died(victim, by_me, at_ms)
+        let kind = self.kda.lock().player_died(victim, by_me, at_ms);
+        tracing::info!("KDA: player {victim} died, killer {killer}{}: {kind:?}", if by_me { " (you)" } else { "" });
+        kind
     }
 
     /// The kills, assists and deaths counted since `seq` was read, and the

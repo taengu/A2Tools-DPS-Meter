@@ -59,6 +59,11 @@ impl Kda {
         }
     }
 
+    /// How long before `at` your last hit on `target` was (ms), if you hit it.
+    pub fn hit_age(&self, target: i32, at: i64) -> Option<i64> {
+        self.my_hits.get(&target).map(|last| at - last)
+    }
+
     /// Player `victim` died at `at`; `by_me` when the record names you.
     /// Returns what it counts as, if anything.
     pub fn player_died(&mut self, victim: i32, by_me: bool, at: i64) -> Option<Kind> {
