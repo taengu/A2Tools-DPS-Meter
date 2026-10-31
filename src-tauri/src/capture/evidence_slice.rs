@@ -352,9 +352,9 @@ pub type SliceKey = [u8; 32];
 /// A token of exactly `len` bytes, derived from the roster id when we have one
 /// and from the name otherwise, under the slice's key.
 ///
-/// Hex, so it is always ASCII and always valid UTF-8 at any truncation — a name
-/// is `<u8 len><utf8>`, and emitting a token that split a multi-byte character
-/// would leave the parser reading invalid UTF-8 where it used to read a name.
+/// ASCII, so truncation never splits UTF-8. A numeric-only hex token is not a
+/// name to the parser: map its first digit to g-p, outside the hex alphabet,
+/// so every nonempty token has a letter without merging distinct hex tokens.
 fn token_for(key: &SliceKey, name: &str, dbid: u64, len: usize) -> String {
     let mut hasher = Sha256::new();
     hasher.update(key);
@@ -376,6 +376,10 @@ fn token_for(key: &SliceKey, name: &str, dbid: u64, len: usize) -> String {
         hex.push('0');
     }
     hex.truncate(len);
+    if !hex.is_empty() && hex.bytes().all(|b| b.is_ascii_digit()) {
+        let letter = (b'g' + (hex.as_bytes()[0] - b'0')) as char;
+        hex.replace_range(..1, &letter.to_string());
+    }
     hex
 }
 
@@ -788,7 +792,7 @@ fn embedded_header(buf: &[u8], i: usize) -> bool {
 /// Is this run plausibly a name or other human-readable string?
 ///
 /// Deliberately broad. A false positive costs a field of binary data getting
-/// overwritten with hex of the same length, which the acceptance test would
+/// overwritten with a token of the same length, which the acceptance test would
 /// catch as drifting damage. A false negative costs someone's name being
 /// uploaded, which nothing would catch.
 fn looks_like_text(span: &[u8]) -> bool {
@@ -2103,6 +2107,53 @@ mod tests {
             assert_eq!(t.len(), name.len(), "{name}");
             assert!(t.is_ascii());
         }
+    }
+
+    #[test]
+    fn a_blinded_self_record_still_identifies_the_current_server() {
+        // Synthetic Xy self record: entity 14957, current server 1304.
+        // This key/id pair previously minted the numeric-only token "67".
+        let source = small_frame("3336ed745e91c1283702587918051e000000011c000000");
+        let replay = |data: &[u8]| {
+            let storage = Arc::new(crate::combat::data_storage::DataStorage::new());
+            let mut processor = crate::capture::stream_processor::StreamProcessor::new(
+                storage.clone(),
+                Arc::new(crate::i18n::lookup::SkillLookup::new()),
+                Arc::new(crate::i18n::lookup::NpcLookup::new()),
+            );
+            processor.consume_stream(data);
+            storage
+        };
+        assert_eq!(replay(&source).self_record_server(), 1304);
+        let names = NameMap::from([("Xy".to_string(), 7)]);
+        let slice = slice_of(&[source.clone()], &names);
+        let token = slice.blind_map.iter().find(|(_, id)| **id == 7).unwrap().0;
+        assert_eq!(token.len(), 2);
+        only_names_changed(&source, &slice.records[0].1, &[11..13]);
+        assert_eq!(unblinded_names(&slice.records, &slice.blind_map), 0);
+        let (records, blind_map) = decode(&encode(&slice)).unwrap();
+        assert_eq!(blind_map, slice.blind_map);
+        let storage = replay(&records[0].1);
+        assert_eq!(storage.self_record_server(), 1304, "blind token={token}");
+        assert_eq!(storage.local_player_id(), Some(14957));
+        assert_eq!(storage.stated_server(token), Some(1304));
+    }
+
+    #[test]
+    fn tokens_keep_a_letter_without_shrinking_the_short_token_space() {
+        for len in 2..=12 {
+            for id in 0..128 {
+                let token = token_for(&KEY, "Xy", id, len);
+                assert_eq!(token.len(), len);
+                assert!(token.bytes().all(|b| b.is_ascii_alphanumeric()));
+                assert!(token.bytes().any(|b| b.is_ascii_alphabetic()));
+            }
+        }
+        // These ids cover all 256 two-character hex prefixes. Numeric tokens
+        // must retain all 256 distinct possibilities, not fold them into a-f.
+        let tokens: HashSet<_> = (0..4096).map(|id| token_for(&KEY, "Xy", id, 2)).collect();
+        assert_eq!(tokens.len(), 256);
+        assert!(token_for(&KEY, "", 0, 0).is_empty());
     }
 
     #[test]
