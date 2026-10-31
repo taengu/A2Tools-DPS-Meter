@@ -215,9 +215,11 @@ fn hides_with_meter(app: &tauri::AppHandle, label: &str, meter: bool) -> bool {
 /// Hide those of `hides_with_meter` that are up, noting each.
 fn hide_with_meter(app: &tauri::AppHandle, meter: bool, hidden: &mut std::collections::HashSet<String>) {
     for (label, window) in app.webview_windows() {
-        if !hides_with_meter(app, &label, meter) || hidden.contains(&label) {
+        if !hides_with_meter(app, &label, meter) {
             continue;
         }
+        // A plugin update can reopen a window whose label is already recorded.
+        // Check its current visibility so the next focus tick hides it again.
         if window.is_visible().unwrap_or(false) && !platform::window::is_hidden_in_place(&window) {
             platform::window::hide_in_place(&window);
             hidden.insert(label);
