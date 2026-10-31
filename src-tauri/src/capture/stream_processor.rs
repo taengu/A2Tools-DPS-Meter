@@ -963,6 +963,9 @@ impl StreamProcessor {
                 self.note_death(data, r);
                 continue;
             }
+            // Another player's death, for your kills and assists.
+            let at = self.override_timestamp.unwrap_or_else(crate::clock::now_ms);
+            self.data_storage.note_player_killed(summon_id, owner_id, at);
             if self.data_storage.is_confirmed_summon(summon_id) {
                 self.data_storage.append_summon(owner_id, summon_id);
             }

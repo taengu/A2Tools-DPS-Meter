@@ -55,6 +55,10 @@
 //                                              player } who won it. The highest roll wins. A roll can
 //                                              come before its "open" or without one. Once each, kept
 //                                              like a decoder's events
+//   a2.on("kda", ({ kind }) => ...)           you killed a player ("kill"), helped kill one ("assist") or
+//                                              a player killed you ("death"), once each, kept like a
+//                                              decoder's events; the event's `at` (unix ms) says when
+//                                              (permission "events:kda"). No names.
 //   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
 //                                              (meter 2.0.65 on)
 //   a2.on("ping", ({ ms }) => ...)             the ping to the game server in ms (null while not known),

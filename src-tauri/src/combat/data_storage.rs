@@ -6,6 +6,7 @@ use parking_lot::{Mutex, RwLock};
 
 use crate::capture::abnormal;
 use crate::combat::death_recap::{self, DeathRecaps};
+use crate::combat::kda::{Kda, KdaEvent, Kind as KdaKind};
 use crate::combat::stagger::{End, Outcome, StaggerHit, StaggerLog, StaggerWindow};
 
 use crate::entity::damage_packet::ParsedDamagePacket;
@@ -535,6 +536,8 @@ pub struct DataStorage {
     death_recaps: Mutex<DeathRecaps>,
     /// Dice Roll loot as read (`capture::loot_rolls`), for plugins.
     loot_rolls: Mutex<crate::capture::loot_rolls::LootRolls>,
+    /// Your kills, assists and deaths (see `combat::kda`). Its own lock.
+    kda: Mutex<Kda>,
 }
 
 /// The timeline and when it was last pruned.
@@ -905,6 +908,7 @@ impl DataStorage {
             stagger: Mutex::new(StaggerLog::default()),
             death_recaps: Mutex::new(DeathRecaps::default()),
             loot_rolls: Mutex::new(Default::default()),
+            kda: Mutex::new(Kda::default()),
         }
     }
 
@@ -1929,6 +1933,10 @@ impl DataStorage {
             {
                 self.death_recaps.lock().note_hit(attacker, pdp.timestamp(), pdp.total_damage() as i64, skill_code);
             }
+            // Your own hit on someone else, for an assist.
+            if attacker == me && target_id != me {
+                self.kda.lock().note_my_hit(summon_resolver::resolve(target_id, &inner.summon_storage), pdp.timestamp());
+            }
         }
 
         // Party healing: player-on-player damage is actually healing/buffs
@@ -2191,7 +2199,29 @@ impl DataStorage {
     }
 
     pub fn push_death_recap(&self, recap: death_recap::DeathRecap) {
+        self.kda.lock().died(recap.at);
         self.death_recaps.lock().push(recap);
+    }
+
+    /// The record that names who killed `victim` came at `at`. Counted when
+    /// the victim is a player and the record names you (a kill) or you hit
+    /// them just before (an assist).
+    pub fn note_player_killed(&self, victim: i32, killer: i32, at_ms: i64) -> Option<KdaKind> {
+        let by_me = {
+            let inner = self.inner.read();
+            let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok())?;
+            if victim == me || !(inner.known_player_ids.contains(&victim) || self.death_recaps.lock().knows(victim)) {
+                return None;
+            }
+            killer == me
+        };
+        self.kda.lock().player_died(victim, by_me, at_ms)
+    }
+
+    /// The kills, assists and deaths counted since `seq` was read, and the
+    /// count to ask with next time; None when there are none.
+    pub fn kda_since(&self, seq: u64) -> Option<(u64, Vec<KdaEvent>)> {
+        self.kda.lock().since(seq)
     }
 
     /// The death recaps made since `seq` was read, and the count to ask with
