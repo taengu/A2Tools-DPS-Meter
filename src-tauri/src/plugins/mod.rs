@@ -69,9 +69,156 @@ pub const DISABLED_KEY: &str = "dpsMeter.pluginsDisabled";
 /// array of ids (Settings → Plugins).
 pub const HIDE_CLOSED_KEY: &str = "dpsMeter.pluginsHideClosed";
 /// Plugins whose windows and widgets hide when AION2 isn't in front, a JSON
-/// array of ids, whether or not the meter itself hides then. Off by default:
-/// an alert's icon is most use while the game isn't in front.
+/// array of ids, whether or not the meter itself hides then. New plugins
+/// start in this list; each plugin's own switch remains the user's choice.
 pub const HIDE_UNFOCUSED_KEY: &str = "dpsMeter.pluginsHideUnfocused";
+const FOCUS_DEFAULTS_KEY: &str = "dpsMeter.pluginFocusDefaults";
+
+/// Remember IDs after uninstall too: reinstalling must not reset a choice.
+#[derive(Serialize, Deserialize)]
+struct FocusDefaults {
+    known: std::collections::BTreeSet<String>,
+    pending: bool,
+}
+
+impl FocusDefaults {
+    fn existing(installed: &[String], history: &[String]) -> Self {
+        Self { known: installed.iter().chain(history).cloned().collect(), pending: !installed.is_empty() }
+    }
+
+    fn installed(&mut self, installed: &[String], hidden: &mut Vec<String>) {
+        for id in installed {
+            if self.known.insert(id.clone()) && !hidden.contains(id) {
+                hidden.push(id.clone());
+            }
+        }
+    }
+
+    fn answer(&mut self, accept: bool, installed: &[String], hidden: &mut Vec<String>) {
+        if !self.pending { return; }
+        if accept {
+            for id in installed {
+                if !hidden.contains(id) { hidden.push(id.clone()); }
+            }
+        }
+        self.pending = false;
+    }
+}
+
+fn focus_defaults_lock() -> &'static Mutex<()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    &LOCK
+}
+
+/// Include disabled/held installations and developer folders even while
+/// developer mode is off. Loading successfully is not a first installation.
+fn installed_focus_ids(root: &Path, folders: &[String]) -> Result<Vec<String>, String> {
+    let mut ids = std::collections::BTreeSet::new();
+    match std::fs::read_dir(root) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry.map_err(|e| e.to_string())?;
+                if !entry.metadata().map_err(|e| e.to_string())?.is_dir() { continue; }
+                if let Some(id) = entry.file_name().to_str().filter(|id| valid_id(id)) { ids.insert(id.to_string()); }
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+    }
+    for folder in folders {
+        let text = std::fs::read_to_string(Path::new(folder).join("manifest.json")).map_err(|e| e.to_string())?;
+        let manifest: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        let id = manifest.get("id").and_then(Value::as_str).filter(|id| valid_id(id))
+            .ok_or("A registered developer plugin has no valid ID")?;
+        ids.insert(id.to_string());
+    }
+    Ok(ids.into_iter().collect())
+}
+
+fn focus_plugin_ids(app: &tauri::AppHandle) -> Result<Vec<String>, String> {
+    let state = app.try_state::<AppState>().ok_or("no app state")?;
+    let folders: Vec<String> = match state.settings.get(DEV_FOLDERS_KEY) {
+        Some(value) => serde_json::from_str(&value).map_err(|e| e.to_string())?,
+        None => Vec::new(),
+    };
+    installed_focus_ids(&plugins_dir(app)?, &folders)
+}
+
+/// Called under focus_defaults_lock, including when an individual switch is
+/// changed. Bootstrap preserves old choices; only subsequently new IDs default on.
+fn prepare_focus_defaults(app: &tauri::AppHandle, installed: &[String]) -> Result<FocusDefaults, String> {
+    let state = app.try_state::<AppState>().ok_or("no app state")?;
+    let saved = state.settings.get(FOCUS_DEFAULTS_KEY);
+    let mut hidden: Vec<String> = state.settings.get(HIDE_UNFOCUSED_KEY)
+        .map(|v| serde_json::from_str(&v)).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
+    let previous_hidden = hidden.clone();
+    let mut defaults = if let Some(saved) = saved {
+        // An unreadable record must never silently turn existing choices on.
+        serde_json::from_str::<FocusDefaults>(&saved).map_err(|_| "Plugin focus preferences could not be read")?
+    } else {
+        let mut history = hidden.clone();
+        for key in ["dpsMeter.pluginsSeen", WINDOWS_KEY] {
+            if let Some(value) = state.settings.get(key) {
+                let values: serde_json::Map<String, Value> = serde_json::from_str(&value).map_err(|e| e.to_string())?;
+                history.extend(values.into_iter().map(|(id, _)| id).filter(|id| valid_id(id)));
+            }
+        }
+        match std::fs::read_dir(state.app_data_dir.join("plugin-data")) {
+            Ok(entries) => for entry in entries {
+                let entry = entry.map_err(|e| e.to_string())?;
+                if let Some(id) = entry.file_name().to_str().filter(|id| valid_id(id)) { history.push(id.to_string()); }
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+        FocusDefaults::existing(installed, &history)
+    };
+    defaults.installed(installed, &mut hidden);
+    if hidden != previous_hidden {
+        state.settings.set(HIDE_UNFOCUSED_KEY, &serde_json::to_string(&hidden).map_err(|e| e.to_string())?);
+    }
+    state.settings.set(FOCUS_DEFAULTS_KEY, &serde_json::to_string(&defaults).map_err(|e| e.to_string())?);
+    Ok(defaults)
+}
+
+fn persist_focus_answer(settings: &crate::config::settings::Settings, defaults: &mut FocusDefaults, installed: &[String], accept: bool) -> Result<(), String> {
+    let old_hidden = settings.get(HIDE_UNFOCUSED_KEY);
+    let old_defaults = settings.get(FOCUS_DEFAULTS_KEY);
+    let mut hidden: Vec<String> = old_hidden.as_ref()
+        .map(|v| serde_json::from_str(v)).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
+    defaults.answer(accept, installed, &mut hidden);
+    let hidden = serde_json::to_string(&hidden).map_err(|e| e.to_string())?;
+    if accept && old_hidden.as_deref() != Some(hidden.as_str()) {
+        settings.set(HIDE_UNFOCUSED_KEY, &hidden);
+    }
+    settings.set(FOCUS_DEFAULTS_KEY, &serde_json::to_string(defaults).map_err(|e| e.to_string())?);
+    if let Err(error) = settings.flush() {
+        // The dialog remains open on a failed save. Roll back our two values
+        // so a later "Keep current settings" cannot commit the failed Enable.
+        for (key, previous) in [(HIDE_UNFOCUSED_KEY, old_hidden), (FOCUS_DEFAULTS_KEY, old_defaults)] {
+            match previous { Some(value) => { settings.set(key, &value); }, None => settings.remove(key) }
+        }
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
+/// One in-app upgrade offer. A repeated reply cannot overwrite a later
+/// individual choice, and the UI closes only after its answer is persisted.
+#[tauri::command]
+pub async fn plugin_focus_defaults(app: tauri::AppHandle, accept: Option<bool>) -> Result<bool, String> {
+    tokio::task::spawn_blocking(move || {
+        let _guard = focus_defaults_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let installed = focus_plugin_ids(&app)?;
+        let mut defaults = prepare_focus_defaults(&app, &installed)?;
+        let state = app.try_state::<AppState>().ok_or("no app state")?;
+        if let Some(accept) = accept {
+            persist_focus_answer(&state.settings, &mut defaults, &installed, accept)?;
+            let _ = app.emit_to("settings", "plugins-changed", ());
+        }
+        Ok(defaults.pending && !installed.is_empty())
+    }).await.map_err(|e| e.to_string())?
+}
 /// Whether AION2 is open, as the plugin event loop last looked.
 static GAME_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
@@ -366,12 +513,14 @@ pub fn plugin_set_hide(app: tauri::AppHandle, id: String, when: String, hide: bo
         _ => return Err("closed or unfocused".into()),
     };
     let state = app.try_state::<AppState>().ok_or("no app state")?;
+    let guard = focus_defaults_lock().lock().unwrap_or_else(|p| p.into_inner());
     let mut ids = listed(&app, key);
     ids.retain(|x| x != &id);
     if hide {
         ids.push(id.clone());
     }
     state.settings.set(key, &serde_json::to_string(&ids).unwrap_or_default());
+    drop(guard);
     sync_game_hiding(&app);
     let host = host(&app)?;
     Ok(view(&app, &host))
@@ -593,6 +742,12 @@ impl PluginHost {
     /// same plugin, so its author tests their own files.
     pub fn reload(self: &Arc<Self>, app: &tauri::AppHandle) {
         let Some(state) = app.try_state::<AppState>() else { return };
+        {
+            let _guard = focus_defaults_lock().lock().unwrap_or_else(|p| p.into_inner());
+            if let Err(error) = focus_plugin_ids(app).and_then(|ids| prepare_focus_defaults(app, &ids)) {
+                tracing::warn!("Plugins: {error}; existing focus choices are kept");
+            }
+        }
         let dev = state.settings.get(DEV_MODE_KEY).as_deref() == Some("true");
         let folders: Vec<String> = if dev {
             state.settings.get(DEV_FOLDERS_KEY).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
@@ -2667,6 +2822,105 @@ fn percent_decode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn focus_defaults_preserve_legacy_choices_and_a_decline() {
+        let installed = vec!["cooldowns".to_string(), "timers".to_string()];
+        let mut hidden = vec!["cooldowns".to_string()];
+        let mut defaults = super::FocusDefaults::existing(&installed, &["removed-before-upgrade".into()]);
+        defaults.installed(&installed, &mut hidden);
+        assert_eq!(hidden, ["cooldowns"]);
+        assert!(defaults.pending);
+        defaults.answer(false, &installed, &mut hidden);
+        assert_eq!(hidden, ["cooldowns"]);
+        assert!(!defaults.pending);
+        defaults.installed(&["removed-before-upgrade".into()], &mut hidden);
+        assert_eq!(hidden, ["cooldowns"], "available uninstall history preserves an old off choice");
+    }
+
+    #[test]
+    fn focus_defaults_apply_to_first_installs_but_never_reinstalls() {
+        let mut defaults = super::FocusDefaults::existing(&[], &[]);
+        assert!(!defaults.pending, "a fresh profile has nothing to ask about");
+        let mut hidden = Vec::new();
+        let installed = vec!["cooldowns".to_string()];
+        defaults.installed(&installed, &mut hidden);
+        assert_eq!(hidden, installed);
+        hidden.clear(); // The player's individual switch is now off.
+        defaults.installed(&installed, &mut hidden); // update/reload
+        defaults.installed(&[], &mut hidden); // uninstall
+        let saved = serde_json::to_string(&defaults).unwrap();
+        let mut defaults: super::FocusDefaults = serde_json::from_str(&saved).unwrap();
+        defaults.installed(&installed, &mut hidden); // restart/reinstall
+        assert!(hidden.is_empty());
+        defaults.installed(&["timers".into()], &mut hidden);
+        assert_eq!(hidden, ["timers"], "another genuinely new plugin still defaults on");
+    }
+
+    #[test]
+    fn focus_prompt_accepts_once_without_overriding_later_edits() {
+        let installed = vec!["cooldowns".to_string(), "timers".to_string()];
+        let mut hidden = vec!["cooldowns".to_string(), "removed".to_string()];
+        let mut defaults = super::FocusDefaults::existing(&installed, &hidden);
+        defaults.answer(true, &installed, &mut hidden);
+        assert_eq!(hidden, ["cooldowns", "removed", "timers"]);
+        hidden.retain(|id| id != "timers");
+        defaults.answer(true, &installed, &mut hidden);
+        assert_eq!(hidden, ["cooldowns", "removed"]);
+        assert!(serde_json::from_str::<super::FocusDefaults>("not saved preferences").is_err());
+    }
+
+    #[test]
+    fn focus_defaults_inventory_includes_held_plugins_and_inactive_dev_folders() {
+        let root = std::env::temp_dir().join(format!("a2-focus-defaults-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let installed = root.join("plugins");
+        let dev = root.join("developer");
+        std::fs::create_dir_all(installed.join("held-plugin")).unwrap();
+        std::fs::create_dir_all(installed.join(".partial-install")).unwrap();
+        std::fs::create_dir_all(&dev).unwrap();
+        std::fs::write(dev.join("manifest.json"), r#"{"id":"dev-plugin"}"#).unwrap();
+        let folders = vec![dev.to_string_lossy().into_owned()];
+        assert_eq!(super::installed_focus_ids(&installed, &folders).unwrap(), ["dev-plugin", "held-plugin"]);
+        std::fs::write(dev.join("manifest.json"), "unreadable metadata").unwrap();
+        assert!(super::installed_focus_ids(&installed, &folders).is_err(), "an incomplete inventory must not bootstrap fresh defaults");
+        std::fs::write(dev.join("manifest.json"), r#"{"id":"Invalid-ID"}"#).unwrap();
+        assert!(super::installed_focus_ids(&installed, &folders).is_err());
+        std::fs::write(dev.join("manifest.json"), "{}").unwrap();
+        assert!(super::installed_focus_ids(&installed, &folders).is_err());
+        std::fs::remove_file(dev.join("manifest.json")).unwrap();
+        assert!(super::installed_focus_ids(&installed, &folders).is_err(), "a temporarily missing developer folder is not a new installation later");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_failed_focus_accept_can_be_retried_as_keep_current_settings() {
+        let root = std::env::temp_dir().join(format!("a2-focus-save-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&root).unwrap();
+        let blocked = root.join("settings-parent");
+        std::fs::write(&blocked, "a file blocks creating the settings folder").unwrap();
+        let settings = crate::config::settings::Settings::new(blocked.clone());
+        let installed = vec!["cooldowns".to_string(), "timers".to_string()];
+        let mut defaults = super::FocusDefaults::existing(&installed, &[]);
+        settings.set(super::FOCUS_DEFAULTS_KEY, &serde_json::to_string(&defaults).unwrap());
+        settings.set(super::HIDE_UNFOCUSED_KEY, "unreadable preferences");
+        assert!(super::persist_focus_answer(&settings, &mut defaults, &installed, true).is_err());
+        assert_eq!(settings.get(super::HIDE_UNFOCUSED_KEY).as_deref(), Some("unreadable preferences"));
+        assert!(defaults.pending);
+        settings.set(super::HIDE_UNFOCUSED_KEY, r#"["cooldowns"]"#);
+        assert!(super::persist_focus_answer(&settings, &mut defaults, &installed, true).is_err());
+        assert_eq!(settings.get(super::HIDE_UNFOCUSED_KEY).as_deref(), Some(r#"["cooldowns"]"#));
+        defaults = serde_json::from_str(&settings.get(super::FOCUS_DEFAULTS_KEY).unwrap()).unwrap();
+        assert!(defaults.pending, "failed persistence keeps the choice pending");
+        std::fs::remove_file(&blocked).unwrap();
+        super::persist_focus_answer(&settings, &mut defaults, &installed, false).unwrap();
+        assert!(!defaults.pending);
+        let saved = crate::config::settings::Settings::new(blocked);
+        assert_eq!(saved.get(super::HIDE_UNFOCUSED_KEY).as_deref(), Some(r#"["cooldowns"]"#));
+        assert!(!serde_json::from_str::<super::FocusDefaults>(&saved.get(super::FOCUS_DEFAULTS_KEY).unwrap()).unwrap().pending);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn percent_decode_takes_any_text() {
         assert_eq!(super::percent_decode("a%20b%2Fc"), "a b/c");
         assert_eq!(super::percent_decode("%é%"), "%é%");
@@ -2678,7 +2932,7 @@ mod tests {
         for label in ["plugin-ping", "plugins-dock", "pw_ping_ping"] {
             assert!(allowed_from(label, "plugin_storage_get"), "{label}");
             assert!(allowed_from(label, "open_url"), "{label}");
-            for cmd in ["show_update_window", "send_logs_to_dev", "plugin_add_folder", "plugin_install", "update_settings", "capture_screenshot", "set_run_as_admin"] {
+            for cmd in ["show_update_window", "send_logs_to_dev", "plugin_add_folder", "plugin_install", "plugin_focus_defaults", "update_settings", "capture_screenshot", "set_run_as_admin"] {
                 assert!(!allowed_from(label, cmd), "{label} {cmd}");
             }
         }

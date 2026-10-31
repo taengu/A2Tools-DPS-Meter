@@ -4459,6 +4459,7 @@ pub fn run() {
             get_hotkey_status,
             open_desktop_shortcuts,
             crate::plugins::plugin_list,
+            crate::plugins::plugin_focus_defaults,
             crate::plugins::plugin_set_dev_mode,
             crate::plugins::plugin_add_folder,
             crate::plugins::plugin_remove_folder,

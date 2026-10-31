@@ -3323,10 +3323,13 @@ class DpsApp {
     }
     Promise.resolve(window.javaBridge?.discordActivityAvailable?.())
       .catch(() => false)
-      .then((ok) => {
+      .then(async (ok) => {
         if (ok) for (const group of document.querySelectorAll(".discordActivityGroup")) group.style.display = "";
         if (window.A2_VIEW !== "main") return;
-        if (window.a2Build?.online === false) return;   // nothing to offer
+        if (window.a2Build?.online === false) {
+          await this.maybeShowPluginFocusPromo();
+          return;
+        }
         // At most one offer per launch: the account one waits for a launch
         // where the Discord one does not open.
         // Sharing first (it decides whether anything uploads); otherwise at
@@ -3334,6 +3337,7 @@ class DpsApp {
         // Asked before this launch: not a new install (for What's new).
         const hadAsked = this.safeGetSetting(this.storageKeys.sharingAsked) === "true";
         this.maybeShowSharing().then(async (shown) => {
+          if (!shown && await this.maybeShowPluginFocusPromo()) return;
           const news = await this.maybeShowWhatsNew({ existingInstall: hadAsked, quiet: shown });
           if (!shown && !news && !(ok && this.maybeShowDiscordPromo())) this.maybeShowPartyPromo();
         });
@@ -7645,6 +7649,73 @@ class DpsApp {
 
   invalidateStreamOverlaySettings() {
     this._streamOverlaySettings?.invalidate();
+  }
+
+  // This changes each installed plugin's own switch once, not a global rule.
+  // The backend remembers the answer; localStorage is not another copy of it.
+  async maybeShowPluginFocusPromo() {
+    const promo = document.querySelector("#pluginFocusPromo");
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (window.A2_VIEW !== "main" || !promo || !invoke) return false;
+    if (this._pluginFocusPromoPending) return true;
+    this._pluginFocusPromoPending = true;
+    try {
+      if (await invoke("plugin_focus_defaults", { accept: null }) !== true) {
+        this._pluginFocusPromoPending = false;
+        return false;
+      }
+    } catch {
+      this._pluginFocusPromoPending = false;
+      return false; // Try on another launch; no choice was saved.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    if (document.querySelector(".discordPromo.isOpen, .updateModal.isOpen, .supportModal.isOpen")) {
+      this._pluginFocusPromoPending = false;
+      return true; // Another card took this launch's offer; keep our native choice pending.
+    }
+    const yes = promo.querySelector(".pluginFocusEnable");
+    const no = promo.querySelector(".pluginFocusKeep");
+    const close = promo.querySelector(".pluginFocusClose");
+    const error = promo.querySelector(".pluginFocusError");
+    const previousFocus = document.activeElement;
+    let pending = false;
+    let answered = false;
+    const answer = async (accept) => {
+      if (pending || answered) return;
+      pending = true;
+      for (const button of [yes, no, close]) if (button) button.disabled = true;
+      if (error) error.textContent = "";
+      try {
+        if (await invoke("plugin_focus_defaults", { accept }) !== false) throw new Error("Choice was not saved");
+        answered = true;
+        promo.classList.remove("isOpen");
+        promo.setAttribute("aria-hidden", "true");
+        document.removeEventListener("keydown", onKey, true);
+        this._pluginFocusPromoPending = false;
+        previousFocus?.focus?.();
+      } catch {
+        if (error) error.textContent = this.i18n?.t?.("pluginFocusPromo.failed", "Couldn't save your choice. Please try again.")
+          || "Couldn't save your choice. Please try again.";
+      } finally {
+        pending = false;
+        for (const button of [yes, no, close]) if (button) button.disabled = false;
+      }
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        answer(false);
+      }
+    };
+    if (yes) yes.onclick = () => answer(true);
+    if (no) no.onclick = () => answer(false);
+    if (close) close.onclick = () => answer(false);
+    promo.onclick = (event) => { if (event.target === promo) answer(false); };
+    promo.classList.add("isOpen");
+    promo.setAttribute("aria-hidden", "false");
+    document.addEventListener("keydown", onKey, true);
+    no?.focus?.();
+    return true;
   }
 
   // A one-time popup about showing A2Tools users in the party to each other,

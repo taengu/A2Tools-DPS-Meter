@@ -875,6 +875,14 @@
     "text": "Party members who also use A2Tools get a small A2 tag beside their name, and you get one beside yours on their meter.",
     "hint": "Anyone in your party who uses A2Tools will be able to see that you use a third-party meter. Only hashes of character names and servers are sent. You can change this any time in Settings."
   },
+  "pluginFocusPromo": {
+    "title": "Hide plugins outside AION2?",
+    "text": "Turn on “Hide when AION2 isn't focused” for all installed plugins, including their widgets. They return when you switch back to the game.",
+    "hint": "Each plugin keeps its own switch. You can change individual choices later in Settings → Plugins.",
+    "keep": "Keep current settings",
+    "enable": "Enable for all",
+    "failed": "Couldn't save your choice. Please try again."
+  },
   "discordPromo": {
     "title": "New: Discord activity",
     "text": "Let friends see your character, class, level and server, and the boss or dungeon you're in, right in your Discord status.",
