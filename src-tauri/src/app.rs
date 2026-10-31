@@ -230,7 +230,7 @@ fn show_with_meter(app: &tauri::AppHandle, hidden: &mut std::collections::HashSe
     for label in hidden.drain() {
         let Some(window) = app.get_webview_window(&label) else { continue };
         // A widget its plugin closed meanwhile stays hidden.
-        if crate::plugins::widgets::is_closed(&label) {
+        if crate::plugins::widgets::is_closed(&label) || crate::plugins::widgets::hold_hidden(app, &window) {
             continue;
         }
         if !platform::window::reveal_in_place(&window) {
@@ -4236,6 +4236,7 @@ pub fn run() {
                         }
 
                         // --- Auto-hide when AION2 loses focus (every tick) ---
+                        crate::plugins::widgets::sync_focus_holds(&handle);
                         // The meter's own hiding waits while it is hidden
                         // anyway (by the player, AION2 closed, solo, or out
                         // of combat); the rest below doesn't: Ping's icon

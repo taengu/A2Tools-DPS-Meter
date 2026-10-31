@@ -87,6 +87,60 @@ pub fn is_closed(label: &str) -> bool {
     closed().lock().unwrap_or_else(|p| p.into_inner()).contains(label)
 }
 
+/// Widgets opened while another app is in front, including ones the focus
+/// poll has never seen. Take a snapshot before touching windows: native calls
+/// can wait for the UI thread, and a concurrent open must keep its own entry.
+fn held_for_focus() -> &'static Mutex<std::collections::HashSet<String>> {
+    static HELD: std::sync::OnceLock<Mutex<std::collections::HashSet<String>>> = std::sync::OnceLock::new();
+    HELD.get_or_init(Mutex::default)
+}
+
+/// Keep a widget out of sight before showing it or loading its plugin frame.
+/// Also used when game-closed hiding releases it; that caller holds its own
+/// game-hiding lock, so this function must not call `hold_for_game`.
+pub fn hold_unfocused(app: &tauri::AppHandle, window: &tauri::WebviewWindow) -> bool {
+    let Some((id, _)) = parse_label(window.label()) else { return false };
+    let inactive = is_closed(window.label()) || super::disabled(app).contains(&id);
+    if !inactive && !(super::hides_unfocused(app, window.label()) && !crate::platform::window::front_is_ours_or_game()) {
+        return false;
+    }
+    if !crate::platform::window::is_hidden_in_place(window) {
+        crate::platform::window::hide_in_place(window);
+    }
+    if !inactive {
+        held_for_focus().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string());
+    }
+    true
+}
+
+/// Either automatic hide rule may still own a widget the other is releasing.
+pub fn hold_hidden(app: &tauri::AppHandle, window: &tauri::WebviewWindow) -> bool {
+    if hold_unfocused(app, window) {
+        return true;
+    }
+    if let Some((id, _)) = parse_label(window.label()) && super::game_hides(app, &id) {
+        super::hold_for_game(window);
+        return true;
+    }
+    false
+}
+
+/// Open again when allowed, even if this plugin opted out while others still
+/// hide. Closed, disabled or destroyed widgets are not brought back.
+pub fn sync_focus_holds(app: &tauri::AppHandle) {
+    let pending = std::mem::take(&mut *held_for_focus().lock().unwrap_or_else(|p| p.into_inner()));
+    for label in pending {
+        let Some(window) = app.get_webview_window(&label) else { continue };
+        if hold_hidden(app, &window) {
+            continue;
+        }
+        if !crate::platform::window::reveal_in_place(&window) {
+            crate::platform::window::show_on_top_without_focus(&window);
+        }
+        relock(app, &window);
+    }
+}
+
 /// The parts of each widget that take the mouse, as its page reported them
 /// (`a2.widget.area`, `a2.widget.areas`): rectangles in CSS px, and the
 /// page's scale. Unlocked, clicks elsewhere in its window go through (by an
@@ -210,9 +264,7 @@ pub async fn plugin_widget_open(
                 let _ = widget.set_position(tauri::PhysicalPosition::new(x, y));
             }
         }
-        if super::game_hides(&app, &id) {
-            super::hold_for_game(&widget);
-        } else if !crate::platform::window::reveal_in_place(&widget) {
+        if !hold_hidden(&app, &widget) && !crate::platform::window::reveal_in_place(&widget) {
             crate::platform::window::show_on_top_without_focus(&widget);
         }
         apply_lock(&widget, is_locked(&app, &id));
@@ -287,10 +339,7 @@ pub async fn plugin_widget_open(
         let (x, y) = keep_on_screen(&app, &widget, at);
         let _ = widget.set_position(tauri::PhysicalPosition::new(x, y));
     }
-    // AION2 closed and the plugin set to hide then: shown when it opens.
-    if super::game_hides(&app, &id) {
-        super::hold_for_game(&widget);
-    }
+    hold_hidden(&app, &widget);
     Ok(())
 }
 
@@ -552,6 +601,9 @@ pub fn plugin_widget_hello(app: tauri::AppHandle, window: tauri::WebviewWindow) 
     crate::platform::window::give_front_back(&window, before);
     let locked = is_locked(&app, &id);
     apply_lock(&window, locked);
+    // The transparent host waits for this reply before loading widget.html.
+    // Check after giving focus back so an alert cannot paint over another app.
+    hold_unfocused(&app, &window);
     let language = app.try_state::<AppState>().and_then(|s| s.settings.get("dpsMeter.language")).unwrap_or_else(|| "en".into());
     Ok(serde_json::json!({ "plugin": id, "name": name, "locked": locked, "language": language }))
 }
