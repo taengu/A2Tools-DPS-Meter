@@ -1520,6 +1520,19 @@
         <button class="discordPromoDone" type="button" data-i18n="discordPromo.done">Done</button>
       </div>
     </div>
+    <div class="discordPromo accountPromo" id="pluginFocusPromo" aria-hidden="true">
+      <div class="discordPromoCard" role="dialog" aria-modal="true" aria-labelledby="pluginFocusPromoTitle" aria-describedby="pluginFocusPromoText">
+        <button class="discordPromoClose pluginFocusClose" type="button" data-i18n-aria-label="discordPromo.close" aria-label="Close">×</button>
+        <div class="discordPromoTitle" id="pluginFocusPromoTitle" data-i18n="pluginFocusPromo.title">Hide plugins outside AION2?</div>
+        <div class="discordPromoText" id="pluginFocusPromoText" data-i18n="pluginFocusPromo.text">Turn on “Hide when AION2 isn't focused” for all installed plugins, including their widgets. They return when you switch back to the game.</div>
+        <div class="discordPromoHint" data-i18n="pluginFocusPromo.hint">Each plugin keeps its own switch. You can change individual choices later in Settings → Plugins.</div>
+        <div class="discordPromoHint pluginFocusError" role="alert"></div>
+        <div class="accountPromoActions">
+          <button class="accountPromoLater pluginFocusKeep" type="button" data-i18n="pluginFocusPromo.keep">Keep current settings</button>
+          <button class="discordPromoDone pluginFocusEnable" type="button" data-i18n="pluginFocusPromo.enable">Enable for all</button>
+        </div>
+      </div>
+    </div>
     <div class="discordPromo partyPromo" id="partyPromo" aria-hidden="true">
       <div class="discordPromoCard" role="dialog" aria-modal="true" aria-labelledby="partyPromoTitle">
         <button class="discordPromoClose partyPromoClose" type="button" data-i18n-aria-label="discordPromo.close" aria-label="Close">×</button>
