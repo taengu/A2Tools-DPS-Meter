@@ -4264,10 +4264,13 @@ pub fn run() {
                                 let hidden = !is_visible || is_minimized
                                     || platform::window::is_hidden_in_place(&window);
                                 if aion_fg || is_self_fg {
-                                    hide_delay = 0;
-                                    if hidden {
+                                    // A native restore can leave the meter visible
+                                    // but below the game after we dropped topmost.
+                                    // Raise it once when focus returns, too.
+                                    if hidden || hide_delay > 0 {
                                         show_meter_again(&handle, &window);
                                     }
+                                    hide_delay = 0;
                                 } else if !hidden {
                                     // Wait 3 ticks (1.5s) before hiding to avoid
                                     // flickering during alt-tab transitions
