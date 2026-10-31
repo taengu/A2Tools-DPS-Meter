@@ -193,7 +193,7 @@ pub fn sync_game_hiding(app: &tauri::AppHandle) {
             }
         } else if hidden.remove(&label) {
             // Closed by its plugin meanwhile: it stays hidden.
-            if widgets::is_closed(&label) {
+            if widgets::is_closed(&label) || widgets::hold_unfocused(app, &window) {
                 continue;
             }
             if !crate::platform::window::reveal_in_place(&window) {
