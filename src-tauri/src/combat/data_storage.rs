@@ -1756,8 +1756,9 @@ impl DataStorage {
         kinah_today_of(&self.inner.read(), now)
     }
 
-    /// The week's Abyss Points and limit, seen at `at` (unix ms). Sent at
-    /// logins and transfers only, so held for the self record.
+    /// The week's Abyss Points and limit, seen at `at` (unix ms). Held for the
+    /// self record, which follows a login's within a second; one that comes
+    /// alone (a gain) is taken as the character's after `ABYSS_POINTS_HOLD_MS`.
     pub fn set_abyss_points(&self, points: u64, limit: u64, at: i64) {
         let mut inner = self.inner.write();
         tracing::debug!("Abyss Points: {points} of {limit}");
@@ -3259,6 +3260,9 @@ fn shop_limits_of(inner: &Inner, now: i64) -> std::collections::BTreeMap<u32, (u
 
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 const WEEK_MS: i64 = 7 * DAY_MS;
+/// How long the Abyss Points the game sent wait for a self record before
+/// they count as the current character's.
+const ABYSS_POINTS_HOLD_MS: i64 = 3_000;
 /// The daily reset, 07:00 UTC, and the weekly, Wednesday 07:00 UTC (the
 /// Daily Duty board's, the Supply Requests', the shop's weekly limits'), as
 /// offsets from the epoch (a Thursday).
@@ -3279,7 +3283,8 @@ fn kinah_today_of(inner: &Inner, now: i64) -> Option<u64> {
 
 /// The week's Abyss Points at `now` (`DataStorage::abyss_points_at`).
 fn abyss_points_of(inner: &Inner, now: i64) -> Option<(u64, u64)> {
-    let (points, limit, at) = inner.abyss_points?;
+    let held = inner.login_abyss_points.filter(|(_, _, at)| now - at >= ABYSS_POINTS_HOLD_MS);
+    let (points, limit, at) = held.or(inner.abyss_points)?;
     Some((if last_reset(now, WEEK_MS, WEEKLY_RESET_MS) > at { 0 } else { points }, limit))
 }
 
