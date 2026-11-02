@@ -1152,6 +1152,15 @@ class DpsApp {
       </div>
       <div class="hoverDetailsTooltipSkills">${skillsHtml || `<div class="hoverDetailsTooltipSkill muted">${stateText}</div>`}</div>
     `;
+    // This hover card cannot itself be hovered. Name the class alongside its
+    // icon without changing the card's pointer-following/dismissal behavior.
+    const classIcon = this.hoverTooltipEl.querySelector?.(".hoverDetailsTooltipClassIcon");
+    if (classIcon) {
+      const label = document.createElement("span");
+      label.dataset.className = row.job;
+      label.textContent = window.i18n?.setClassTooltip?.(classIcon, row.job) || row.job;
+      classIcon.after(label);
+    }
     // Apply cached skill icons to tooltip img elements
     if (window.skillIcons?.applyIconToImage && skills.length) {
       const iconEls = this.hoverTooltipEl.querySelectorAll(".hoverDetailsTooltipSkill .skillIcon");

@@ -190,7 +190,47 @@ const createI18n = ({
     return multiTierDungeons.has(npc.dungeonId) ? String(npc.tier) : "";
   };
 
+  const CLASS_KEYS = {
+    "검성": "GLADIATOR",
+    "수호성": "TEMPLAR",
+    "궁성": "RANGER",
+    "살성": "ASSASSIN",
+    "마도성": "SORCERER",
+    "치유성": "CLERIC",
+    "정령성": "ELEMENTALIST",
+    "호법성": "CHANTER",
+    "권성": "FIGHTER",
+  };
+
+  const getClassName = (job) => {
+    if (!job) return "";
+    return Object.hasOwn(CLASS_KEYS, job) ? t("classes." + CLASS_KEYS[job], job) : String(job);
+  };
+
+  // Retained rows need their class labels refreshed even when combat data
+  // did not change. History's existing data-tip stays its only tooltip.
+  const setClassTooltip = (element, job) => {
+    if (!element) return "";
+    const label = job === "Unknown" ? "" : getClassName(job);
+    const custom = element.hasAttribute("data-tip");
+    const icon = custom ? element.querySelector("img") : element;
+    if (label) {
+      if (element.dataset.classTooltip !== job) element.dataset.classTooltip = job;
+      const attribute = custom ? "data-tip" : "title";
+      if (element.getAttribute(attribute) !== label) element.setAttribute(attribute, label);
+    } else {
+      element.removeAttribute("data-class-tooltip");
+      element.removeAttribute("title");
+      if (custom) element.removeAttribute("data-tip");
+    }
+    if (icon?.tagName === "IMG" && icon.alt !== label) icon.alt = label;
+    return label;
+  };
+
   const applyTranslations = () => {
+    document.querySelectorAll("[data-class-tooltip]").forEach((el) => setClassTooltip(el, el.dataset.classTooltip));
+    document.querySelectorAll("[data-class-name]").forEach((el) => { el.textContent = getClassName(el.dataset.className); });
+
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       const key = el.dataset.i18n;
       const text = t(key, el.textContent ?? "");
@@ -356,6 +396,8 @@ const createI18n = ({
     t,
     format,
     getSkillName,
+    getClassName,
+    setClassTooltip,
     getNpcName,
     getNpcLevel,
     loadAbnormalNames,

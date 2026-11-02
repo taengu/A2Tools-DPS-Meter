@@ -461,6 +461,7 @@ const createMeterUI = ({
         view.nameEl.classList.toggle("onBright", bright);
       }
 
+      window.i18n?.setClassTooltip?.(view.classIconImg, row.job);
       if (row.job && row.job !== "Unknown") {
         if (!classIconSrcByJob.has(row.job)) {
           classIconSrcByJob.set(row.job, `./assets/${row.job}.png`);
