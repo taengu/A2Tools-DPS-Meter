@@ -5,6 +5,9 @@
 //! kill. When it names someone else and you hit the player a moment before,
 //! that is an assist. Your own deaths come from the death recap.
 //!
+//! The Abyss comes with them: the Abyss Points you gain (`points`, with the
+//! `amount`) and entering or leaving the Abyss (`zone`, with `abyss`).
+//!
 //! Only the kind and the time leave this module: no names, no one else's
 //! data. Plugins get them with the `events:kda` permission.
 
@@ -20,6 +23,12 @@ const SAME_DEATH_MS: i64 = 10_000;
 const MAX_EVENTS: usize = 50;
 /// Targets' last hits kept.
 const MAX_TARGETS: usize = 512;
+/// The most Abyss Points one update can be told as earned. A bigger jump is
+/// another character's total at a login, not a gain.
+const MAX_GAIN: u64 = 20_000;
+/// The maps of the Abyss: the first layer (seen in a 2026-11-02 capture) and
+/// the second (from the artifact ids, not seen loaded).
+const ABYSS_MAPS: [i32; 2] = [20, 22];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -27,6 +36,8 @@ pub enum Kind {
     Kill,
     Assist,
     Death,
+    Points,
+    Zone,
 }
 
 /// One kill, assist or death, as plugins get it.
@@ -35,6 +46,12 @@ pub struct KdaEvent {
     /// When (unix ms).
     pub at: i64,
     pub kind: Kind,
+    /// Abyss Points gained (`Points`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount: Option<u64>,
+    /// Whether the map is the Abyss (`Zone`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub abyss: Option<bool>,
 }
 
 #[derive(Default)]
@@ -45,6 +62,10 @@ pub struct Kda {
     told: HashMap<i32, i64>,
     events: VecDeque<KdaEvent>,
     seq: u64,
+    /// The Abyss Points total as last sent.
+    points: Option<u64>,
+    /// Whether the last map loaded was the Abyss.
+    in_abyss: Option<bool>,
 }
 
 impl Kda {
@@ -91,8 +112,31 @@ impl Kda {
         self.push(at, Kind::Death);
     }
 
+    /// The Abyss Points total the game just sent. The first is only noted;
+    /// a rise after it is told as earned.
+    pub fn abyss_points(&mut self, total: u64, at: i64) {
+        let before = self.points.replace(total);
+        if let Some(before) = before.filter(|b| total > *b && total - b <= MAX_GAIN) {
+            self.push_event(KdaEvent { at, kind: Kind::Points, amount: Some(total - before), abyss: None });
+        }
+    }
+
+    /// A map loaded: told when it is the Abyss and the last was not, or the
+    /// other way round.
+    pub fn map_loaded(&mut self, map_id: i32, at: i64) {
+        let abyss = ABYSS_MAPS.contains(&map_id);
+        let before = self.in_abyss.replace(abyss);
+        if before != Some(abyss) && (abyss || before.is_some()) {
+            self.push_event(KdaEvent { at, kind: Kind::Zone, amount: None, abyss: Some(abyss) });
+        }
+    }
+
     fn push(&mut self, at: i64, kind: Kind) {
-        self.events.push_back(KdaEvent { at, kind });
+        self.push_event(KdaEvent { at, kind, amount: None, abyss: None });
+    }
+
+    fn push_event(&mut self, event: KdaEvent) {
+        self.events.push_back(event);
         while self.events.len() > MAX_EVENTS {
             self.events.pop_front();
         }
@@ -120,7 +164,7 @@ mod tests {
         assert_eq!(kda.player_died(7, true, 1_000), Some(Kind::Kill));
         let (seq, events) = kda.since(0).unwrap();
         assert_eq!(seq, 1);
-        assert_eq!(events, vec![KdaEvent { at: 1_000, kind: Kind::Kill }]);
+        assert_eq!(events, vec![KdaEvent { at: 1_000, kind: Kind::Kill, amount: None, abyss: None }]);
         assert!(kda.since(seq).is_none());
     }
 
@@ -164,6 +208,49 @@ mod tests {
         kda.died(2_000);
         let (seq, events) = kda.since(1).unwrap();
         assert_eq!(seq, 2);
-        assert_eq!(events, vec![KdaEvent { at: 2_000, kind: Kind::Death }]);
+        assert_eq!(events, vec![KdaEvent { at: 2_000, kind: Kind::Death, amount: None, abyss: None }]);
+    }
+
+    #[test]
+    fn a_rise_in_the_abyss_points_is_told_as_earned() {
+        let mut kda = Kda::default();
+        // The first total, at a login, is only noted; the same again is nothing.
+        kda.abyss_points(132_456, 1_000);
+        kda.abyss_points(132_456, 2_000);
+        assert!(kda.since(0).is_none());
+        kda.abyss_points(133_369, 3_000);
+        let (_, events) = kda.since(0).unwrap();
+        assert_eq!(events, vec![KdaEvent { at: 3_000, kind: Kind::Points, amount: Some(913), abyss: None }]);
+    }
+
+    #[test]
+    fn a_lower_or_far_higher_total_is_not_a_gain() {
+        let mut kda = Kda::default();
+        kda.abyss_points(500, 1_000);
+        kda.abyss_points(100, 2_000);
+        kda.abyss_points(100 + MAX_GAIN + 1, 3_000);
+        assert!(kda.since(0).is_none());
+        kda.abyss_points(100 + MAX_GAIN + 11, 4_000);
+        assert_eq!(kda.since(0).unwrap().1[0].amount, Some(10));
+    }
+
+    #[test]
+    fn entering_and_leaving_the_abyss_is_told_once() {
+        let mut kda = Kda::default();
+        kda.map_loaded(1010, 1_000);
+        assert!(kda.since(0).is_none());
+        kda.map_loaded(20, 2_000);
+        kda.map_loaded(22, 3_000);
+        kda.map_loaded(1010, 4_000);
+        let (_, events) = kda.since(0).unwrap();
+        let told: Vec<_> = events.iter().map(|e| (e.at, e.abyss)).collect();
+        assert_eq!(told, vec![(2_000, Some(true)), (4_000, Some(false))]);
+    }
+
+    #[test]
+    fn a_meter_started_in_the_abyss_hears_it_at_the_first_load() {
+        let mut kda = Kda::default();
+        kda.map_loaded(20, 1_000);
+        assert_eq!(kda.since(0).unwrap().1[0].abyss, Some(true));
     }
 }

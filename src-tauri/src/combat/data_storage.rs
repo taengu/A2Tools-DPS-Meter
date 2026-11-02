@@ -1772,6 +1772,11 @@ impl DataStorage {
         inner.login_abyss_points = Some((points, limit, at));
     }
 
+    /// The Abyss Points total the game just sent, for the K/D/A feed.
+    pub fn note_abyss_points_total(&self, total: u64, at: i64) {
+        self.kda.lock().abyss_points(total, at);
+    }
+
     /// The week's Abyss Points and limit at `now` (unix ms): 0 points once a
     /// weekly reset has passed since seen.
     pub fn abyss_points_at(&self, now: i64) -> Option<(u64, u64)> {
@@ -2551,6 +2556,7 @@ impl DataStorage {
         // an entity that is gone.
         inner.loot_identity.scope_counts.clear();
         let from = inner.current_map_id.replace(map_id);
+        self.kda.lock().map_loaded(map_id, crate::clock::now_ms());
         inner.zone_generation += 1;
         if !(from.is_some_and(is_open_world_map) && is_open_world_map(map_id)) {
             inner.instance_generation += 1;

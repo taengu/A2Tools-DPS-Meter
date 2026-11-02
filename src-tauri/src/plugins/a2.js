@@ -58,7 +58,10 @@
 //   a2.on("kda", ({ kind }) => ...)           you killed a player ("kill"), helped kill one ("assist") or
 //                                              a player killed you ("death"), once each, kept like a
 //                                              decoder's events; the event's `at` (unix ms) says when
-//                                              (permission "events:kda"). No names.
+//                                              (permission "events:kda"). No names. Also
+//                                              "points" with `amount`: Abyss Points just gained, and
+//                                              "zone" with `abyss` true/false: the Abyss entered or
+//                                              left (the first map load of a meter started there too).
 //   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
 //                                              (meter 2.0.65 on)
 //   a2.on("ping", ({ ms }) => ...)             the ping to the game server in ms (null while not known),
