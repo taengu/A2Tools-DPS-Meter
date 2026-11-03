@@ -133,9 +133,9 @@ fn all_listed(ids: &[String], list: &[String]) -> bool {
 /// settings or start an update (security audit H2, 2026-10-26). Add a command
 /// here when a plugin page starts using it.
 const PLUGIN_SURFACE_COMMANDS: &[&str] = &[
-    "dock_close", "dock_fold", "dock_hello", "meter_shown", "open_settings_at", "open_settings_window",
+    "dock_close", "dock_fold", "dock_hello", "dock_select", "meter_shown", "open_settings_at", "open_settings_window",
     "open_url", "plugin_abyss_siege", "plugin_boss_follow", "plugin_boss_timers", "plugin_close",
-    "plugin_fps_admin", "plugin_fps_watch", "plugin_hello", "plugin_open", "plugin_screenshot", "plugin_set_docked", "plugin_storage_get",
+    "plugin_fps_admin", "plugin_fps_watch", "plugin_hello", "plugin_screenshot", "plugin_set_docked", "plugin_storage_get",
     "plugin_storage_set", "plugin_widget_area", "plugin_widget_close", "plugin_widget_drag",
     "plugin_widget_hello", "plugin_widget_open", "plugin_widget_place", "plugin_widget_post",
     "plugin_widget_send", "plugin_widget_where", "plugin_widgets_lock", "plugin_widgets_locked",
@@ -147,7 +147,7 @@ const PLUGIN_SURFACE_COMMANDS: &[&str] = &[
 /// `PLUGIN_SURFACE_COMMANDS`.
 pub fn allowed_from(label: &str, command: &str) -> bool {
     let plugin_surface = is_plugin_window(label) || widgets::parse_label(label).is_some();
-    if plugin_surface && command == "plugin_open" {
+    if command == "dock_select" {
         return label == dock::LABEL;
     }
     !plugin_surface || PLUGIN_SURFACE_COMMANDS.contains(&command)
@@ -1932,17 +1932,14 @@ fn open_window(app: &tauri::AppHandle, id: &str, visible: bool) -> Result<(), St
 /// Open a plugin's window.
 /// Async: on Windows, building a window from a synchronous command deadlocks.
 #[tauri::command]
-pub async fn plugin_open(app: tauri::AppHandle, window: tauri::WebviewWindow, id: String) -> Result<(), String> {
-    if window.label() == dock::LABEL {
-        window_plugin(&window, Some(&id))?;
-    }
+pub async fn plugin_open(app: tauri::AppHandle, id: String) -> Result<(), String> {
     if disabled(&app).contains(&id) {
         return Err("that plugin is turned off".into());
     }
+    if dock::docks(&app, &id) { dock::set_configuration_open(true); }
     reopened(&app, &id);
     remember_window(&app, &id, Some("shown"));
     if dock::docks(&app, &id) {
-        dock::set_configuration_open(true);
         dock::sync(&app, Some(&id));
         return Ok(());
     }
@@ -2707,8 +2704,11 @@ mod tests {
 
     #[test]
     fn only_the_dock_can_reopen_configuration_tabs() {
-        assert!(allowed_from(super::dock::LABEL, "plugin_open"));
-        for label in ["plugin-cooldowns", "pw_cooldowns_icon"] {
+        assert!(allowed_from(super::dock::LABEL, "dock_select"));
+        for label in ["plugin-cooldowns", "pw_cooldowns_icon", "settings"] {
+            assert!(!allowed_from(label, "dock_select"));
+        }
+        for label in [super::dock::LABEL, "plugin-cooldowns", "pw_cooldowns_icon"] {
             assert!(!allowed_from(label, "plugin_open"));
         }
         assert!(allowed_from("settings", "plugin_open"));

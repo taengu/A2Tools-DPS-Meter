@@ -143,8 +143,11 @@
     tab.setAttribute("aria-label", d.name);
     tab.title = `${d.name} ${d.version}`;
     tab.addEventListener("click", () => {
-      invoke("plugin_open", { id: d.id }).then(() => { backTo.clear(); activate(d.id); })
-        .catch((e) => showToast(String(e)));
+      // The click owns selection immediately. The native acknowledgement
+      // only keeps configuration open; it must not select an older tab.
+      backTo.clear();
+      activate(d.id);
+      invoke("dock_select", { id: d.id }).catch((e) => showToast(String(e)));
     });
     tab.addEventListener("dragstart", (e) => {
       dragging = d.id;

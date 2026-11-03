@@ -4512,6 +4512,7 @@ pub fn run() {
             take_settings_section,
             crate::plugins::dock::dock_hello,
             crate::plugins::dock::dock_close,
+            crate::plugins::dock::dock_select,
             crate::plugins::dock::dock_fold,
             crate::plugins::dock::plugin_set_docked,
             crate::plugins::set_plugin_theme,

@@ -22,7 +22,7 @@ function element() {
     addEventListener(k, fn) { this.listeners[k] = fn; },
   };
 }
-function setup(states, saved = {}) {
+function setup(states, saved = {}, customInvoke = null) {
   const docked = new Map(), tabsEl = element(), calls = [], errors = [], listeners = {};
   const prefs = { active: null, layout: "tabs", folded: false, order: [], compact: {}, ...saved };
   let stored;
@@ -45,7 +45,8 @@ function setup(states, saved = {}) {
     showToast: e => errors.push(e),
     invoke: (name, args) => {
       calls.push({ name, args });
-      if (name === "plugin_open") docked.get(args.id).shown = true;
+      if (customInvoke) return customInvoke(name, args);
+      if (name === "dock_select") docked.get(args.id).shown = true;
       return Promise.resolve();
     },
   });
@@ -114,7 +115,7 @@ test("clicking a retained tab records explicit intent without recreating the pan
   const panel = s.docked.get("cooldowns").panel;
   s.docked.get("cooldowns").tab.listeners.click();
   await Promise.resolve();
-  assert.equal(s.calls[0].name, "plugin_open");
+  assert.equal(s.calls[0].name, "dock_select");
   assert.equal(s.calls[0].args.id, "cooldowns");
   assert.equal(s.prefs.active, "cooldowns");
   assert.equal(s.docked.get("cooldowns").panel, panel);
@@ -165,4 +166,54 @@ test("an alert on the manually selected tab stays the baseline for a later alert
   s.event("dock-return", "cooldowns");
   s.event("dock-return", "boss-telegraph");
   assert.equal(s.prefs.active, "cooldowns");
+});
+
+
+test("the latest clicked tab wins even when native acknowledgements finish backwards", async () => {
+  const pending = new Map();
+  const s = setup([["a", false], ["b", false], ["c", false]], {},
+    (_name, args) => new Promise(resolve => pending.set(args.id, resolve)));
+  s.docked.get("b").tab.listeners.click();
+  s.docked.get("c").tab.listeners.click();
+  assert.equal(s.prefs.active, "c", "the click is immediate");
+  pending.get("c")(); await Promise.resolve();
+  pending.get("b")(); await Promise.resolve();
+  assert.equal(s.prefs.active, "c");
+  assert.equal(s.stored().active, "c");
+});
+
+test("a late acknowledgement cannot erase an alert's return to the chosen tab", async () => {
+  let finish;
+  const s = setup([["a", false], ["b", false], ["alert", false]], {},
+    () => new Promise(resolve => { finish = resolve; }));
+  s.docked.get("b").tab.listeners.click();
+  s.event("dock-focus", "alert");
+  finish(); await Promise.resolve();
+  assert.equal(s.prefs.active, "alert");
+  s.event("dock-return", "alert");
+  assert.equal(s.prefs.active, "b");
+});
+
+test("a completed selection cannot restore a plugin removed while waiting", async () => {
+  let finish;
+  const s = setup([["a", false], ["b", false], ["c", false]], {},
+    () => new Promise(resolve => { finish = resolve; }));
+  s.docked.get("b").tab.listeners.click();
+  s.apply([["a", false], ["c", false]]);
+  s.event("dock-focus", "c");
+  finish(); await Promise.resolve();
+  assert.equal(s.prefs.active, "c");
+});
+
+test("an older failed acknowledgement reports its error without changing the latest choice", async () => {
+  const pending = new Map();
+  const s = setup([["a", false], ["b", false], ["c", false]], {},
+    (_name, args) => new Promise((resolve, reject) => pending.set(args.id, { resolve, reject })));
+  s.docked.get("b").tab.listeners.click();
+  s.docked.get("c").tab.listeners.click();
+  pending.get("c").resolve();
+  pending.get("b").reject("plugin removed");
+  await Promise.resolve();
+  assert.equal(s.prefs.active, "c");
+  assert.deepEqual(s.errors, ["plugin removed"]);
 });

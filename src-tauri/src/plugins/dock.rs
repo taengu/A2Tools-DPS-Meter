@@ -35,6 +35,21 @@ pub const PLACE_ID: &str = "_dock";
 /// its own tab, 2026-10-23).
 const CLOSED_WITH_KEY: &str = "dpsMeter.pluginDockClosedWith";
 
+/// The plugin a call from window `label` is for. A plugin's own window is its
+/// plugin's, whatever the call says; the dock's calls name their plugin,
+/// which must be one docked now (`docked`). Anything else is refused.
+pub fn plugin_of_call(label: &str, plugin: Option<&str>, docked: &[String]) -> Result<String, String> {
+    if label == LABEL {
+        let id = plugin.filter(|id| valid_id(id)).ok_or("the dock names no plugin")?;
+        return if docked.iter().any(|d| d == id) { Ok(id.to_string()) } else { Err("that plugin is not in the dock".into()) };
+    }
+    label
+        .strip_prefix("plugin-")
+        .filter(|id| valid_id(id))
+        .map(str::to_string)
+        .ok_or_else(|| "not a plugin window".to_string())
+}
+
 // An explicitly opened configuration dock stays usable after its alerts hide.
 // This is only this run's window state, never a saved plugin preference.
 static CONFIGURATION_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -78,21 +93,6 @@ pub fn sync_focus_hiding(app: &tauri::AppHandle) {
         HELD_FOR_FOCUS.store(false, std::sync::atomic::Ordering::Relaxed);
         sync(app, None);
     }
-}
-
-/// The plugin a call from window `label` is for. A plugin's own window is its
-/// plugin's, whatever the call says; the dock's calls name their plugin,
-/// which must be one docked now (`docked`). Anything else is refused.
-pub fn plugin_of_call(label: &str, plugin: Option<&str>, docked: &[String]) -> Result<String, String> {
-    if label == LABEL {
-        let id = plugin.filter(|id| valid_id(id)).ok_or("the dock names no plugin")?;
-        return if docked.iter().any(|d| d == id) { Ok(id.to_string()) } else { Err("that plugin is not in the dock".into()) };
-    }
-    label
-        .strip_prefix("plugin-")
-        .filter(|id| valid_id(id))
-        .map(str::to_string)
-        .ok_or_else(|| "not a plugin window".to_string())
 }
 
 /// Whether plugin `id` goes in the dock (rather than a window of its own).
@@ -149,10 +149,10 @@ pub fn sync(app: &tauri::AppHandle, focus: Option<&str>) {
     let members = members(app);
     let window = app.get_webview_window(LABEL);
     if members.is_empty() {
-        set_configuration_open(false);
         if let Some(window) = window {
             let _ = window.close();
         }
+        set_configuration_open(false);
         return;
     }
     let shown = shown_members(app);
@@ -337,7 +337,6 @@ pub fn dock_fold(window: tauri::WebviewWindow, height: Option<f64>) -> Result<()
 /// keep running, as with a plugin window's ×.
 #[tauri::command]
 pub fn dock_close(app: tauri::AppHandle) {
-    set_configuration_open(false);
     let open = shown_members(&app);
     if let Some(state) = app.try_state::<AppState>() {
         state.settings.set(CLOSED_WITH_KEY, &serde_json::to_string(&open).unwrap_or_default());
@@ -345,7 +344,22 @@ pub fn dock_close(app: tauri::AppHandle) {
     for id in members(&app) {
         super::remember_window(&app, &id, Some("hidden"));
     }
+    set_configuration_open(false);
     sync(&app, None);
+}
+
+/// A click inside an existing dock keeps its configuration open. Selection
+/// belongs to the page: never echo dock-focus, build, show or activate here.
+/// Synchronous with dock_close, so a delayed acknowledgement cannot reopen it.
+#[tauri::command]
+pub fn dock_select(app: tauri::AppHandle, window: tauri::WebviewWindow, id: String) -> Result<(), String> {
+    if window.label() != LABEL || !wants_visible(&app) {
+        return Err("the dock is not open".into());
+    }
+    let id = plugin_of_call(window.label(), Some(&id), &members(&app))?;
+    set_configuration_open(true);
+    super::remember_window(&app, &id, Some("shown"));
+    app.emit_to(LABEL, "dock-layout", layout(&app)).map_err(|e| e.to_string())
 }
 
 /// Dock a plugin, or give it a window of its own (Settings → Plugins, and
@@ -363,9 +377,9 @@ pub async fn plugin_set_docked(app: tauri::AppHandle, id: String, docked: bool) 
         own.push(id.clone());
     }
     state.settings.set(OWN_WINDOW_KEY, &serde_json::to_string(&own).unwrap_or_default());
+    if docked { set_configuration_open(true); }
     super::remember_window(&app, &id, Some("shown"));
     if docked {
-        set_configuration_open(true);
         if let Some(window) = app.get_webview_window(&format!("plugin-{id}")) {
             let _ = window.close();
         }
