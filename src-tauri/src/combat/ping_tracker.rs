@@ -10,6 +10,7 @@ const DOTNET_EPOCH_OFFSET_MS: i64 = 62135596800000;
 const MAX_PING_MS: i32 = 9999;
 const MIN_PING_RS_BYTES: usize = 12;
 const MAX_HISTORY: usize = 10_000;
+const RECENT_RESPONSES: usize = 16;
 /// Physical size of the client's ping request frame. Its body is encrypted, but
 /// nothing else the client sends is this size: 12 bytes while the timestamp was
 /// wall-clock, 13 since it became an arbitrary-epoch clock. Once every ten
@@ -48,6 +49,8 @@ pub struct PingTracker {
 struct Inner {
     last_ping: Option<i32>,
     history: Vec<(i64, i32)>,
+    /// Accepted echoed timestamps, so duplicates cannot retrain either clock.
+    responses: VecDeque<i64>,
     /// Capture times of recent ping requests, oldest first.
     requests: VecDeque<i64>,
     /// Local capture clock minus the client's ping clock, once two pings agree
@@ -77,6 +80,7 @@ impl PingTracker {
             inner: Mutex::new(Inner {
                 last_ping: None,
                 history: Vec::new(),
+                responses: VecDeque::new(),
                 requests: VecDeque::new(),
                 clock_offset: None,
                 prev_offsets: Vec::new(),
@@ -134,6 +138,10 @@ impl PingTracker {
             {
                 let client_sent_raw = read_i64_le(data, i + 4);
                 let mut inner = self.inner.lock();
+                if inner.responses.contains(&client_sent_raw) {
+                    i += 12;
+                    continue;
+                }
 
                 // The newer client's timestamp is this machine's performance
                 // counter, which the meter can read too: exact, and no request
@@ -154,7 +162,7 @@ impl PingTracker {
                 } else {
                     self.rtt_from_perf_clock(client_sent_raw, arrival_ms)
                 };
-                let paired_rtt = inner.rtt_from_request(client_sent_raw, arrival_ms);
+                let paired_rtt = inner.rtt_from_request(client_sent_raw, arrival_ms, perf_rtt);
                 // Where both exist they should agree to a few ms. The counter
                 // is only assumed to be the game's clock (not verified on every
                 // OS), so a disagreement means trusting the request instead,
@@ -181,6 +189,10 @@ impl PingTracker {
 
                 if let Some(rtt_ms) = rtt_ms {
                     let rtt_ms = rtt_ms as i32;
+                    inner.responses.push_back(client_sent_raw);
+                    if inner.responses.len() > RECENT_RESPONSES {
+                        inner.responses.pop_front();
+                    }
                     inner.last_ping = Some(rtt_ms);
                     let now = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
@@ -213,9 +225,12 @@ impl PingTracker {
         let mut inner = self.inner.lock();
         inner.last_ping = None;
         inner.history.clear();
+        inner.responses.clear();
         inner.requests.clear();
         inner.clock_offset = None;
         inner.prev_offsets.clear();
+        inner.perf_misses = 0;
+        inner.perf_distrusted = false;
     }
 }
 
@@ -227,7 +242,7 @@ impl Inner {
     /// agreeing with the known offset (or with the previous ping) is. The real
     /// offset repeats from ping to ping, so it is stored once two consecutive
     /// pings agree on it, for responses whose request goes unseen.
-    fn rtt_from_request(&mut self, client_sent: i64, arrival_ms: i64) -> Option<i64> {
+    fn rtt_from_request(&mut self, client_sent: i64, arrival_ms: i64, perf_rtt: Option<i64>) -> Option<i64> {
         let offsets: Vec<i64> = self
             .requests
             .iter()
@@ -251,6 +266,20 @@ impl Inner {
         };
 
         if let Some(offset) = picked {
+            // A lone captured request may be an old retransmission. Reject it
+            // before changing either clock when the learned offset and live
+            // counter independently agree, but the candidate contradicts both.
+            // After a time sync or on Wine those clocks disagree, so request
+            // timing remains authoritative as before.
+            let paired = arrival_ms.wrapping_sub(client_sent.wrapping_add(offset));
+            if let (Some(perf), Some(known)) = (perf_rtt, self.rtt_from_known_offset(client_sent, arrival_ms)) {
+                if (perf - known).abs() <= PERF_AGREEMENT_MS
+                    && (paired - perf).abs() > PERF_AGREEMENT_MS
+                    && (paired - known).abs() > PERF_AGREEMENT_MS
+                {
+                    return None;
+                }
+            }
             let agrees = self
                 .clock_offset
                 .is_some_and(|known| offset.wrapping_sub(known).wrapping_abs() <= OFFSET_TOLERANCE_MS);
@@ -461,6 +490,135 @@ mod tests {
     /// A machine 1,000 s after boot whose wall clock reads 1_790_000_000_000.
     fn fake_perf_clock() -> (i64, i64) {
         (1_000_000, 1_790_000_000_000)
+    }
+
+    #[test]
+    fn a_stale_request_cannot_override_two_agreeing_clocks() {
+        let t = PingTracker::with_perf_clock(Some(fake_perf_clock));
+        let base = 1_789_999_970_000;
+        for n in 0..2 {
+            t.on_packet(&request(base + n * 10_000), SERVER);
+            t.on_packet(&response(base + n * 10_000 + 60,
+                970_000 + n * 10_000 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        }
+        let known = t.inner.lock().clock_offset;
+        assert!(known.is_some());
+        // An old request is retransmitted at 15s; the actual 20s request was
+        // not captured. The sole candidate would imply 5060ms, but both the
+        // learned offset and the native counter independently imply 60ms.
+        t.on_packet(&request(base + 15_000), SERVER);
+        t.on_packet(&response(base + 20_060, 990_000 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        assert_eq!(t.current_ping_ms(), Some(60));
+        assert_eq!(t.inner.lock().clock_offset, known);
+        assert_eq!(t.inner.lock().perf_misses, 0);
+        assert!(!t.inner.lock().perf_distrusted);
+        t.on_packet(&response(base + 30_070, 1_000_000 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        assert_eq!(t.current_ping_ms(), Some(70));
+    }
+
+    #[test]
+    fn a_repeated_response_cannot_learn_an_offset_or_change_history() {
+        let t = PingTracker::new();
+        let now = 1_790_000_000_000;
+        let clock = 17_552_452_660;
+        t.on_packet(&request(now), SERVER);
+        t.on_packet(&response(now + 60, clock), SERVER);
+        t.on_packet(&response(now + 80, clock), SERVER);
+        assert_eq!(t.current_ping_ms(), Some(60));
+        assert_eq!(t.inner.lock().history.len(), 1);
+        assert_eq!(t.inner.lock().clock_offset, None, "one distinct response cannot establish a clock");
+        t.on_packet(&request(now + 10_000), SERVER);
+        t.on_packet(&response(now + 10_070, clock + 10_000), SERVER);
+        let known = t.inner.lock().clock_offset;
+        assert!(known.is_some());
+        // A delayed duplicate of an earlier response is ignored too.
+        t.on_packet(&response(now + 10_080, clock), SERVER);
+        assert_eq!(t.current_ping_ms(), Some(70));
+        assert_eq!(t.inner.lock().history.len(), 2);
+        assert_eq!(t.inner.lock().clock_offset, known);
+    }
+
+    #[test]
+    fn counter_distrust_requires_distinct_responses_and_reset_retries_it() {
+        let t = PingTracker::with_perf_clock(Some(fake_perf_clock));
+        let base = 1_789_999_980_000;
+        t.on_packet(&request(base), SERVER);
+        t.on_packet(&response(base + 70, 979_500 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        assert_eq!(t.inner.lock().perf_misses, 1);
+        t.on_packet(&response(base + 90, 979_500 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        assert_eq!(t.inner.lock().perf_misses, 1);
+        assert!(!t.inner.lock().perf_distrusted);
+        assert_eq!(t.current_ping_ms(), Some(70));
+        t.on_packet(&request(base + 10_000), SERVER);
+        t.on_packet(&response(base + 10_070, 989_500 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        assert!(t.inner.lock().perf_distrusted, "a genuinely different Wine clock still falls back");
+        t.reset();
+        assert_eq!(t.inner.lock().perf_misses, 0);
+        assert!(!t.inner.lock().perf_distrusted);
+        // A new session can use the native counter even if capture missed its
+        // request. Reusing an earlier echo also verifies reset clears dedup.
+        t.on_packet(&response(base + 9_560, 989_500 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        assert_eq!(t.current_ping_ms(), Some(60));
+        assert_eq!(t.inner.lock().history.len(), 1);
+    }
+
+    #[test]
+    fn a_counter_clock_sync_still_accepts_the_current_request() {
+        use std::sync::atomic::{AtomicI64, Ordering};
+        static JUMP: AtomicI64 = AtomicI64::new(0);
+        fn clock() -> (i64, i64) {
+            (1_000_000, 1_790_000_000_000 + JUMP.load(Ordering::Relaxed))
+        }
+        let t = PingTracker::with_perf_clock(Some(clock));
+        let base = 1_789_999_970_000;
+        for n in 0..2 {
+            t.on_packet(&request(base + n * 10_000), SERVER);
+            t.on_packet(&response(base + n * 10_000 + 60,
+                970_000 + n * 10_000 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        }
+        let jump = 2_320;
+        JUMP.store(jump, Ordering::Relaxed);
+        t.on_packet(&request(base + 20_000 + jump), SERVER);
+        t.on_packet(&response(base + 20_070 + jump, 990_000 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        assert_eq!(t.current_ping_ms(), Some(70));
+        assert_eq!(t.inner.lock().clock_offset, None, "the old offset is discarded after time sync");
+        assert_eq!(t.inner.lock().perf_misses, 0);
+        t.on_packet(&request(base + 30_000 + jump), SERVER);
+        t.on_packet(&response(base + 30_065 + jump, 1_000_000 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+        assert_eq!(t.current_ping_ms(), Some(65));
+        assert!(t.inner.lock().clock_offset.is_some());
+    }
+
+    #[test]
+    fn genuine_high_latency_is_not_clipped() {
+        let t = PingTracker::with_perf_clock(Some(fake_perf_clock));
+        let base = 1_789_999_970_000;
+        for n in 0..3 {
+            let rtt = if n == 2 { 5_060 } else { 60 };
+            t.on_packet(&request(base + n * 10_000), SERVER);
+            t.on_packet(&response(base + n * 10_000 + rtt,
+                970_000 + n * 10_000 + UNREAL_CLOCK_OFFSET_MS), SERVER);
+            assert_eq!(t.current_ping_ms(), Some(rtt as i32));
+        }
+        assert_eq!(t.inner.lock().perf_misses, 0);
+    }
+
+    #[test]
+    fn duplicate_tracking_is_bounded_and_remembers_only_accepted_responses() {
+        let t = PingTracker::new();
+        let now = 1_790_000_000_000;
+        let first = now + DOTNET_EPOCH_OFFSET_MS;
+        t.on_packet(&response(now, first), SERVER); // invalid zero RTT
+        assert!(t.inner.lock().responses.is_empty());
+        t.on_packet(&response(now + 60, first), SERVER);
+        assert_eq!(t.current_ping_ms(), Some(60));
+        for n in 1..=RECENT_RESPONSES as i64 {
+            t.on_packet(&response(now + n * 10_000 + 60, first + n * 10_000), SERVER);
+        }
+        let inner = t.inner.lock();
+        assert_eq!(inner.responses.len(), RECENT_RESPONSES);
+        assert_eq!(inner.responses.front(), Some(&(first + 10_000)));
+        assert_eq!(inner.history.len(), RECENT_RESPONSES + 1);
     }
 
     #[test]
