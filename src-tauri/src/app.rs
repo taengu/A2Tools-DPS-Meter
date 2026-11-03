@@ -313,7 +313,8 @@ fn auto_hide_now(app: &tauri::AppHandle) {
         return;
     }
     let Some(window) = app.get_webview_window("main") else { return };
-    let front = platform::window_detector::is_aion2_foreground() || window.is_focused().unwrap_or(false);
+    let front = platform::window_detector::is_aion2_foreground() || window.is_focused().unwrap_or(false)
+        || crate::plugins::configuration_focused(app);
     let hidden = !window.is_visible().unwrap_or(true)
         || window.is_minimized().unwrap_or(false)
         || platform::window::is_hidden_in_place(&window);
@@ -4226,7 +4227,8 @@ pub fn run() {
                                 } else if wanted
                                     && !(on("dpsMeter.autoHideMeter")
                                         && !platform::window_detector::is_aion2_foreground()
-                                        && !window.is_focused().unwrap_or(false))
+                                        && !window.is_focused().unwrap_or(false)
+                                        && !crate::plugins::configuration_focused(&handle))
                                 {
                                     // Hidden by the player meanwhile, it stays
                                     // so; with another program in front and
@@ -4257,7 +4259,8 @@ pub fn run() {
                         if auto_hide {
                             if let Some(window) = handle.get_webview_window("main") {
                                 let aion_fg = platform::window_detector::is_aion2_foreground();
-                                let is_self_fg = window.is_focused().unwrap_or(false);
+                                let is_self_fg = window.is_focused().unwrap_or(false)
+                                    || crate::plugins::configuration_focused(&handle);
                                 let is_visible = window.is_visible().unwrap_or(true);
                                 let is_minimized = window.is_minimized().unwrap_or(false);
                                 if tick_count % 4 == 0 {

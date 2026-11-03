@@ -296,6 +296,18 @@ fn input_region(window: &tauri::WebviewWindow, ignore: bool, keep: Option<Keep>)
     .is_some()
 }
 
+/// Reject a delayed Open when the desktop reports another app in front.
+/// Unknown focus tracking keeps the compositor's existing decision.
+pub fn user_focus_unchanged(_before: Option<isize>) -> bool {
+    front_is_ours_or_game()
+}
+
+/// A recent explicit configuration Open asks the compositor for focus.
+/// There is no portable foreground handle here; its focus policy decides.
+pub fn activate_from_user(window: &tauri::WebviewWindow, _before: Option<isize>) {
+    let _ = window.set_focus();
+}
+
 pub fn start_drag(window: &tauri::WebviewWindow) {
     let _ = window.start_dragging();
 }

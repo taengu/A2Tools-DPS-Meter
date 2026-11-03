@@ -52,6 +52,25 @@ pub fn bring_forward(window: &tauri::WebviewWindow) {
     }
 }
 
+/// Do not finish a delayed Open over an application the user switched to.
+pub fn user_focus_unchanged(before: Option<isize>) -> bool {
+    before.is_some() && before == front_window()
+}
+
+/// An explicit configuration Open may take focus if the same window is
+/// still in front. Do not use tao's set_focus here: its failed foreground
+/// request falls back to synthesizing Alt, which can reach the game.
+pub fn activate_from_user(window: &tauri::WebviewWindow, before: Option<isize>) {
+    let Some(hwnd) = hwnd_of(window) else { return };
+    unsafe {
+        if user_focus_unchanged(before) && IsWindowVisible(hwnd).as_bool()
+            && !IsIconic(hwnd).as_bool()
+        {
+            let _ = SetForegroundWindow(hwnd);
+        }
+    }
+}
+
 /// Bring the overlay back on top without taking focus from the game.
 pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     let Some(hwnd) = hwnd_of(window) else { return };

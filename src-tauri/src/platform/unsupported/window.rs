@@ -6,6 +6,17 @@ pub fn cursor_position() -> Option<(i32, i32)> {
     None
 }
 
+/// No foreground tracking here; focus requests remain the OS's decision.
+pub fn user_focus_unchanged(_before: Option<isize>) -> bool {
+    true
+}
+
+/// A recent explicit configuration Open asks the compositor for focus.
+/// There is no portable foreground handle here; its focus policy decides.
+pub fn activate_from_user(window: &tauri::WebviewWindow, _before: Option<isize>) {
+    let _ = window.set_focus();
+}
+
 pub fn start_drag(window: &tauri::WebviewWindow) {
     let _ = window.start_dragging();
 }
