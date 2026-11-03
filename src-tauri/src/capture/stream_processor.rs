@@ -1758,6 +1758,7 @@ impl StreamProcessor {
             if !(1..=299_999_999).contains(&exact_skill_code) {
                 break;
             }
+            exact_skill_code = i64::from(hit_skill_id(exact_skill_code as i32));
 
             // A 7-digit skill is an NPC's: a monster hitting a player. Its
             // damage is what the player took (DataStorage::append_damage); it
@@ -2166,7 +2167,7 @@ impl StreamProcessor {
             if self.is_known_skill_code(candidate) {
                 return Some(PendingCompactSkillContext {
                     actor_id: actor_info.value,
-                    skill_raw: self.normalize_skill_id(candidate),
+                    skill_raw: self.normalize_skill_id(hit_skill_id(candidate)),
                 });
             }
         }
@@ -2203,6 +2204,53 @@ impl StreamProcessor {
 }
 
 // ===== FREE FUNCTIONS =====
+
+/// Hit records filed under one skill's id that another skill dealt. A
+/// Cleric's Judgment Thunder at level 16 has the Specialty "Activates Divine
+/// Punishment 1 extra time": that extra Divine Punishment comes as a
+/// Judgment Thunder record ending in 7 (17040257 with Specialties 2 and 5),
+/// about 50 ms after the first Divine Punishment (17050250), while
+/// Judgment Thunder's own hits end in 0 (17040250). On a Training Scarecrow
+/// the game's Combat Analysis shows 33 Judgment Thunder hits for 214,718 and
+/// 66 Divine Punishment hits for 474,534; the records carry 66 under
+/// 1704xxxx (33 ending in 0, 33 in 7) and 33 under 1705xxxx for 237,200, and
+/// 237,200 + the 7s = 474,534. At level 15 there are no 7s and the two
+/// match the game as they are (#175).
+const EXTRA_HITS: [ExtraHit; 1] = [ExtraHit {
+    family: JUDGMENT_THUNDER,
+    last_digit: 7,
+    dealt_by: DIVINE_PUNISHMENT,
+}];
+
+const JUDGMENT_THUNDER: i32 = 17_040_000;
+const DIVINE_PUNISHMENT: i32 = 17_050_000;
+
+/// A record of `family` ending in `last_digit` is a hit of `dealt_by`.
+struct ExtraHit {
+    family: i32,
+    last_digit: i32,
+    dealt_by: i32,
+}
+
+/// A skill id in a hit record is the skill's family (17040000, Judgment
+/// Thunder) plus four digits: the Specialties picked, then one digit for
+/// which of the skill's records it is (17040250: Specialties 2 and 5, the
+/// skill's own hit). `SKILL_FAMILY` steps from one family to the next,
+/// `RECORD_DIGIT` is the last digit's place.
+const SKILL_FAMILY: i32 = 10_000;
+const RECORD_DIGIT: i32 = 10;
+
+/// A hit record's skill id as the skill that dealt it: the record's own,
+/// except for an `EXTRA_HITS` record, which takes its skill's family with
+/// the record's Specialty digits (17040257 is 17050250).
+fn hit_skill_id(raw: i32) -> i32 {
+    let family = raw - raw % SKILL_FAMILY;
+    let last_digit = raw % RECORD_DIGIT;
+    EXTRA_HITS
+        .iter()
+        .find(|extra| extra.family == family && extra.last_digit == last_digit)
+        .map_or(raw, |extra| extra.dealt_by + raw % SKILL_FAMILY - last_digit)
+}
 
 /// The skill code a hit record's code is shown under: its family's
 /// (12090243, Punishment, is 12090000) unless the table names it apart.
@@ -4911,6 +4959,21 @@ mod tests {
         let mut p = StreamProcessor::new(storage.clone(), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()));
         p.set_override_timestamp(Some(1_000));
         (storage, p)
+    }
+
+    /// Judgment Thunder's extra Divine Punishment (a record ending in 7)
+    /// goes to Divine Punishment, Specialty digits kept; Judgment Thunder's
+    /// own hits, Divine Punishment's and every other skill keep their ids
+    /// (#175).
+    #[test]
+    fn judgment_thunders_extra_divine_punishment_is_divine_punishment() {
+        assert_eq!(hit_skill_id(17_040_257), 17_050_250);
+        assert_eq!(hit_skill_id(17_040_007), 17_050_000);
+        assert_eq!(hit_skill_id(17_040_250), 17_040_250, "Judgment Thunder");
+        assert_eq!(hit_skill_id(17_050_250), 17_050_250, "Divine Punishment");
+        assert_eq!(hit_skill_id(17_350_247), 17_350_247, "Condemnation");
+        assert_eq!(hit_skill_id(12_090_243), 12_090_243, "Punishment");
+        assert_eq!(hit_skill_id(30_000_007), 30_000_007);
     }
 
     fn skill_of(storage: &DataStorage, target: i32, actor: i32, skill: i32) -> SkillCombatData {
