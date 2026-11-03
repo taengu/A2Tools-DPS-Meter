@@ -258,7 +258,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
       sortEl.replaceChildren(...[
         ["newest", t("history.sortNewest", "Newest")],
         ["fastest", t("history.sortFastest", "Fastest kill")],
-        ["partyDps", t("history.sortPartyDps", "Party DPS")],
+        ["partyDps", t("history.sortTotalDps", "Total DPS")],
         ["myDps", t("history.sortMyDps", "Your DPS")],
       ].map(([v, label]) => option(v, label, v === sortBy)));
     }
@@ -559,7 +559,11 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
         el.append(`${label} `, b);
         return el;
       };
-      metaEl.appendChild(stat("historyRowParty", t("history.party", "Party"), partyDps(fight)));
+      // All damage on the target the meter saw: the party's in a dungeon,
+      // anyone's around in the open world, where a solo fight read as
+      // "Party" (#157).
+      const total = Number(fight.dungeonId) > 0 ? t("history.party", "Party") : t("history.allPlayers", "All players");
+      metaEl.appendChild(stat("historyRowParty", total, partyDps(fight)));
       if (Number(fight.myDamage) > 0 && youIn(fight)) {
         const mine = stat("historyRowMine", t("history.you", "You"), myDps(fight));
         const share = Number(fight.totalDamage) > 0 ? Math.round(Number(fight.myDamage) * 100 / Number(fight.totalDamage)) : 0;
