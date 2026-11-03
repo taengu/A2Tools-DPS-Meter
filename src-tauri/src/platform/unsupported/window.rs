@@ -26,6 +26,12 @@ pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     let _ = window.set_always_on_top(true);
 }
 
+/// Turn a window's always-on-top on or off (the Windows one keeps a hidden
+/// window hidden; here the plain call does).
+pub fn set_on_top_without_showing(window: &tauri::WebviewWindow, on_top: bool) {
+    let _ = window.set_always_on_top(on_top);
+}
+
 /// A tool window behind others, brought in front (see the Windows one).
 pub fn bring_forward(window: &tauri::WebviewWindow) {
     let _ = window.unminimize();

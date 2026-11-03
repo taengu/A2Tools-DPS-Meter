@@ -87,6 +87,20 @@ pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     }
 }
 
+/// Turn a window's always-on-top on or off without showing it: tao's
+/// `set_always_on_top` puts back the visible style it remembers, so a dock
+/// hidden natively came back on the next switch (talyaseen, #166).
+pub fn set_on_top_without_showing(window: &tauri::WebviewWindow, on_top: bool) {
+    let Some(hwnd) = hwnd_of(window) else { return };
+    unsafe {
+        let _ = SetWindowPos(
+            hwnd, Some(if on_top { HWND_TOPMOST } else { HWND_NOTOPMOST }),
+            0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
+    }
+}
+
 /// Hide a window that `show_on_top_without_focus` shows, the same way: Tauri's
 /// own show and hide go through tao, which keeps a visible flag of its own.
 /// A raw show leaves that flag "hidden", so a tao hide after it changed

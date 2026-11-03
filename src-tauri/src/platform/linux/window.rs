@@ -312,6 +312,12 @@ pub fn start_drag(window: &tauri::WebviewWindow) {
     let _ = window.start_dragging();
 }
 
+/// Turn a window's always-on-top on or off (the Windows one keeps a hidden
+/// window hidden; here the plain call does).
+pub fn set_on_top_without_showing(window: &tauri::WebviewWindow, on_top: bool) {
+    let _ = window.set_always_on_top(on_top);
+}
+
 /// A tool window behind others, brought in front (see the Windows one). The
 /// compositor decides whether it takes focus.
 pub fn bring_forward(window: &tauri::WebviewWindow) {
