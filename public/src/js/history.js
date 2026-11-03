@@ -300,7 +300,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
     }
   };
 
-  // Damage per second over the fight: all recorded damage, and yours.
+  // Damage per second over the fight: the party's, and yours.
   const partyDps = (f) => (Number(f.durationMs) > 0 ? (Number(f.totalDamage) || 0) * 1000 / Number(f.durationMs) : 0);
   const myDps = (f) => (Number(f.durationMs) > 0 ? (Number(f.myDamage) || 0) * 1000 / Number(f.durationMs) : 0);
   // What the search matches: the boss and its dungeon, in the shown language.

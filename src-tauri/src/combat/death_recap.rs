@@ -17,8 +17,11 @@ use serde::Serialize;
 
 use crate::entity::job_class::JobClass;
 
-/// Players' profiles kept, the oldest dropped first.
-const MAX_PROFILES: usize = 256;
+/// Players' profiles kept, the one seen longest ago dropped first. 256 lasted
+/// seconds in a big fight: 1,625 players in the two minutes before one death,
+/// and the killer's was gone by then (report 28KXWE, 2026-11-01). Each is a
+/// few dozen bytes.
+const MAX_PROFILES: usize = 4096;
 /// Hits on you older than this are dropped.
 const HIT_WINDOW_MS: i64 = 60_000;
 /// A gap longer than this between two of the killer's hits starts the fight
@@ -241,13 +244,32 @@ pub struct DeathRecaps {
 }
 
 impl DeathRecaps {
+    /// A player's record read: what it gives replaces what was known, and
+    /// what it doesn't give is kept. A record is read more than once, still
+    /// packed as well as decoded, and the packed read gives nothing: it came
+    /// last and wiped the killer's class, gear score and combat power (Ess,
+    /// report 28KXWE, 2026-11-01).
     pub fn note_profile(&mut self, id: i32, profile: Profile) {
-        if self.profiles.insert(id, profile).is_none() {
-            self.order.push_back(id);
-            while self.order.len() > MAX_PROFILES {
-                if let Some(old) = self.order.pop_front() {
-                    self.profiles.remove(&old);
-                }
+        let profile = match self.profiles.get(&id) {
+            Some(known) => Profile {
+                name: profile.name.or_else(|| known.name.clone()),
+                class: profile.class.or(known.class),
+                level: profile.level.or(known.level),
+                gear_score: profile.gear_score.or(known.gear_score),
+                combat_power: profile.combat_power.or(known.combat_power),
+                legion: profile.legion.or_else(|| known.legion.clone()),
+                server_id: profile.server_id.or(known.server_id),
+            },
+            None => profile,
+        };
+        // Seen again: to the back of the queue, the last to go.
+        if self.profiles.insert(id, profile).is_some() {
+            self.order.retain(|&x| x != id);
+        }
+        self.order.push_back(id);
+        while self.order.len() > MAX_PROFILES {
+            if let Some(old) = self.order.pop_front() {
+                self.profiles.remove(&old);
             }
         }
     }
@@ -355,6 +377,28 @@ mod tests {
 
     fn hex(s: &str) -> Vec<u8> {
         s.split_whitespace().map(|b| u8::from_str_radix(b, 16).unwrap()).collect()
+    }
+
+    /// A later read that gives nothing keeps what was known, and a player
+    /// seen again is the last to be dropped, however many others came since
+    /// (report 28KXWE: the killer's profile was gone in a big fight).
+    #[test]
+    fn a_profile_outlives_empty_reads_and_a_crowd() {
+        let mut recaps = DeathRecaps::default();
+        let full = Profile { level: Some(45), gear_score: Some(2832), combat_power: Some(160_901), ..Default::default() };
+        recaps.note_profile(656, full.clone());
+        recaps.note_profile(656, Profile { legion: Some("Heartless".into()), ..Default::default() });
+        let kept = &recaps.profiles[&656];
+        assert_eq!((kept.gear_score, kept.combat_power, kept.legion.as_deref()), (Some(2832), Some(160_901), Some("Heartless")));
+        for id in 1..MAX_PROFILES as i32 {
+            recaps.note_profile(10_000 + id, Profile::default());
+        }
+        recaps.note_profile(656, Profile::default());
+        for id in 0..MAX_PROFILES as i32 / 2 {
+            recaps.note_profile(20_000 + id, Profile::default());
+        }
+        assert_eq!(recaps.profiles.get(&656).and_then(|p| p.combat_power), Some(160_901));
+        assert!(recaps.profiles.len() <= MAX_PROFILES);
     }
 
     /// A record's end, past a run of zeros: `<pad> 21 f4 cb 1f <tail>`.
