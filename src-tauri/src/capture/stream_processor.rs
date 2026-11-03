@@ -505,7 +505,7 @@ impl StreamProcessor {
         }
     }
 
-    // ===== KINAH TODAY AND ABYSS POINTS (A5 FF, A6 FF, A9 FF) =====
+    // ===== KINAH TODAY AND ABYSS POINTS (A5 FF, A6 FF, A9 FF, AB FF) =====
 
     /// The Kinah gained today and the week's Abyss Points, for plugins. At a
     /// login or transfer the Abyss Points come just before the list and
@@ -536,6 +536,18 @@ impl StreamProcessor {
             // Abyss Points this week and the week's limit: `<points u64>
             // <limit u64>`.
             Some([0xA9, 0xFF]) if body.len() == 16 => {
+                let points = u64::from_le_bytes(body[..8].try_into().unwrap());
+                let limit = u64::from_le_bytes(body[8..].try_into().unwrap());
+                if (1..=1_000_000_000).contains(&limit) && points <= limit {
+                    let now = self.override_timestamp.unwrap_or_else(crate::clock::now_ms);
+                    self.data_storage.set_abyss_points(points, limit, now);
+                }
+            }
+            // Since the game's 2026-10-29 build the Abyss Points come as `ab`,
+            // not `a9` (its `a9` is two bytes now): the same `<points u64>
+            // <limit u64>`, at a login and with every gain (132456 of
+            // 2500000, then 133369 for the 913 the game said, 2026-11-02).
+            Some([0xAB, 0xFF]) if body.len() == 16 => {
                 let points = u64::from_le_bytes(body[..8].try_into().unwrap());
                 let limit = u64::from_le_bytes(body[8..].try_into().unwrap());
                 if (1..=1_000_000_000).contains(&limit) && points <= limit {
@@ -4670,6 +4682,25 @@ mod tests {
         assert!(storage.craft_counts().is_empty());
         let list = storage.entry_list();
         assert!(list.shop_limits.is_empty() && list.crafts.is_empty());
+    }
+
+    /// The Abyss Points as the game sends them since 2026-10-29: `ab`, at a
+    /// login and with each gain (2026-11-02, Nullception: 132456, then
+    /// 133369 for the 913 the game said).
+    #[test]
+    fn abyss_points_from_the_ab_record() {
+        let (storage, mut p) = processor();
+        let now = 1_793_000_000_000;
+        p.set_override_timestamp(Some(now));
+        storage.set_local_identity_from_game(1030, Some("Main".into()));
+        p.parse_perfect_packet(&hex("13abff6805020000000000a025260000000000"));
+        storage.set_local_identity_from_game(1030, Some("Main".into()));
+        assert_eq!(storage.abyss_points_at(now), Some((132_456, 2_500_000)));
+        // A gain: no self record follows, so it counts after the hold.
+        p.set_override_timestamp(Some(now + 5_000));
+        p.parse_perfect_packet(&hex("13abfff908020000000000a025260000000000"));
+        assert_eq!(storage.abyss_points_at(now + 5_000), Some((132_456, 2_500_000)));
+        assert_eq!(storage.abyss_points_at(now + 8_000), Some((133_369, 2_500_000)));
     }
 
     /// Kinah gained today at a login, then a pickup; the week's Abyss Points
