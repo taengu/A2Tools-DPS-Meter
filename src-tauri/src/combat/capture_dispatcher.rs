@@ -406,15 +406,10 @@ impl CaptureDispatcher {
                 }
             }
 
-            // Feed to ping tracker — also marks connection alive to prevent stale reset
+            // Outbound ping requests are encrypted; retain their wire-shape
+            // recognition. Inbound responses are read only after reassembly.
             if let Some(port) = current_port {
-                let had_ping_before = self.ping_tracker.current_ping_ms();
                 self.ping_tracker.on_packet(&cap, port);
-                let has_ping_now = self.ping_tracker.current_ping_ms();
-                // If a new ping was received, mark the connection as active
-                if has_ping_now != had_ping_before {
-                    self.port_detector.mark_packet_parsed();
-                }
             }
 
             // Only parse server->client (src == locked port)
@@ -505,13 +500,14 @@ impl CaptureDispatcher {
             // back, retransmitted bytes read once, a hole reported. A payload
             // with no sequence number (0: a test's) is read as it comes.
             let pieces = if cap.tcp_seq == 0 {
-                vec![Piece::Bytes(cap.data.clone())]
+                vec![(Piece::Bytes(cap.data.clone()), cap.captured_at_ms)]
             } else {
-                order.push(cap.tcp_seq, &cap.data, cap.captured_at_ms)
+                order.push_timed(cap.tcp_seq, &cap.data, cap.captured_at_ms)
             };
             processor.set_override_timestamp(captured_at);
+            processor.set_ping_observer(current_port.map(|_| self.ping_tracker.clone()));
             let mut parsed = false;
-            for piece in pieces {
+            for (piece, received_at) in pieces {
                 match piece {
                     Piece::Gap { missing } => {
                         warn!(
@@ -539,11 +535,12 @@ impl CaptureDispatcher {
                         // And keep it in memory for a while, so a boss fight can be shared
                         // without packet logging having been on. See `share::ring`.
                         crate::share::ring::record(&ordered);
-                        parsed |= assembler.process_chunk(&ordered.data, processor);
+                        parsed |= assembler.process_chunk_at(&ordered.data, processor, Some(received_at));
                     }
                 }
             }
             processor.set_override_timestamp(None);
+            processor.set_ping_observer(None);
 
             let signature_locked =
                 unlocked && sig_hits.get(&key).map(|(c, _)| *c).unwrap_or(0) >= SIGNATURE_LOCK_THRESHOLD;

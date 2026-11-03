@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::combat::data_storage::{DataStorage, DutyOffer, NoDamageHit};
 use crate::combat::death_recap::{self, Killer};
+use crate::combat::ping_tracker::PingTracker;
 use crate::entity::damage_packet::ParsedDamagePacket;
 use crate::entity::job_class::JobClass;
 use crate::entity::special_damage::{self, SpecialDamage};
@@ -77,6 +78,10 @@ pub struct StreamProcessor {
     pending_compact_skill_context: Option<PendingCompactSkillContext>,
     /// When set, override the timestamp on all created packets (for replay mode).
     override_timestamp: Option<i64>,
+    /// Live observer and raw completion time of the frame being parsed.
+    /// Separate from the combat clock, whose capture offset may be corrected.
+    ping_observer: Option<Arc<PingTracker>>,
+    ping_captured_at: Option<i64>,
 }
 
 /// The `42 36` flag of an entity leaving the world, a spirit unsummoned among
@@ -93,11 +98,19 @@ impl StreamProcessor {
             dot_damage_skill_ids: HashSet::new(), // loaded lazily
             pending_compact_skill_context: None,
             override_timestamp: None,
+            ping_observer: None,
+            ping_captured_at: None,
         }
     }
 
     pub fn set_dot_skill_ids(&mut self, ids: HashSet<i32>) {
         self.dot_damage_skill_ids = ids;
+    }
+
+    /// Set only for an admitted server-to-client read on the locked game port.
+    /// Replays and other parser instances have no observer by default.
+    pub fn set_ping_observer(&mut self, observer: Option<Arc<PingTracker>>) {
+        self.ping_observer = observer;
     }
 
     /// Set an override timestamp for all packets created by this processor.
@@ -118,12 +131,22 @@ impl StreamProcessor {
     /// Parse as many complete packets as possible from the buffer.
     /// Returns the number of bytes consumed.
     pub fn consume_stream(&mut self, buffer: &[u8]) -> usize {
+        self.consume_stream_timed(buffer, |_, _| None)
+    }
+
+    /// The assembler supplies raw capture timing for each complete frame.
+    /// A compressed bundle's inner frames share its completion time.
+    pub fn consume_stream_timed(&mut self, buffer: &[u8], captured_at: impl Fn(usize, usize) -> Option<i64>) -> usize {
         // Framing lives in `capture::framing` so the Evidence Slice builder can
         // split a capture the same way this does. See that module.
         let framing = super::framing::walk(buffer);
         let offset = framing.consumed;
 
         for frame in &framing.frames {
+            self.ping_captured_at = if self.ping_observer.is_some() &&
+                (frame.kind == super::framing::FrameKind::Bundle || frame.payload(buffer).starts_with(&[0x03, 0x36])) {
+                captured_at(frame.start, frame.end)
+            } else { None };
             match frame.kind {
                 super::framing::FrameKind::Bundle => {
                     super::framing::new_read();
@@ -136,6 +159,7 @@ impl StreamProcessor {
                     self.scan_embedded_bundles_for_identity(frame.bytes(buffer));
                 }
             }
+            self.ping_captured_at = None;
         }
 
         // The unconsumed tail (a frame still arriving) is its own region.
@@ -270,6 +294,10 @@ impl StreamProcessor {
     fn parse_perfect_packet(&mut self, packet: &[u8]) -> bool {
         if packet.len() < 3 {
             return false;
+        }
+
+        if let (Some(ping), Some(captured_at)) = (&self.ping_observer, self.ping_captured_at) {
+            ping.on_response_frame(packet, captured_at);
         }
 
         // Plugin decoders (`crate::plugins`); nothing when none is loaded.

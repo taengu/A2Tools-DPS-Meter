@@ -52,13 +52,19 @@ impl TcpOrder {
     /// Take segment `data` starting at sequence number `seq`, captured at
     /// `at_ms`, and give back what can be read now, in order.
     pub fn push(&mut self, seq: u32, data: &[u8], at_ms: i64) -> Vec<Piece> {
+        self.push_timed(seq, data, at_ms).into_iter().map(|(piece, _)| piece).collect()
+    }
+
+    /// As `push`, retaining each segment's capture time when a gap delays it.
+    /// Gap entries carry the time of the read that reported the gap.
+    pub fn push_timed(&mut self, seq: u32, data: &[u8], at_ms: i64) -> Vec<(Piece, i64)> {
         let mut out = Vec::new();
         if data.is_empty() {
             return out;
         }
         let Some(next) = self.next else {
             self.next = Some(seq.wrapping_add(data.len() as u32));
-            out.push(Piece::Bytes(data.to_vec()));
+            out.push((Piece::Bytes(data.to_vec()), at_ms));
             return out;
         };
         let d = distance(next, seq);
@@ -67,16 +73,44 @@ impl TcpOrder {
             self.waiting.clear();
             self.waiting_bytes = 0;
             self.next = Some(seq.wrapping_add(data.len() as u32));
-            out.push(Piece::Gap { missing: 0 });
-            out.push(Piece::Bytes(data.to_vec()));
+            out.push((Piece::Gap { missing: 0 }, at_ms));
+            out.push((Piece::Bytes(data.to_vec()), at_ms));
             return out;
         }
         if d <= 0 {
-            self.take(seq, data, &mut out);
+            // A gap-filling retransmission may include bytes already queued.
+            // Read up to those bytes, then drain their first copy with its
+            // original capture time instead of assigning the later arrival.
+            while let Some(&(first, _, _)) = self.waiting.first() {
+                let prefix = distance(seq, first);
+                if prefix <= 0 || prefix >= data.len() as i64 {
+                    break;
+                }
+                self.take(seq, &data[..prefix as usize], at_ms, &mut out);
+                self.drain(&mut out);
+            }
+            self.take(seq, data, at_ms, &mut out);
             self.drain(&mut out);
-        } else if !self.waiting.iter().any(|(s, b, _)| *s == seq && b.len() >= data.len()) {
-            self.waiting.push((seq, data.to_vec(), at_ms));
-            self.waiting_bytes += data.len();
+        } else {
+            // Keep queued spans disjoint: a later segment can start before
+            // one already received and overlap it. Only its new bytes belong
+            // to the later timestamp, even if both still wait behind a gap.
+            let end = d + data.len() as i64;
+            let mut from = d;
+            let mut uncovered = Vec::new();
+            for (other, bytes, _) in &self.waiting {
+                let start = distance(next, *other);
+                if start >= end { break; }
+                if start > from { uncovered.push((from, start)); }
+                from = from.max(start + bytes.len() as i64);
+                if from >= end { break; }
+            }
+            if from < end { uncovered.push((from, end)); }
+            for (start, end) in uncovered {
+                let bytes = data[(start - d) as usize..(end - d) as usize].to_vec();
+                self.waiting_bytes += bytes.len();
+                self.waiting.push((next.wrapping_add(start as u32), bytes, at_ms));
+            }
             self.waiting.sort_by_key(|(s, _, _)| distance(next, *s));
         }
         // A hole that has waited long enough: its bytes are not coming.
@@ -87,7 +121,7 @@ impl TcpOrder {
             }
             let next = self.next.unwrap_or(first);
             let missing = distance(next, first).max(0) as u32;
-            out.push(Piece::Gap { missing });
+            out.push((Piece::Gap { missing }, at_ms));
             self.next = Some(first);
             self.drain(&mut out);
         }
@@ -95,26 +129,26 @@ impl TcpOrder {
     }
 
     /// The part of `data` (at `seq`) past what the reader has had.
-    fn take(&mut self, seq: u32, data: &[u8], out: &mut Vec<Piece>) {
+    fn take(&mut self, seq: u32, data: &[u8], at_ms: i64, out: &mut Vec<(Piece, i64)>) {
         let next = self.next.expect("set before take");
         let had = (-distance(next, seq)).max(0) as usize;
         if had >= data.len() {
             return; // all of it already read: a retransmission
         }
-        out.push(Piece::Bytes(data[had..].to_vec()));
+        out.push((Piece::Bytes(data[had..].to_vec()), at_ms));
         self.next = Some(seq.wrapping_add(data.len() as u32));
     }
 
     /// Every waiting segment the reader has now reached.
-    fn drain(&mut self, out: &mut Vec<Piece>) {
+    fn drain(&mut self, out: &mut Vec<(Piece, i64)>) {
         while let Some(&(seq, _, _)) = self.waiting.first() {
             let next = self.next.expect("set before drain");
             if distance(next, seq) > 0 {
                 break;
             }
-            let (seq, data, _) = self.waiting.remove(0);
+            let (seq, data, at_ms) = self.waiting.remove(0);
             self.waiting_bytes -= data.len();
-            self.take(seq, &data, out);
+            self.take(seq, &data, at_ms, out);
         }
     }
 }
@@ -153,6 +187,41 @@ mod tests {
         assert!(o.push(1002, b"cd", 3).is_empty(), "a piece of it");
         // Cut elsewhere, running on past what was had.
         assert_eq!(bytes(&o.push(1004, b"efgh", 4)), b"gh");
+    }
+
+    #[test]
+    fn a_gap_filler_keeps_the_first_copies_of_overlapping_queued_spans() {
+        let mut o = TcpOrder::default();
+        o.push_timed(1000, b"ab", 1);
+        assert!(o.push_timed(1004, b"efg", 2).is_empty());
+        assert!(o.push_timed(1008, b"ij", 3).is_empty());
+        assert_eq!(o.push_timed(1002, b"cdefghijkl", 4), vec![
+            (Piece::Bytes(b"cd".to_vec()), 4),
+            (Piece::Bytes(b"efg".to_vec()), 2),
+            (Piece::Bytes(b"h".to_vec()), 4),
+            (Piece::Bytes(b"ij".to_vec()), 3),
+            (Piece::Bytes(b"kl".to_vec()), 4),
+        ]);
+        assert!(o.push_timed(1002, b"cdefghijkl", 5).is_empty());
+    }
+
+    #[test]
+    fn overlapping_waiting_segments_store_only_new_bytes_and_keep_first_times() {
+        let mut o = TcpOrder::default();
+        o.push_timed(1000, b"ab", 1);
+        assert!(o.push_timed(1006, b"gh", 2).is_empty());
+        assert!(o.push_timed(1010, b"kl", 3).is_empty());
+        assert!(o.push_timed(1004, b"efghijklmn", 4).is_empty());
+        assert_eq!(o.waiting_bytes, 10);
+        assert_eq!(o.push_timed(1002, b"cd", 5), vec![
+            (Piece::Bytes(b"cd".to_vec()), 5),
+            (Piece::Bytes(b"ef".to_vec()), 4),
+            (Piece::Bytes(b"gh".to_vec()), 2),
+            (Piece::Bytes(b"ij".to_vec()), 4),
+            (Piece::Bytes(b"kl".to_vec()), 3),
+            (Piece::Bytes(b"mn".to_vec()), 4),
+        ]);
+        assert_eq!(o.waiting_bytes, 0);
     }
 
     #[test]
