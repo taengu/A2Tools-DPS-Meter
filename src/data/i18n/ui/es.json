@@ -972,6 +972,7 @@
     "ttk": "Tiempo estimado para matar",
     "partyTotal": "Total del grupo",
     "odyle": "Energía de Odyle",
-    "ping": "Ping"
+    "ping": "Ping",
+    "jitter": "Fluctuación: {ms} ms"
   }
 }

@@ -972,6 +972,7 @@
     "ttk": "撃破時間の予測",
     "partyTotal": "パーティ合計",
     "odyle": "オードエネルギー",
-    "ping": "ping"
+    "ping": "ping",
+    "jitter": "ジッター: {ms} ms"
   }
 }

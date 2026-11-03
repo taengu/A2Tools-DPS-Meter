@@ -11,6 +11,8 @@ const MAX_PING_MS: i32 = 9999;
 const MIN_PING_RS_BYTES: usize = 12;
 const MAX_HISTORY: usize = 10_000;
 const RECENT_RESPONSES: usize = 16;
+/// The readings jitter is worked out over.
+const JITTER_SAMPLES: usize = 10;
 /// Physical size of the client's ping request frame. Its body is encrypted, but
 /// nothing else the client sends is this size: 12 bytes while the timestamp was
 /// wall-clock, 13 since it became an arbitrary-epoch clock. Once every ten
@@ -214,6 +216,19 @@ impl PingTracker {
         self.inner.lock().last_ping
     }
 
+    /// How much the ping moves from one reading to the next: the mean
+    /// difference between the last JITTER_SAMPLES readings, in ms (#164,
+    /// after talyaseen's). None until there are three.
+    pub fn current_jitter_ms(&self) -> Option<f64> {
+        let inner = self.inner.lock();
+        let recent: Vec<i32> = inner.history.iter().rev().take(JITTER_SAMPLES).map(|&(_, ms)| ms).collect();
+        if recent.len() < 3 {
+            return None;
+        }
+        let total: i64 = recent.windows(2).map(|w| (i64::from(w[0]) - i64::from(w[1])).abs()).sum();
+        Some(total as f64 / (recent.len() - 1) as f64)
+    }
+
     pub fn get_ping_history(&self, start_ms: i64, end_ms: i64) -> Vec<(i64, i32)> {
         self.inner.lock().history.iter()
             .filter(|(ts, _)| *ts >= start_ms && *ts <= end_ms)
@@ -350,6 +365,20 @@ fn read_i64_le(data: &[u8], offset: usize) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jitter_is_the_mean_change_between_the_last_readings() {
+        let t = PingTracker::new();
+        assert_eq!(t.current_jitter_ms(), None);
+        t.inner.lock().history.extend([(1, 40), (2, 44)]);
+        assert_eq!(t.current_jitter_ms(), None, "not from two");
+        t.inner.lock().history.extend([(3, 40), (4, 50)]);
+        // 4, 4, 10 over three steps.
+        assert_eq!(t.current_jitter_ms(), Some(6.0));
+        // Only the last ten count.
+        t.inner.lock().history.extend((5..20).map(|i| (i, 30)));
+        assert_eq!(t.current_jitter_ms(), Some(0.0));
+    }
 
     const SERVER: u16 = 13328;
     const CLIENT: u16 = 50000;

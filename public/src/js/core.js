@@ -6931,6 +6931,15 @@ class DpsApp {
     this.safeSetStorage(this.storageKeys.odyleLast, JSON.stringify(saved));
   }
 
+  // How much the ping moves, in its tooltip: the footer has no room for it
+  // (#164).
+  updateJitter(ms) {
+    if (!this.pingEl) return;
+    this.pingEl.title = typeof ms === "number"
+      ? this.i18n?.format?.("footerMenu.jitter", { ms: ms.toFixed(1) }, `Jitter: ${ms.toFixed(1)} ms`) ?? `Jitter: ${ms.toFixed(1)} ms`
+      : "";
+  }
+
   updatePing(pushedMs) {
     if (!this.pingEl) return;
     if (!this.showPing) {

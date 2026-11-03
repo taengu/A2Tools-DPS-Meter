@@ -972,6 +972,7 @@
     "ttk": "예상 처치 시간",
     "partyTotal": "파티 합계",
     "odyle": "오드 에너지",
-    "ping": "핑"
+    "ping": "핑",
+    "jitter": "지터: {ms} ms"
   }
 }

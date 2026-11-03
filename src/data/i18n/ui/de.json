@@ -972,6 +972,7 @@
     "ttk": "Geschätzte Kill-Zeit",
     "partyTotal": "Gruppensumme",
     "odyle": "Odyle-Energie",
-    "ping": "Ping"
+    "ping": "Ping",
+    "jitter": "Jitter: {ms} ms"
   }
 }

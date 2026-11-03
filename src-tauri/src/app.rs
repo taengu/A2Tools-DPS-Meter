@@ -4162,6 +4162,10 @@ pub fn run() {
                             if last_ping != Some(ping as u64) || tick_count % 4 == 0 {
                                 last_ping = Some(ping as u64);
                                 let _ = handle.emit("ping-update", ping);
+                                // For the ping's tooltip.
+                                if let Some(jitter) = state.ping_tracker.current_jitter_ms() {
+                                    let _ = handle.emit("ping-jitter", (jitter * 10.0).round() / 10.0);
+                                }
                             }
                         }
 

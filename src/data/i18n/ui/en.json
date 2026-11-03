@@ -972,6 +972,7 @@
     "ttk": "Time to kill estimate",
     "partyTotal": "Party total",
     "odyle": "Odyle energy",
-    "ping": "Ping"
+    "ping": "Ping",
+    "jitter": "Jitter: {ms} ms"
   }
 }
