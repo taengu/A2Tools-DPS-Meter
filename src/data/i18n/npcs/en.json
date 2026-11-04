@@ -8847,6 +8847,102 @@
     "name": "Ordeal of Love",
     "isBoss": false
   },
+  "2300277": {
+    "name": "Ludra Follower Drakan",
+    "isBoss": false
+  },
+  "2300278": {
+    "name": "Ludra Follower Beast",
+    "isBoss": false
+  },
+  "2300279": {
+    "name": "Ludra Follower Warmage",
+    "isBoss": false
+  },
+  "2300280": {
+    "name": "Ludra Follower Officer",
+    "isBoss": false
+  },
+  "2300281": {
+    "name": "Ludra Follower Scout",
+    "isBoss": false
+  },
+  "2300282": {
+    "name": "Isolation Specialist Rahu",
+    "isBoss": true,
+    "category": "Sanctuary",
+    "dungeonId": 600083
+  },
+  "2300283": {
+    "name": "Abyssal Wings Ketu",
+    "isBoss": true,
+    "category": "Sanctuary",
+    "dungeonId": 600083
+  },
+  "2300284": {
+    "name": "Central Abyss Fusion Reactor",
+    "isBoss": true,
+    "category": "Sanctuary",
+    "dungeonId": 600083
+  },
+  "2300285": {
+    "name": "Auxiliary Abyss Fusion Reactor",
+    "isBoss": false
+  },
+  "2300286": {
+    "name": "Laser",
+    "isBoss": false
+  },
+  "2300287": {
+    "name": "Laser",
+    "isBoss": false
+  },
+  "2300288": {
+    "name": "Auxiliary Abyss Fusion Reactor",
+    "isBoss": false
+  },
+  "2300289": {
+    "name": "Auxiliary Abyss Fusion Reactor",
+    "isBoss": false
+  },
+  "2300290": {
+    "name": "Eternal Ludra",
+    "isBoss": true,
+    "category": "Sanctuary",
+    "dungeonId": 600083
+  },
+  "2300291": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300292": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300293": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300294": {
+    "name": "Abyssal Drakan Armed Soldier",
+    "isBoss": false
+  },
+  "2300295": {
+    "name": "Abyssal Beast",
+    "isBoss": false
+  },
+  "2300296": {
+    "name": "Abyssal Drakan Mage Officer",
+    "isBoss": false
+  },
+  "2300297": {
+    "name": "Abyssal Drakan Chief",
+    "isBoss": false
+  },
+  "2300298": {
+    "name": "Abyssal Drakan Scout Officer",
+    "isBoss": false
+  },
   "2300299": {
     "name": "Rotar",
     "isBoss": true,
@@ -10439,19 +10535,19 @@
   "2301006": {
     "name": "Isolation Specialist Rahu",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "dungeonId": 600082
   },
   "2301007": {
     "name": "Abyssal Wings Ketu",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "dungeonId": 600082
   },
   "2301008": {
     "name": "Central Abyss Fusion Reactor",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "dungeonId": 600082
   },
   "2301009": {
@@ -10477,7 +10573,7 @@
   "2301014": {
     "name": "Eternal Ludra",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "dungeonId": 600082
   },
   "2301015": {
@@ -10535,7 +10631,7 @@
   "2301055": {
     "name": "Blazing Guardian Sword",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Hard",
     "dungeonId": 620021
   },
@@ -10554,21 +10650,21 @@
   "2301059": {
     "name": "Iscariel",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Hard",
     "dungeonId": 620021
   },
   "2301060": {
     "name": "Kaldrix",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Hard",
     "dungeonId": 620021
   },
   "2301061": {
     "name": "Kaldrix",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Hard",
     "dungeonId": 620021
   },
@@ -10595,7 +10691,7 @@
   "2301067": {
     "name": "Blazing Guardian Sword",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Hard",
     "dungeonId": 620021
   },
@@ -10626,7 +10722,7 @@
   "2301085": {
     "name": "Blazing Guardian Sword",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Normal",
     "dungeonId": 620022
   },
@@ -10645,21 +10741,21 @@
   "2301089": {
     "name": "Iscariel",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Normal",
     "dungeonId": 620022
   },
   "2301090": {
     "name": "Kaldrix",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Normal",
     "dungeonId": 620022
   },
   "2301091": {
     "name": "Kaldrix",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Normal",
     "dungeonId": 620022
   },
@@ -10686,7 +10782,7 @@
   "2301097": {
     "name": "Blazing Guardian Sword",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Normal",
     "dungeonId": 620022
   },
@@ -10741,14 +10837,14 @@
   "2301112": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Hard",
     "dungeonId": 620025
   },
   "2301113": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Hard",
     "dungeonId": 620025
   },
@@ -10759,7 +10855,7 @@
   "2301115": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Hard",
     "dungeonId": 620025
   },
@@ -10814,14 +10910,14 @@
   "2301142": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Normal",
     "dungeonId": 620026
   },
   "2301143": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Normal",
     "dungeonId": 620026
   },
@@ -10832,7 +10928,7 @@
   "2301145": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Normal",
     "dungeonId": 620026
   },
@@ -10883,14 +10979,14 @@
   "2301162": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Easy",
     "dungeonId": 620027
   },
   "2301163": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Easy",
     "dungeonId": 620027
   },
@@ -10901,7 +10997,7 @@
   "2301165": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "tier": "Easy",
     "dungeonId": 620027
   },
@@ -10932,19 +11028,19 @@
   "2301207": {
     "name": "Black Blood Blatt",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "dungeonId": 620011
   },
   "2301208": {
     "name": "Terminator Bargott",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "dungeonId": 620011
   },
   "2301209": {
     "name": "Devouring Klawfly",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "dungeonId": 620011
   },
   "2301210": {
@@ -10974,7 +11070,7 @@
   "2301216": {
     "name": "Surveillance Device",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Sanctuary",
     "dungeonId": 620011
   },
   "2301217": {

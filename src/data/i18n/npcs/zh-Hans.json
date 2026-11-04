@@ -8847,6 +8847,102 @@
     "name": "爱的试炼",
     "isBoss": false
   },
+  "2300277": {
+    "name": "卢德莱随从德拉坎",
+    "isBoss": false
+  },
+  "2300278": {
+    "name": "卢德莱随从野兽",
+    "isBoss": false
+  },
+  "2300279": {
+    "name": "卢德莱随从魔法兵",
+    "isBoss": false
+  },
+  "2300280": {
+    "name": "卢德莱随从军官",
+    "isBoss": false
+  },
+  "2300281": {
+    "name": "卢德莱随从侦察兵",
+    "isBoss": false
+  },
+  "2300282": {
+    "name": "隔绝者拉胡",
+    "isBoss": true,
+    "category": "圣域",
+    "dungeonId": 600083
+  },
+  "2300283": {
+    "name": "深渊翅膀凯图",
+    "isBoss": true,
+    "category": "圣域",
+    "dungeonId": 600083
+  },
+  "2300284": {
+    "name": "中央深渊融合炉",
+    "isBoss": true,
+    "category": "圣域",
+    "dungeonId": 600083
+  },
+  "2300285": {
+    "name": "深渊辅助融合炉",
+    "isBoss": false
+  },
+  "2300286": {
+    "name": "雷射",
+    "isBoss": false
+  },
+  "2300287": {
+    "name": "雷射",
+    "isBoss": false
+  },
+  "2300288": {
+    "name": "深渊辅助融合炉",
+    "isBoss": false
+  },
+  "2300289": {
+    "name": "深渊辅助融合炉",
+    "isBoss": false
+  },
+  "2300290": {
+    "name": "永劫卢德莱",
+    "isBoss": true,
+    "category": "圣域",
+    "dungeonId": 600083
+  },
+  "2300291": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300292": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300293": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300294": {
+    "name": "深渊德拉坎武装兵",
+    "isBoss": false
+  },
+  "2300295": {
+    "name": "深渊野兽",
+    "isBoss": false
+  },
+  "2300296": {
+    "name": "深渊德拉坎魔法士官",
+    "isBoss": false
+  },
+  "2300297": {
+    "name": "深渊德拉坎指挥官",
+    "isBoss": false
+  },
+  "2300298": {
+    "name": "深渊德拉坎侦察士官",
+    "isBoss": false
+  },
   "2300299": {
     "name": "罗塔尔",
     "isBoss": true,

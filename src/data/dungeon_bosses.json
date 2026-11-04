@@ -1,5 +1,5 @@
 {
- "_note": "From the game's tables (Aion2DataExtractor, 2026-10-14): finalBosses = NpcData named HeroMonsters of Grade 2, a dungeon's last boss; raids = Dungeon rows of DungeonType Raid; tiers = Dungeon rows' PartDungeonTier (1-6), by instance id.",
+ "_note": "From the game's tables (Aion2DataExtractor, 2026-10-14): finalBosses = NpcData named HeroMonsters of Grade 2, a dungeon's last boss; raids = Dungeon rows of DungeonType Raid; tiers = Dungeon rows' PartDungeonTier (1-6), by instance id. Abyssal Forge: Ludra Hard (600083) added 2026-11-04 from that day's client: its NPCs mirror Normal's (ReforgedAbyss_Hard_*).",
  "finalBosses": [
   2101600,
   2101601,
@@ -22,6 +22,7 @@
   2300180,
   2300182,
   2300218,
+  2300284,
   2300371,
   2300470,
   2300471,
@@ -138,6 +139,7 @@
  ],
  "raids": [
   600082,
+  600083,
   620011,
   620021,
   620022

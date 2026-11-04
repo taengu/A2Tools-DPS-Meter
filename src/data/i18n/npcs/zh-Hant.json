@@ -8847,6 +8847,102 @@
     "name": "愛的試煉",
     "isBoss": false
   },
+  "2300277": {
+    "name": "盧德萊隨從德拉坎",
+    "isBoss": false
+  },
+  "2300278": {
+    "name": "盧德萊隨從野獸",
+    "isBoss": false
+  },
+  "2300279": {
+    "name": "盧德萊隨從魔法兵",
+    "isBoss": false
+  },
+  "2300280": {
+    "name": "盧德萊隨從軍官",
+    "isBoss": false
+  },
+  "2300281": {
+    "name": "盧德萊隨從偵察兵",
+    "isBoss": false
+  },
+  "2300282": {
+    "name": "隔絕者拉胡",
+    "isBoss": true,
+    "category": "聖域",
+    "dungeonId": 600083
+  },
+  "2300283": {
+    "name": "深淵翅膀凱圖",
+    "isBoss": true,
+    "category": "聖域",
+    "dungeonId": 600083
+  },
+  "2300284": {
+    "name": "中央深淵融合爐",
+    "isBoss": true,
+    "category": "聖域",
+    "dungeonId": 600083
+  },
+  "2300285": {
+    "name": "深淵輔助融合爐",
+    "isBoss": false
+  },
+  "2300286": {
+    "name": "雷射",
+    "isBoss": false
+  },
+  "2300287": {
+    "name": "雷射",
+    "isBoss": false
+  },
+  "2300288": {
+    "name": "深淵輔助融合爐",
+    "isBoss": false
+  },
+  "2300289": {
+    "name": "深淵輔助融合爐",
+    "isBoss": false
+  },
+  "2300290": {
+    "name": "永劫盧德萊",
+    "isBoss": true,
+    "category": "聖域",
+    "dungeonId": 600083
+  },
+  "2300291": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300292": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300293": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300294": {
+    "name": "深淵德拉坎武裝兵",
+    "isBoss": false
+  },
+  "2300295": {
+    "name": "深淵野獸",
+    "isBoss": false
+  },
+  "2300296": {
+    "name": "深淵德拉坎魔法士官",
+    "isBoss": false
+  },
+  "2300297": {
+    "name": "深淵德拉坎指揮官",
+    "isBoss": false
+  },
+  "2300298": {
+    "name": "深淵德拉坎偵察士官",
+    "isBoss": false
+  },
   "2300299": {
     "name": "羅塔爾",
     "isBoss": true,

@@ -8847,6 +8847,102 @@
     "name": "사랑의 시련",
     "isBoss": false
   },
+  "2300277": {
+    "name": "루드라 추종 드라칸",
+    "isBoss": false
+  },
+  "2300278": {
+    "name": "루드라 추종 야수",
+    "isBoss": false
+  },
+  "2300279": {
+    "name": "루드라 추종 마법병",
+    "isBoss": false
+  },
+  "2300280": {
+    "name": "루드라 추종 장교",
+    "isBoss": false
+  },
+  "2300281": {
+    "name": "루드라 추종 정찰병",
+    "isBoss": false
+  },
+  "2300282": {
+    "name": "이격의 라후",
+    "isBoss": true,
+    "category": "성역",
+    "dungeonId": 600083
+  },
+  "2300283": {
+    "name": "심연의 날개 케투",
+    "isBoss": true,
+    "category": "성역",
+    "dungeonId": 600083
+  },
+  "2300284": {
+    "name": "중앙 심연 융합로",
+    "isBoss": true,
+    "category": "성역",
+    "dungeonId": 600083
+  },
+  "2300285": {
+    "name": "심연 보조 융합로",
+    "isBoss": false
+  },
+  "2300286": {
+    "name": "레이저",
+    "isBoss": false
+  },
+  "2300287": {
+    "name": "레이저",
+    "isBoss": false
+  },
+  "2300288": {
+    "name": "심연 보조 융합로",
+    "isBoss": false
+  },
+  "2300289": {
+    "name": "심연 보조 융합로",
+    "isBoss": false
+  },
+  "2300290": {
+    "name": "영겁의 루드라",
+    "isBoss": true,
+    "category": "성역",
+    "dungeonId": 600083
+  },
+  "2300291": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300292": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300293": {
+    "name": "None",
+    "isBoss": false
+  },
+  "2300294": {
+    "name": "심연의 드라칸 무장병",
+    "isBoss": false
+  },
+  "2300295": {
+    "name": "심연의 야수",
+    "isBoss": false
+  },
+  "2300296": {
+    "name": "심연의 드라칸 마법사관",
+    "isBoss": false
+  },
+  "2300297": {
+    "name": "심연의 드라칸 지휘관",
+    "isBoss": false
+  },
+  "2300298": {
+    "name": "심연의 드라칸 정찰사관",
+    "isBoss": false
+  },
   "2300299": {
     "name": "로타르",
     "isBoss": true,

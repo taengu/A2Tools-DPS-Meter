@@ -8847,6 +8847,102 @@
     "name": "Испытание любви",
     "isBoss": false
   },
+  "2300277": {
+    "name": "Дракан последователей Рудры",
+    "isBoss": false
+  },
+  "2300278": {
+    "name": "Зверь последователей Рудры",
+    "isBoss": false
+  },
+  "2300279": {
+    "name": "Боевой маг последователей Рудры",
+    "isBoss": false
+  },
+  "2300280": {
+    "name": "Офицер последователей Рудры",
+    "isBoss": false
+  },
+  "2300281": {
+    "name": "Солдат-разведчик последователей Рудры",
+    "isBoss": false
+  },
+  "2300282": {
+    "name": "Раху разрыва",
+    "isBoss": true,
+    "category": "Священные земли",
+    "dungeonId": 600083
+  },
+  "2300283": {
+    "name": "Крылья пропасти Кету",
+    "isBoss": true,
+    "category": "Священные земли",
+    "dungeonId": 600083
+  },
+  "2300284": {
+    "name": "Центральное ядро синтеза пропасти",
+    "isBoss": true,
+    "category": "Священные земли",
+    "dungeonId": 600083
+  },
+  "2300285": {
+    "name": "Вспомогательное ядро синтеза пропасти",
+    "isBoss": false
+  },
+  "2300286": {
+    "name": "Лазер",
+    "isBoss": false
+  },
+  "2300287": {
+    "name": "Лазер",
+    "isBoss": false
+  },
+  "2300288": {
+    "name": "Вспомогательное ядро синтеза пропасти",
+    "isBoss": false
+  },
+  "2300289": {
+    "name": "Вспомогательное ядро синтеза пропасти",
+    "isBoss": false
+  },
+  "2300290": {
+    "name": "Рудра веков",
+    "isBoss": true,
+    "category": "Священные земли",
+    "dungeonId": 600083
+  },
+  "2300291": {
+    "name": "???",
+    "isBoss": false
+  },
+  "2300292": {
+    "name": "???",
+    "isBoss": false
+  },
+  "2300293": {
+    "name": "???",
+    "isBoss": false
+  },
+  "2300294": {
+    "name": "Вооруженный солдат драканов пропасти",
+    "isBoss": false
+  },
+  "2300295": {
+    "name": "Зверь пропасти",
+    "isBoss": false
+  },
+  "2300296": {
+    "name": "Главный маг драканов пропасти",
+    "isBoss": false
+  },
+  "2300297": {
+    "name": "Командир драканов Бездны",
+    "isBoss": false
+  },
+  "2300298": {
+    "name": "Главный разведчик драканов пропасти",
+    "isBoss": false
+  },
   "2300299": {
     "name": "Лотар",
     "isBoss": true,
@@ -10741,14 +10837,14 @@
   "2301112": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Hard",
     "dungeonId": 620025
   },
   "2301113": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Hard",
     "dungeonId": 620025
   },
@@ -10759,7 +10855,7 @@
   "2301115": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Hard",
     "dungeonId": 620025
   },
@@ -10814,14 +10910,14 @@
   "2301142": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Normal",
     "dungeonId": 620026
   },
   "2301143": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Normal",
     "dungeonId": 620026
   },
@@ -10832,7 +10928,7 @@
   "2301145": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Normal",
     "dungeonId": 620026
   },
@@ -10883,14 +10979,14 @@
   "2301162": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Easy",
     "dungeonId": 620027
   },
   "2301163": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Easy",
     "dungeonId": 620027
   },
@@ -10901,7 +10997,7 @@
   "2301165": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "Священные земли",
     "tier": "Easy",
     "dungeonId": 620027
   },

@@ -8847,6 +8847,102 @@
     "name": "愛の試練",
     "isBoss": false
   },
+  "2300277": {
+    "name": "ルドラ追従者ドラカン",
+    "isBoss": false
+  },
+  "2300278": {
+    "name": "ルドラ追従者野獣",
+    "isBoss": false
+  },
+  "2300279": {
+    "name": "ルドラ追従者魔法兵",
+    "isBoss": false
+  },
+  "2300280": {
+    "name": "ルドラ追従者将校",
+    "isBoss": false
+  },
+  "2300281": {
+    "name": "ルドラ追従者偵察兵",
+    "isBoss": false
+  },
+  "2300282": {
+    "name": "離隔のラフ",
+    "isBoss": true,
+    "category": "聖域",
+    "dungeonId": 600083
+  },
+  "2300283": {
+    "name": "深淵の翼ケトゥ",
+    "isBoss": true,
+    "category": "聖域",
+    "dungeonId": 600083
+  },
+  "2300284": {
+    "name": "中央の深淵融合炉",
+    "isBoss": true,
+    "category": "聖域",
+    "dungeonId": 600083
+  },
+  "2300285": {
+    "name": "深淵の補助融合炉",
+    "isBoss": false
+  },
+  "2300286": {
+    "name": "レーザー",
+    "isBoss": false
+  },
+  "2300287": {
+    "name": "レーザー",
+    "isBoss": false
+  },
+  "2300288": {
+    "name": "深淵の補助融合炉",
+    "isBoss": false
+  },
+  "2300289": {
+    "name": "深淵の補助融合炉",
+    "isBoss": false
+  },
+  "2300290": {
+    "name": "永劫のルドラ",
+    "isBoss": true,
+    "category": "聖域",
+    "dungeonId": 600083
+  },
+  "2300291": {
+    "name": "？？？",
+    "isBoss": false
+  },
+  "2300292": {
+    "name": "？？？",
+    "isBoss": false
+  },
+  "2300293": {
+    "name": "？？？",
+    "isBoss": false
+  },
+  "2300294": {
+    "name": "深淵のドラカン武装兵",
+    "isBoss": false
+  },
+  "2300295": {
+    "name": "深淵の野獣",
+    "isBoss": false
+  },
+  "2300296": {
+    "name": "深淵のドラカン魔法士官",
+    "isBoss": false
+  },
+  "2300297": {
+    "name": "深淵のドラカン指揮官",
+    "isBoss": false
+  },
+  "2300298": {
+    "name": "深淵のドラカン偵察士官",
+    "isBoss": false
+  },
   "2300299": {
     "name": "ロータル",
     "isBoss": true,
@@ -10741,14 +10837,14 @@
   "2301112": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Hard",
     "dungeonId": 620025
   },
   "2301113": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Hard",
     "dungeonId": 620025
   },
@@ -10759,7 +10855,7 @@
   "2301115": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Hard",
     "dungeonId": 620025
   },
@@ -10814,14 +10910,14 @@
   "2301142": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Normal",
     "dungeonId": 620026
   },
   "2301143": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Normal",
     "dungeonId": 620026
   },
@@ -10832,7 +10928,7 @@
   "2301145": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Normal",
     "dungeonId": 620026
   },
@@ -10883,14 +10979,14 @@
   "2301162": {
     "name": "Triton the Returned",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Easy",
     "dungeonId": 620027
   },
   "2301163": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Easy",
     "dungeonId": 620027
   },
@@ -10901,7 +10997,7 @@
   "2301165": {
     "name": "Deltras",
     "isBoss": true,
-    "category": "Raid",
+    "category": "聖域",
     "tier": "Easy",
     "dungeonId": 620027
   },
