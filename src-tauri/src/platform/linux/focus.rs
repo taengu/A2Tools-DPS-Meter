@@ -135,6 +135,8 @@ function place(w) {
         if (main) overlayHeight = placed ? keptHeight : 0;
         if (!placed) return;
         w.frameGeometry = r;
+        // A widget's size as last seen, for a resize to keep its top left.
+        var widgetSize = Math.round(w.frameGeometry.width) + "x" + Math.round(w.frameGeometry.height), resizedAt = 0;
         // Moved by a resize while held: back to its place, at its new size.
         // Never against the player's own move or resize.
         var until = Date.now() + HOLD_MS;
@@ -156,14 +158,33 @@ function place(w) {
                 top = Math.round(now.y);
                 // The player sized it: its edge is kept from this height.
                 if (main && !mainGrown) keptHeight = overlayHeight = seen;
+                // Or moved it: its top left is kept from here.
+                if (!main) {
+                    r = { x: Math.round(now.x), y: top };
+                    widgetSize = Math.round(now.width) + "x" + seen;
+                }
             });
         }
         w.frameGeometryChanged.connect(function () {
             if (held || userMove || w.move || w.resize) return;
             var now = w.frameGeometry;
             if (!main) {
-                if (Date.now() > until) return;
-                if (Math.round(now.x) === r.x && Math.round(now.y) === r.y) return;
+                var nx = Math.round(now.x), ny = Math.round(now.y);
+                var size = Math.round(now.width) + "x" + Math.round(now.height);
+                // Held, it stays at its place. After, a move by KWin alone is
+                // its place now, but a resize keeps its top left: KWin keeps
+                // a resized window's centre, and a plugin sizes its widget
+                // again as the game tells it more (Cooldowns once the class
+                // and its skills come, long after the hold when the game was
+                // just started): the buffs slid onto the skills (#177).
+                // (The move can come as a change of its own just after.)
+                if (size !== widgetSize) resizedAt = Date.now();
+                widgetSize = size;
+                if (nx === r.x && ny === r.y) return;
+                if (Date.now() > until && Date.now() - resizedAt > 500) {
+                    r = { x: nx, y: ny };
+                    return;
+                }
                 held = true;
                 w.frameGeometry = { x: r.x, y: r.y, width: now.width, height: now.height };
                 held = false;
