@@ -3748,9 +3748,34 @@ pub fn run() {
             {
                 let flag = app_data_dir.join("dev-quit");
                 let _ = std::fs::remove_file(&flag);
+                // And feed the packets of the capture a `dev-replay` file
+                // names to the parser, at the time they arrive (`TIMESTAMP|
+                // STREAM|HEX` lines, one packet each): to see a feature's UI
+                // play out without the game.
+                let replay = app_data_dir.join("dev-replay");
+                let _ = std::fs::remove_file(&replay);
                 let handle = app.handle().clone();
                 std::thread::spawn(move || loop {
                     std::thread::sleep(Duration::from_millis(500));
+                    if let Ok(path) = std::fs::read_to_string(&replay) {
+                        let _ = std::fs::remove_file(&replay);
+                        if let (Ok(text), Some(state)) = (std::fs::read_to_string(path.trim()), handle.try_state::<AppState>()) {
+                            let mut processor = crate::capture::stream_processor::StreamProcessor::new(
+                                state.data_storage.clone(),
+                                state.skill_lookup.clone(),
+                                state.npc_lookup.clone(),
+                            );
+                            let packets: Vec<Vec<u8>> = text
+                                .lines()
+                                .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+                                .filter_map(|l| decode_replay_hex(l.splitn(3, '|').nth(2)?.trim()))
+                                .collect();
+                            for data in &packets {
+                                processor.consume_stream(data);
+                            }
+                            tracing::info!("dev-replay: {} packets from {}", packets.len(), path.trim());
+                        }
+                    }
                     if flag.exists() {
                         let _ = std::fs::remove_file(&flag);
                         tracing::info!("dev-quit: quitting");

@@ -44,6 +44,17 @@
 //                                              combatPower, damage, hits }] (the others who damaged you
 //                                              in the fight, your party never) }, null where the game
 //                                              did not say. Once each, kept like a decoder's events
+//   a2.on("lootRoll", (e) => ...)              Dice Roll loot (permission "events:loot-rolls", meter
+//                                              2.0.88 on), each as the game says it, with `at` (unix ms):
+//                                              { type: "open", rollId, itemId, count, endsAt } an item is
+//                                              up for a roll until endsAt (unix ms); { type: "mine", rollId,
+//                                              roll } your roll (no item: match by rollId); { type: "roll",
+//                                              itemId, player: { name, serverId }, roll } another's roll
+//                                              (no rollId: match by itemId); { type: "pass", rollId, itemId,
+//                                              player } a player passed; { type: "won", rollId, itemId,
+//                                              player } who won it. The highest roll wins. A roll can
+//                                              come before its "open" or without one. Once each, kept
+//                                              like a decoder's events
 //   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
 //                                              (meter 2.0.65 on)
 //   a2.on("ping", ({ ms }) => ...)             the ping to the game server in ms (null while not known),

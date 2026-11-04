@@ -533,6 +533,8 @@ pub struct DataStorage {
     /// Who killed you (see `combat::death_recap`). Its own lock, as
     /// `stagger`.
     death_recaps: Mutex<DeathRecaps>,
+    /// Dice Roll loot as read (`capture::loot_rolls`), for plugins.
+    loot_rolls: Mutex<crate::capture::loot_rolls::LootRolls>,
 }
 
 /// The timeline and when it was last pruned.
@@ -902,6 +904,7 @@ impl DataStorage {
             abnormals: Mutex::new(AbnormalLog { timeline: abnormal::Timeline::default(), pruned_ms: NEVER_MS }),
             stagger: Mutex::new(StaggerLog::default()),
             death_recaps: Mutex::new(DeathRecaps::default()),
+            loot_rolls: Mutex::new(Default::default()),
         }
     }
 
@@ -2195,6 +2198,18 @@ impl DataStorage {
     /// next time; None when there are none.
     pub fn death_recaps_since(&self, seq: u64) -> Option<(u64, Vec<death_recap::DeathRecap>)> {
         self.death_recaps.lock().since(seq)
+    }
+
+    /// A Dice Roll packet read, kept for plugins.
+    pub fn note_loot_roll(&self, roll: crate::capture::loot_rolls::LootRoll) {
+        let at = crate::clock::now_ms();
+        self.loot_rolls.lock().push(crate::capture::loot_rolls::LootRollEvent { at, roll });
+    }
+
+    /// The roll events read since `seq`, and the count to ask with next
+    /// time; None when there are none.
+    pub fn loot_rolls_since(&self, seq: u64) -> Option<(u64, Vec<crate::capture::loot_rolls::LootRollEvent>)> {
+        self.loot_rolls.lock().since(seq)
     }
 
     /// The maps opened since `seq` was read (all of them, newest last), and

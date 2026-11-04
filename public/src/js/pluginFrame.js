@@ -41,6 +41,7 @@
       if (event === "character" && !allowed("events:character")) return;
       if ((event === "bossMap" || event === "bossLive" || event === "abyss") && !allowed("feed:boss-timers")) return;
       if (event === "deathRecap" && !allowed("events:death-recap")) return;
+      if (event === "lootRoll" && !allowed("events:loot-rolls")) return;
       const msg = { event, data, ...extra };
       if (ready) send(msg);
       else queue.push(msg);

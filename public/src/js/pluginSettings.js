@@ -135,6 +135,9 @@
       if (permission === "events:death-recap") {
         return t("settings.plugins.permDeathRecap", "After a player kills you: who they were and the damage they did to you");
       }
+      if (permission === "events:loot-rolls") {
+        return t("settings.plugins.permLootRolls", "See Dice Roll loot: the item, who rolled what, and who won it");
+      }
       if (permission.startsWith("decoder:")) {
         return t("settings.plugins.permDecoder", "Read selected game fields (may include other players): {name}", { name: permission.slice(8) });
       }

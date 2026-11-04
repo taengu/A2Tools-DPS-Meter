@@ -304,6 +304,10 @@ impl StreamProcessor {
         if let Some(state) = crate::capture::abyss_artifacts::parse(packet) {
             self.data_storage.note_abyss_artifacts(state);
         }
+        // Dice Roll loot: an item rolled for, each roll, and who won it.
+        if let Some(roll) = crate::capture::loot_rolls::parse(packet) {
+            self.data_storage.note_loot_roll(roll);
+        }
         // The Supply Requests boards (at login), for Profiteer.
         if let Some(boards) = crate::capture::supply_requests::parse(packet) {
             self.data_storage.note_supply_requests(boards);

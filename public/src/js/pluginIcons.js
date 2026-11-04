@@ -16,6 +16,8 @@ window.A2_PLUGIN_ICONS = Object.freeze({
   "alt-roster": ["users", 160],
   // Who killed you; red, as its "Killed by".
   "death-recap": ["swords", 0],
+  // Dice Roll loot; gold, as its winner.
+  "dice-rolls": ["dices", 45],
 });
 
 // A plugin's glyph (a Lucide name) or null, and its hue.
