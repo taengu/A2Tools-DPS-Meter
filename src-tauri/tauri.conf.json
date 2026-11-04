@@ -80,9 +80,9 @@
           "libcap2-bin"
         ],
         "postInstallScript": "../packaging/linux/postinst.sh",
-        "files": { "usr/share/applications/com.a2tools.dps-meter.desktop": "../packaging/linux/com.a2tools.dps-meter.desktop" }
+        "files": { "/usr/share/applications/com.a2tools.dps-meter.desktop": "../packaging/linux/com.a2tools.dps-meter.desktop" }
       },
-      "rpm": { "files": { "usr/share/applications/com.a2tools.dps-meter.desktop": "../packaging/linux/com.a2tools.dps-meter.desktop" } }
+      "rpm": { "files": { "/usr/share/applications/com.a2tools.dps-meter.desktop": "../packaging/linux/com.a2tools.dps-meter.desktop" } }
     }
   }
 }
