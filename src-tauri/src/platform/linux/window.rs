@@ -352,6 +352,13 @@ pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
         }
     });
     let _ = window.show();
+    // A window hidden for good comes back where it was: the compositor placed
+    // it again as it was mapped (`hide_in_place`, which kept the place).
+    if super::focus::hyprland_places_windows()
+        && let Some((x, y)) = super::focus::place_of(window)
+    {
+        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+    }
     let _ = window.set_always_on_top(true);
     reapply_click_through(window);
 }
@@ -413,8 +420,20 @@ fn hidden_in_place() -> &'static std::sync::Mutex<std::collections::HashMap<Stri
 /// Wayland, `focus::kwin_places_windows`) a window is hidden for good: there
 /// the invisible window, kept mapped and above everything (the plugin windows
 /// rule), still took every click over it (#100).
+///
+/// Hyprland does the same and needs it: it keeps drawing a window left mapped
+/// at `_NET_WM_WINDOW_OPACITY` 0, so the concealment below hid nothing and the
+/// meter stayed on screen as its own blurred panel out of combat (Hyprland
+/// 0.57, 2026-11-03). The window is hidden for good there too, where it was
+/// kept first for the show (`focus::save_place`).
 pub fn hide_in_place(window: &tauri::WebviewWindow) {
     use gtk::prelude::*;
+    if super::focus::hyprland_places_windows() {
+        // Before it goes: Hyprland places a window again whenever it is mapped.
+        super::focus::save_place(window);
+        hide_without_focus(window);
+        return;
+    }
     if super::focus::kwin_places_windows() {
         hide_without_focus(window);
         return;
