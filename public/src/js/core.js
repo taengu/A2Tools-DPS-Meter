@@ -145,6 +145,7 @@ class DpsApp {
       font: "dpsMeter.font",
       autoHideMeter: "dpsMeter.autoHideMeter",
       hideWhenGameClosed: "dpsMeter.hideWhenGameClosed",
+      closeWithGame: "dpsMeter.closeWithGame",
       hideWhenSolo: "dpsMeter.hideWhenSolo",
       hideOutOfCombat: "dpsMeter.hideOutOfCombat",
       globalHotkeys: "dpsMeter.globalHotkeys",
@@ -3235,6 +3236,14 @@ class DpsApp {
         this.safeSetSetting(this.storageKeys.hideWhenGameClosed, String(!!event.target?.checked));
       });
     }
+    // Close the meter once AION2 has closed (the same loop).
+    this.closeWithGameCheckbox = document.querySelector(".closeWithGameCheckbox");
+    if (this.closeWithGameCheckbox) {
+      this.closeWithGameCheckbox.checked = this.safeGetSetting(this.storageKeys.closeWithGame) === "true";
+      this.closeWithGameCheckbox.addEventListener("change", (event) => {
+        this.safeSetSetting(this.storageKeys.closeWithGame, String(!!event.target?.checked));
+      });
+    }
     // And while not in a party (the same loop).
     this.hideWhenSoloCheckbox = document.querySelector(".hideWhenSoloCheckbox");
     if (this.hideWhenSoloCheckbox) {
@@ -5263,6 +5272,7 @@ class DpsApp {
       [this.bossLogsCheckbox, "bossLogs", false],
       [this.autoHideMeterCheckbox, "autoHideMeter", false],
       [this.hideWhenGameClosedCheckbox, "hideWhenGameClosed", false],
+      [this.closeWithGameCheckbox, "closeWithGame", false],
       [this.hideWhenSoloCheckbox, "hideWhenSolo", false],
       [this.globalHotkeysCheckbox, "globalHotkeys", !document.documentElement?.classList?.contains?.("linux")],
       [this.saveRawPacketsCheckbox, "saveRawPackets", false],

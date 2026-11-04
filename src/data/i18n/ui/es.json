@@ -386,6 +386,7 @@
     "showDpsSuffix": "Añadir /s al DPS",
     "autoHideMeter": "Ocultar cuando AION2 no está activo",
     "hideWhenGameClosed": "Ocultar mientras AION2 está cerrado",
+    "closeWithGame": "Cerrar el medidor al cerrar AION2",
     "hideWhenSolo": "Mostrar solo en grupo",
     "hideOutOfCombat": {
       "label": "Ocultar fuera de combate",
@@ -667,6 +668,7 @@
       "showMeter": "Desactivado: solo se ven tus plugins. El medidor sigue registrando combates y subiéndolos en segundo plano. Vuelve a mostrarlo aquí, con el atajo de mostrar/ocultar o con el botón del medidor en una ventana de plugin.",
       "clearOnZone": "Cuándo desaparece el último combate del medidor tras un cambio de zona. Todos los combates quedan en el Historial igualmente.",
       "hideWhenGameClosed": "El medidor se oculta mientras el juego no está abierto y vuelve cuando se inicia.",
+      "closeWithGame": "El medidor se cierra solo unos 10 segundos después de cerrar AION2. Si se abre antes que el juego, lo espera.",
       "hideWhenSolo": "El medidor se oculta mientras no estás en un grupo y vuelve cuando te unes a uno. El atajo de mostrar/ocultar lo sigue mostrando.",
       "hideOutOfCombat": "El medidor se oculta tras este tiempo fuera de combate y vuelve con el siguiente golpe. Sigue visible mientras Ajustes, Historial o Detalles están abiertos, o el ratón está encima.",
       "runAsAdmin": "Necesario para mostrar los FPS del juego. Windows lo pedirá cada vez que se inicie el medidor.",

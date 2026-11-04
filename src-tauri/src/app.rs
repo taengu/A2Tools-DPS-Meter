@@ -1435,6 +1435,36 @@ fn set_manual_device(state: tauri::State<'_, AppState>, device: String) {
     state.port_detector.set_preferred_device(dev);
 }
 
+/// "Close the meter when AION2 closes": the meter quits once the game, seen
+/// open since the meter started, has stayed closed for CLOSE_AFTER_MS. Never
+/// before the game is first seen, so a meter started ahead of the game waits
+/// for it; and not at a blink of its window (a crash and relaunch, a loading
+/// screen on a slow PC).
+#[derive(Default)]
+struct CloseWithGame {
+    seen_open: bool,
+    closed_since: Option<i64>,
+}
+
+impl CloseWithGame {
+    const CLOSE_AFTER_MS: i64 = 10_000;
+
+    /// Whether to quit now, the game open or not at `now_ms`.
+    fn due(&mut self, game_open: bool, enabled: bool, now_ms: i64) -> bool {
+        if game_open {
+            self.seen_open = true;
+            self.closed_since = None;
+            return false;
+        }
+        if !enabled || !self.seen_open {
+            self.closed_since = None;
+            return false;
+        }
+        let since = *self.closed_since.get_or_insert(now_ms);
+        now_ms - since >= Self::CLOSE_AFTER_MS
+    }
+}
+
 #[tauri::command]
 pub(crate) fn quit_app(app: tauri::AppHandle) {
     save_fights_before_quit(&app);
@@ -4162,6 +4192,9 @@ pub fn run() {
                 let mut hidden_closed = false;
                 // Hide while AION2 is closed or while solo, as last checked.
                 let mut closed_or_solo = false;
+                // Close with the game (Settings): whether it has been seen
+                // open this run, and since when it has been closed.
+                let mut close_with = CloseWithGame::default();
                 // Out of combat (#106): the setting last seen, and when the
                 // wait began (the meter started, the setting changed, the
                 // player showed the meter, or a Settings/History/Details
@@ -4222,7 +4255,13 @@ pub fn run() {
                         // hit; no keybind needed (#106, a headless stream).
                         let on = |key: &str| state.settings.get(key).as_deref() == Some("true");
                         if tick_count % 4 == 0 {
-                            let closed = on("dpsMeter.hideWhenGameClosed") && !platform::window_detector::find_aion2_window();
+                            let game_open = platform::window_detector::find_aion2_window();
+                            if close_with.due(game_open, on("dpsMeter.closeWithGame"), crate::clock::now_ms()) {
+                                tracing::info!("AION2 closed: closing the meter with it (Settings)");
+                                quit_app(handle.clone());
+                                return;
+                            }
+                            let closed = on("dpsMeter.hideWhenGameClosed") && !game_open;
                             let solo = on("dpsMeter.hideWhenSolo") && state.data_storage.get_party_members().len() < 2;
                             closed_or_solo = closed || solo;
                         }
@@ -4666,6 +4705,27 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_meter_closes_only_after_the_game_it_saw_has_stayed_closed() {
+        let mut c = super::CloseWithGame::default();
+        let after = super::CloseWithGame::CLOSE_AFTER_MS;
+        // Started before the game: waits for it, however long.
+        assert!(!c.due(false, true, 0));
+        assert!(!c.due(false, true, 10 * after));
+        assert!(!c.due(true, true, 11 * after));
+        // Closed, then back within the wait (a relaunch): stays.
+        assert!(!c.due(false, true, 12 * after));
+        assert!(!c.due(true, true, 12 * after + after / 2));
+        // Closed for the whole wait: quits.
+        assert!(!c.due(false, true, 13 * after));
+        assert!(!c.due(false, true, 14 * after - 1));
+        assert!(c.due(false, true, 14 * after));
+        // The option off: never.
+        let mut off = super::CloseWithGame::default();
+        assert!(!off.due(true, false, 0));
+        assert!(!off.due(false, false, 100 * after));
+    }
+
     // Updates are an online build's: the offline one has no updater.
     #[cfg(feature = "online")]
     #[test]

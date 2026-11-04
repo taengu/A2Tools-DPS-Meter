@@ -386,6 +386,7 @@
     "showDpsSuffix": "Ajouter /s au DPS",
     "autoHideMeter": "Masquer quand AION2 n'est pas au premier plan",
     "hideWhenGameClosed": "Masquer quand AION2 est fermé",
+    "closeWithGame": "Fermer le compteur quand AION2 se ferme",
     "hideWhenSolo": "Afficher seulement en groupe",
     "hideOutOfCombat": {
       "label": "Masquer hors combat",
@@ -667,6 +668,7 @@
       "showMeter": "Désactivé : seuls vos plugins s'affichent. Le meter continue d'enregistrer les combats et de les envoyer en arrière-plan. Réaffichez-le ici, avec le raccourci afficher/masquer, ou avec le bouton meter d'une fenêtre de plugin.",
       "clearOnZone": "Quand le dernier combat quitte le compteur après un changement de zone. Chaque combat reste dans l'Historique dans tous les cas.",
       "hideWhenGameClosed": "Le compteur se masque quand le jeu n'est pas lancé et réapparaît à son démarrage.",
+      "closeWithGame": "Le compteur se ferme de lui-même environ 10 secondes après AION2. Lancé avant le jeu, il l'attend.",
       "hideWhenSolo": "Le compteur se masque tant que vous n'êtes pas en groupe et réapparaît quand vous en rejoignez un. Le raccourci Afficher/Masquer le fait toujours apparaître.",
       "hideOutOfCombat": "Le compteur se masque après ce délai hors combat et réapparaît au prochain coup. Il reste affiché tant que les Paramètres, l'Historique ou les Détails sont ouverts, ou que la souris est dessus.",
       "runAsAdmin": "Nécessaire pour afficher les FPS du jeu. Windows le demande à chaque démarrage du compteur.",

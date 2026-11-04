@@ -386,6 +386,7 @@
     "showDpsSuffix": "DPS 后显示 /s",
     "autoHideMeter": "AION2 不在前台时隐藏",
     "hideWhenGameClosed": "AION2 关闭时隐藏",
+    "closeWithGame": "AION2 关闭时一并关闭计量器",
     "hideWhenSolo": "仅在队伍中显示",
     "hideOutOfCombat": {
       "label": "脱离战斗时隐藏",
@@ -667,6 +668,7 @@
       "showMeter": "关闭：只显示插件。统计仍在后台记录战斗并上传。可在此处、用显示/隐藏快捷键，或插件窗口上的统计按钮重新显示。",
       "clearOnZone": "切换区域后，何时从统计中清除上一场战斗。所有战斗都会保留在历史记录中。",
       "hideWhenGameClosed": "游戏未运行时隐藏计量器，游戏启动后再次显示。",
+      "closeWithGame": "AION2 关闭约 10 秒后，计量器会自动关闭。若比游戏先启动，会等待游戏开启。",
       "hideWhenSolo": "不在队伍中时隐藏计量器，加入队伍后再次显示。显示/隐藏快捷键仍可随时打开它。",
       "hideOutOfCombat": "脱离战斗达到该时长后隐藏计量器，下一次命中时再次显示。设置、历史记录或详情窗口打开时，或鼠标停在计量器上时不会隐藏。",
       "runAsAdmin": "显示游戏帧率需要此项。每次启动计量器时 Windows 都会询问。",

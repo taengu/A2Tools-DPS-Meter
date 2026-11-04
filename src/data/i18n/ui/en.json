@@ -386,6 +386,7 @@
     "showDpsSuffix": "Add /s to DPS",
     "autoHideMeter": "Hide when AION2 isn't focused",
     "hideWhenGameClosed": "Hide while AION2 is closed",
+    "closeWithGame": "Close the meter when AION2 closes",
     "hideWhenSolo": "Show only in a party",
     "hideOutOfCombat": {
       "label": "Hide out of combat",
@@ -676,6 +677,7 @@
       "showMeter": "Off: only your plugins show. The meter keeps reading combat and uploading in the background. Bring it back here, with the show/hide hotkey, or with the meter button on a plugin window.",
       "clearOnZone": "When the last fight leaves the meter after the zone changes. Every fight stays in History either way.",
       "hideWhenGameClosed": "The meter hides while the game isn't running, and comes back when it starts.",
+      "closeWithGame": "The meter closes itself about 10 seconds after AION2 closes. Started before the game, it waits for it.",
       "hideWhenSolo": "The meter hides while you're not in a party, and comes back when you join one. The Show/Hide keybind still brings it up.",
       "hideOutOfCombat": "The meter hides once you've been out of combat this long, and comes back with the next hit. It stays up while Settings, History or Details is open, or the mouse is over it.",
       "runAsAdmin": "Needed to show the game's frame rate. Windows asks each time the meter starts.",

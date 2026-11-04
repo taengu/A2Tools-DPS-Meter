@@ -386,6 +386,7 @@
     "showDpsSuffix": "/s an DPS anhängen",
     "autoHideMeter": "Ausblenden, wenn AION2 nicht im Vordergrund ist",
     "hideWhenGameClosed": "Ausblenden, wenn AION2 geschlossen ist",
+    "closeWithGame": "Meter mit AION2 schließen",
     "hideWhenSolo": "Nur in einer Gruppe anzeigen",
     "hideOutOfCombat": {
       "label": "Außerhalb des Kampfes ausblenden",
@@ -667,6 +668,7 @@
       "showMeter": "Aus: Nur deine Plugins sind zu sehen. Das Meter liest im Hintergrund weiter Kämpfe mit und lädt hoch. Zurückholen kannst du es hier, mit dem Ein-/Ausblenden-Hotkey oder mit dem Meter-Knopf an einem Plugin-Fenster.",
       "clearOnZone": "Wann der letzte Kampf nach einem Zonenwechsel aus dem Meter verschwindet. Jeder Kampf bleibt so oder so im Verlauf.",
       "hideWhenGameClosed": "Das Meter wird ausgeblendet, solange das Spiel nicht läuft, und erscheint wieder, wenn es startet.",
+      "closeWithGame": "Das Meter schließt sich etwa 10 Sekunden nach AION2 selbst. Vor dem Spiel gestartet, wartet es auf das Spiel.",
       "hideWhenSolo": "Das Meter wird ausgeblendet, solange du in keiner Gruppe bist, und erscheint wieder, wenn du einer beitrittst. Die Tastenkombination zum Ein-/Ausblenden holt es trotzdem hervor.",
       "hideOutOfCombat": "Das Meter wird ausgeblendet, wenn du so lange nicht im Kampf warst, und erscheint mit dem nächsten Treffer wieder. Solange Einstellungen, Verlauf oder Details offen sind oder die Maus darüber ist, bleibt es sichtbar.",
       "runAsAdmin": "Nötig, um die Bildrate des Spiels anzuzeigen. Windows fragt bei jedem Start des Meters nach.",
