@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=A2Tools DPS Meter
+Comment=Real-time DPS overlay for AION 2
+Exec=a2tools-dps-meter
+Icon=a2tools-dps-meter
+Categories=Game;Utility;
+NoDisplay=true

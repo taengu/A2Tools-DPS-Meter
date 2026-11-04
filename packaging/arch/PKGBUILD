@@ -92,5 +92,11 @@ Exec=a2tools-dps-meter
 Icon=a2tools-dps-meter
 Categories=Game;Utility;
 DESKTOP
+  # The app id the desktop's shortcut service files the meter's global
+  # shortcuts under (platform/linux/hotkeys.rs, APP_ID): the portal looks it up
+  # as <app id>.desktop, and without it every shortcut call is refused with
+  # "an app id is required". The entry above is what menus show.
+  install -Dm644 "$root/packaging/linux/com.a2tools.dps-meter.desktop" \
+    "$pkgdir/usr/share/applications/com.a2tools.dps-meter.desktop"
   install -Dm644 "$root/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

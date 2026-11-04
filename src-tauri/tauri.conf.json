@@ -79,8 +79,10 @@
           "libpcap0.8t64 | libpcap0.8",
           "libcap2-bin"
         ],
-        "postInstallScript": "../packaging/linux/postinst.sh"
-      }
+        "postInstallScript": "../packaging/linux/postinst.sh",
+        "files": { "usr/share/applications/com.a2tools.dps-meter.desktop": "../packaging/linux/com.a2tools.dps-meter.desktop" }
+      },
+      "rpm": { "files": { "usr/share/applications/com.a2tools.dps-meter.desktop": "../packaging/linux/com.a2tools.dps-meter.desktop" } }
     }
   }
 }
