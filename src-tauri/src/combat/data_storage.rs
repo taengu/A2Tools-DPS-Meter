@@ -1938,9 +1938,11 @@ impl DataStorage {
             {
                 self.death_recaps.lock().note_hit(attacker, pdp.timestamp(), pdp.total_damage() as i64, skill_code);
             }
-            // Your own hit on someone else, for an assist.
-            if attacker == me && target_id != me {
-                self.kda.lock().note_my_hit(summon_resolver::resolve(target_id, &inner.summon_storage), pdp.timestamp());
+            // Your own hit on an enemy, for an assist: a heal or buff on
+            // someone in your party is no part of one.
+            let target = summon_resolver::resolve(target_id, &inner.summon_storage);
+            if attacker == me && target_id != me && !in_party(&inner, target) {
+                self.kda.lock().note_my_hit(target, pdp.timestamp());
             }
         }
 
@@ -2222,14 +2224,14 @@ impl DataStorage {
             if !player {
                 // A mob's loot record, unless you had just hit it.
                 if let Some(age) = self.kda.lock().hit_age(victim, at_ms) {
-                    tracing::info!("KDA: {victim} died {age} ms after your hit, not known as a player");
+                    tracing::debug!("KDA: {victim} died {age} ms after your hit, not known as a player");
                 }
                 return None;
             }
             killer == me
         };
         let kind = self.kda.lock().player_died(victim, by_me, at_ms);
-        tracing::info!("KDA: player {victim} died, killer {killer}{}: {kind:?}", if by_me { " (you)" } else { "" });
+        tracing::debug!("KDA: player {victim} died, killer {killer}{}: {kind:?}", if by_me { " (you)" } else { "" });
         kind
     }
 
@@ -3635,6 +3637,11 @@ fn fight_of(inner: &mut Inner, actor: i32, mob: Option<i32>) -> Option<&mut Acto
     inner.target_combat.get_mut(&tid)?.actors.get_mut(&actor)
 }
 
+/// Whether `entity` is a member of your party (by the roster's names).
+fn in_party(inner: &Inner, entity: i32) -> bool {
+    inner.nickname_storage.get(&entity).is_some_and(|name| inner.party_members.contains_key(name))
+}
+
 fn is_friendly_action(inner: &Inner, actor_id: i32, target_id: i32) -> bool {
     let resolved_actor = summon_resolver::resolve(actor_id, &inner.summon_storage);
     let resolved_target = summon_resolver::resolve(target_id, &inner.summon_storage);
@@ -3694,6 +3701,20 @@ fn is_mob(inner: &Inner, id: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Your party's members are told by the roster's names, so a heal on one
+    /// is no hit on an enemy (an assist counts only those).
+    #[test]
+    fn party_members_are_not_enemies() {
+        let s = DataStorage::new();
+        s.set_party_roster(vec![("Ally".into(), PartyMember { slot: 1, ..Default::default() })], true);
+        s.append_nickname_authoritative(500, "Ally");
+        s.append_nickname_authoritative(501, "Stranger");
+        let inner = s.inner.read();
+        assert!(in_party(&inner, 500));
+        assert!(!in_party(&inner, 501));
+        assert!(!in_party(&inner, 502));
+    }
 
     #[test]
     fn your_own_and_a_known_players_hp_log_deaths_and_a_strangers_does_not() {

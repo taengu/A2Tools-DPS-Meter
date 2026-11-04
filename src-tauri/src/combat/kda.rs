@@ -45,6 +45,9 @@ pub enum Kind {
 pub struct KdaEvent {
     /// When (unix ms).
     pub at: i64,
+    /// The event's number, counting from 1: two in the same millisecond
+    /// differ by it.
+    pub seq: u64,
     pub kind: Kind,
     /// Abyss Points gained (`Points`).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -117,7 +120,7 @@ impl Kda {
     pub fn abyss_points(&mut self, total: u64, at: i64) {
         let before = self.points.replace(total);
         if let Some(before) = before.filter(|b| total > *b && total - b <= MAX_GAIN) {
-            self.push_event(KdaEvent { at, kind: Kind::Points, amount: Some(total - before), abyss: None });
+            self.push_event(KdaEvent { at, seq: 0, kind: Kind::Points, amount: Some(total - before), abyss: None });
         }
     }
 
@@ -127,20 +130,21 @@ impl Kda {
         let abyss = ABYSS_MAPS.contains(&map_id);
         let before = self.in_abyss.replace(abyss);
         if before != Some(abyss) && (abyss || before.is_some()) {
-            self.push_event(KdaEvent { at, kind: Kind::Zone, amount: None, abyss: Some(abyss) });
+            self.push_event(KdaEvent { at, seq: 0, kind: Kind::Zone, amount: None, abyss: Some(abyss) });
         }
     }
 
     fn push(&mut self, at: i64, kind: Kind) {
-        self.push_event(KdaEvent { at, kind, amount: None, abyss: None });
+        self.push_event(KdaEvent { at, seq: 0, kind, amount: None, abyss: None });
     }
 
-    fn push_event(&mut self, event: KdaEvent) {
+    fn push_event(&mut self, mut event: KdaEvent) {
+        self.seq += 1;
+        event.seq = self.seq;
         self.events.push_back(event);
         while self.events.len() > MAX_EVENTS {
             self.events.pop_front();
         }
-        self.seq += 1;
     }
 
     /// The events made since `seq` was read, and the count to ask with next
@@ -164,7 +168,7 @@ mod tests {
         assert_eq!(kda.player_died(7, true, 1_000), Some(Kind::Kill));
         let (seq, events) = kda.since(0).unwrap();
         assert_eq!(seq, 1);
-        assert_eq!(events, vec![KdaEvent { at: 1_000, kind: Kind::Kill, amount: None, abyss: None }]);
+        assert_eq!(events, vec![KdaEvent { at: 1_000, seq: 1, kind: Kind::Kill, amount: None, abyss: None }]);
         assert!(kda.since(seq).is_none());
     }
 
@@ -208,7 +212,7 @@ mod tests {
         kda.died(2_000);
         let (seq, events) = kda.since(1).unwrap();
         assert_eq!(seq, 2);
-        assert_eq!(events, vec![KdaEvent { at: 2_000, kind: Kind::Death, amount: None, abyss: None }]);
+        assert_eq!(events, vec![KdaEvent { at: 2_000, seq: 2, kind: Kind::Death, amount: None, abyss: None }]);
     }
 
     #[test]
@@ -220,7 +224,7 @@ mod tests {
         assert!(kda.since(0).is_none());
         kda.abyss_points(133_369, 3_000);
         let (_, events) = kda.since(0).unwrap();
-        assert_eq!(events, vec![KdaEvent { at: 3_000, kind: Kind::Points, amount: Some(913), abyss: None }]);
+        assert_eq!(events, vec![KdaEvent { at: 3_000, seq: 1, kind: Kind::Points, amount: Some(913), abyss: None }]);
     }
 
     #[test]
@@ -252,5 +256,14 @@ mod tests {
         let mut kda = Kda::default();
         kda.map_loaded(20, 1_000);
         assert_eq!(kda.since(0).unwrap().1[0].abyss, Some(true));
+    }
+
+    #[test]
+    fn two_kills_in_the_same_millisecond_are_two_events() {
+        let mut kda = Kda::default();
+        kda.player_died(7, true, 1_000);
+        kda.player_died(8, true, 1_000);
+        let events = kda.since(0).unwrap().1;
+        assert_eq!(events.iter().map(|e| (e.at, e.seq)).collect::<Vec<_>>(), vec![(1_000, 1), (1_000, 2)]);
     }
 }
