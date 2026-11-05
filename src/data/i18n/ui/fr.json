@@ -744,6 +744,7 @@
       "permFps": "Afficher les FPS du jeu (sous Windows, le compteur demande à s'exécuter en tant qu'administrateur pour cela)",
       "permDeathRecap": "Après qu'un joueur vous a tué : qui c'était et les dégâts qu'il vous a infligés",
       "permLootRolls": "Voir le butin aux dés : l'objet, qui a obtenu quel score et qui l'a remporté",
+      "permInput": "Voir quand vous appuyez sur Échap ou faites un clic gauche sur les zones de la fenêtre du jeu qu'il marque, tant que le jeu est au premier plan (rien d'autre)",
       "permScreenshot": "Faire des captures de sa propre fenêtre, dans le presse-papiers et votre dossier de captures",
       "testHint": "Des versions précoces que tout le monde peut essayer, signées comme les autres. Elles peuvent changer ou avoir des défauts : dis-nous ce que tu trouves.",
       "testTitle": "Plugins de test",

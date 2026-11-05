@@ -55,8 +55,11 @@
 //                                              player } who won it. The highest roll wins. A roll can
 //                                              come before its "open" or without one. Once each, kept
 //                                              like a decoder's events
-//   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
-//                                              (meter 2.0.65 on)
+//   a2.on("game", ({ running, area }) => ...)  whether AION2 is open, at start and on change
+//                                              (meter 2.0.65 on); meter 2.0.89 on also where its window's
+//                                              client area is on screen ({ x, y, width, height },
+//                                              physical pixels, as a2.widgets.place takes them; null
+//                                              while not known), told again when it moves
 //   a2.on("ping", ({ ms }) => ...)             the ping to the game server in ms (null while not known),
 //                                              at start and on change, about every 10 s (meter 2.0.73 on)
 //   a2.on("language", (code) => ...)           the meter's language ("en", "ko", "zh-Hans", ...), at start and on change
@@ -88,6 +91,13 @@
 //                                              being { fps, state }: state "ok" (fps a number), "noGame",
 //                                              "needsAdmin" (Windows: the meter must run as administrator)
 //                                              or "unsupported"; resolves to the reading now; false stops
+//   await a2.watchInput(zones)                 Esc, and left clicks in parts of AION2's window, while it is
+//                                              in front (permission "events:input", meter 2.0.89 on):
+//                                              zones are [{ x, y, width, height }], fractions (0 to 1) of
+//                                              its client area, up to 16; each comes as
+//                                              a2.on("input", (e) => ...), e being { key: "Escape" } or
+//                                              { zone } (the index). No other key, no click elsewhere, no
+//                                              position, nothing taken from the game; null stops
 //   await a2.fpsAdmin()                        ask the player to run the meter as administrator for the
 //                                              frame rate (permission "fps"): the meter's prompt, then
 //                                              Windows'; yes restarts the meter elevated (and it stays so)
@@ -225,6 +235,8 @@
     followBosses: (server, bosses) => call("bossTimers.follow", [Number(server), (bosses || []).map(String)]),
     // Meter 2.0.78 on: the game's frame rate.
     watchFps: (on) => call("fps.watch", [on !== false]),
+    // Meter 2.0.89 on: Esc, and clicks in parts of the game's window.
+    watchInput: (zones) => call("input.watch", [Array.isArray(zones) ? zones : null]),
     screenshot: (rect) => call("screenshot", [rect || {}]),
     fpsAdmin: () => call("fps.admin", []),
     window: Object.freeze({

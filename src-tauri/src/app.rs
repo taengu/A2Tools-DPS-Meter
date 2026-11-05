@@ -3732,6 +3732,7 @@ pub fn run() {
                     crate::plugins::widgets::close_all(window.app_handle(), &id);
                     crate::plugins::boss_live::forget_plugin(window.app_handle(), &id);
                     crate::plugins::fps::forget_plugin(&id);
+                    crate::plugins::input::forget_plugin(&id);
                 }
             }
             if let tauri::WindowEvent::Destroyed = event
@@ -3745,6 +3746,7 @@ pub fn run() {
                     crate::plugins::widgets::close_all(window.app_handle(), id);
                     crate::plugins::boss_live::forget_plugin(window.app_handle(), id);
                     crate::plugins::fps::forget_plugin(id);
+                    crate::plugins::input::forget_plugin(id);
                 }
                 // The meter hidden and its last plugin window closed: nothing
                 // would be left on screen, so the meter comes back.
@@ -4589,6 +4591,7 @@ pub fn run() {
             crate::plugins::widgets::plugin_widget_drag,
             crate::plugins::boss_live::plugin_boss_follow,
             crate::plugins::fps::plugin_fps_watch,
+            crate::plugins::input::plugin_input_watch,
             set_run_as_admin,
             crate::plugins::fps::plugin_fps_admin,
             crate::plugins::plugin_screenshot,

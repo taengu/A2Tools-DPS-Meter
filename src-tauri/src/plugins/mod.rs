@@ -16,6 +16,7 @@ pub mod catalog;
 pub mod decoder;
 pub mod dock;
 pub mod fps;
+pub mod input;
 pub mod widgets;
 #[cfg(feature = "online")]
 pub mod boss_live;
@@ -134,7 +135,7 @@ fn all_listed(ids: &[String], list: &[String]) -> bool {
 const PLUGIN_SURFACE_COMMANDS: &[&str] = &[
     "dock_close", "dock_fold", "dock_hello", "meter_shown", "open_settings_at", "open_settings_window",
     "open_url", "plugin_abyss_siege", "plugin_boss_follow", "plugin_boss_timers", "plugin_close",
-    "plugin_fps_admin", "plugin_fps_watch", "plugin_hello", "plugin_screenshot", "plugin_set_docked", "plugin_storage_get",
+    "plugin_fps_admin", "plugin_fps_watch", "plugin_hello", "plugin_input_watch", "plugin_screenshot", "plugin_set_docked", "plugin_storage_get",
     "plugin_storage_set", "plugin_widget_area", "plugin_widget_close", "plugin_widget_drag",
     "plugin_widget_hello", "plugin_widget_open", "plugin_widget_place", "plugin_widget_post",
     "plugin_widget_send", "plugin_widget_where", "plugin_widgets_lock", "plugin_widgets_locked",
@@ -670,6 +671,7 @@ impl PluginHost {
                 .spawn(move || {
                 let mut told = character(&app);
                 let mut game = crate::platform::window_detector::find_aion2_window();
+                let mut game_area = if game { crate::platform::game_input::game_area() } else { None };
                 GAME_OPEN.store(game, std::sync::atomic::Ordering::Relaxed);
                 sync_game_hiding(&app);
                 let mut game_checked = Instant::now();
@@ -767,16 +769,23 @@ impl PluginHost {
                         Some(_) => {}
                         None => fps_told = None,
                     }
-                    // Whether AION2 is open, looked at every few seconds.
+                    // Whether AION2 is open, and where its window is, looked
+                    // at every few seconds.
                     if game_checked.elapsed() >= GAME_CHECK {
                         game_checked = Instant::now();
                         let running = crate::platform::window_detector::find_aion2_window();
+                        let area = if running { crate::platform::game_input::game_area() } else { None };
                         if running != game {
-                            game = running;
                             tracing::debug!("Plugins: told the game is {}", if running { "open" } else { "closed" });
-                            host.tell_all(&app, "game", serde_json::json!({ "running": running }));
                             GAME_OPEN.store(running, std::sync::atomic::Ordering::Relaxed);
-                            sync_game_hiding(&app);
+                        }
+                        if (running, area) != (game, game_area) {
+                            let opened = running != game;
+                            (game, game_area) = (running, area);
+                            host.tell_all(&app, "game", serde_json::json!({ "running": running, "area": area }));
+                            if opened {
+                                sync_game_hiding(&app);
+                            }
                         }
                     }
                 }
@@ -795,8 +804,8 @@ impl PluginHost {
     }
 
     /// Turn a plugin's events off or on: off, what waits for it and its
-    /// replay log go, and so do its live boss and frame-rate follows (its
-    /// window's going drops those, but one in the dock has none).
+    /// replay log go, and so do its live boss, frame-rate and input follows
+    /// (its window's going drops those, but one in the dock has none).
     fn set_off(&self, app: &tauri::AppHandle, id: &str, off: bool) {
         let mut set = self.off.write().unwrap_or_else(|p| p.into_inner());
         if !off {
@@ -809,6 +818,7 @@ impl PluginHost {
         self.log.lock().unwrap_or_else(|p| p.into_inner()).remove(id);
         boss_live::forget_plugin(app, id);
         fps::forget_plugin(id);
+        input::forget_plugin(id);
     }
 
     /// The loaded plugins that are on, by id, with whatever `keep` picks.
@@ -1282,6 +1292,7 @@ struct PromptTexts {
     perm_death_recap: String,
     perm_loot_rolls: String,
     perm_screenshot: String,
+    perm_input: String,
 }
 
 /// One text of the meter's interface in its language (English failing that),
@@ -1336,6 +1347,7 @@ fn prompt_texts(data_dir: Option<&Path>, lang: &str) -> PromptTexts {
         perm_death_recap: perm("permDeathRecap", "After a player kills you: who they were and the damage they did to you"),
         perm_loot_rolls: perm("permLootRolls", "See Dice Roll loot: the item, who rolled what, and who won it"),
         perm_screenshot: perm("permScreenshot", "Take screenshots of its own window, to the clipboard and your screenshot folder"),
+        perm_input: perm("permInput", "See when you press Esc, or left-click the parts of the game's window it marks, while the game is in front (nothing else)"),
     }
 }
 
@@ -1352,6 +1364,7 @@ fn describe_permission(t: &PromptTexts, permission: &str) -> String {
         "events:death-recap" => t.perm_death_recap.clone(),
         "events:loot-rolls" => t.perm_loot_rolls.clone(),
         "screenshot" => t.perm_screenshot.clone(),
+        "events:input" => t.perm_input.clone(),
         p => match p.strip_prefix("decoder:") {
             Some(name) => t.perm_decoder.replace("{name}", name),
             None => p.to_string(),
@@ -2194,6 +2207,7 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
         "visible": window_shown(&app, &id),
         "reviewed": reviewed,
         "game": crate::platform::window_detector::find_aion2_window(),
+        "gameArea": crate::platform::game_input::game_area(),
         "ping": app.try_state::<AppState>().and_then(|s| s.ping_tracker.current_ping_ms()),
     }))
 }

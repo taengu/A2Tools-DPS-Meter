@@ -744,6 +744,7 @@
       "permFps": "Die Bildrate des Spiels anzeigen (unter Windows bittet das Meter dafür, als Administrator zu laufen)",
       "permDeathRecap": "Nachdem dich ein Spieler getötet hat: wer es war und welchen Schaden er dir zugefügt hat",
       "permLootRolls": "Würfel-Beute sehen: den Gegenstand, wer was gewürfelt hat und wer ihn bekommen hat",
+      "permInput": "Sehen, wann du Esc drückst oder die Stellen im Spielfenster linksklickst, die es markiert, solange das Spiel im Vordergrund ist (sonst nichts)",
       "permScreenshot": "Bildschirmfotos des eigenen Fensters machen, in die Zwischenablage und deinen Screenshot-Ordner",
       "testHint": "Frühe Versionen zum Ausprobieren für alle, signiert wie die anderen. Sie können sich noch ändern oder Ecken und Kanten haben: Sag uns, was dir auffällt.",
       "testTitle": "Test-Plugins",

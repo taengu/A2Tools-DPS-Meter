@@ -254,6 +254,7 @@ To remove it:
 | Discord activity | From 2.0.42: your class, level and server in your Discord status, through the Discord app on the same computer |
 | Screenshots | Works from 2.0.41, to the clipboard and a folder (`~/Pictures/A2Tools DPS Meter` by default). On Linux the meter pictures itself on a plain background, since Wayland lets no app copy the screen |
 | Auto-hide when the game loses focus | Not yet (the meter stays visible) |
+| Plugins that hear Esc and clicks in the game (`events:input`) | From 2.0.89, while the game runs through XWayland or X11 (Proton's default), on any desktop. Not with `PROTON_ENABLE_WAYLAND=1`, nor inside gamescope, where the game has no window on your desktop's X server |
 
 ## Global hotkeys
 
