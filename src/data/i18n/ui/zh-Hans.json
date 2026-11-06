@@ -227,6 +227,7 @@
     },
     "fightTimeline": "战斗时间线",
     "replay": {
+      "noOthersTiming": "其他玩家的命中时间未被记录，因此回放不包含“其他”。结束回放即可查看观测到的总伤害。",
       "label": "回放",
       "title": "回放",
       "play": "播放回放",

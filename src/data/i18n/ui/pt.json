@@ -227,6 +227,7 @@
     },
     "fightTimeline": "Linha do tempo da luta",
     "replay": {
+      "noOthersTiming": "O replay exclui os outros porque os momentos dos seus golpes não foram registrados. Encerre o replay para ver o total observado.",
       "label": "Replay",
       "title": "Replay",
       "play": "Reproduzir replay",

@@ -232,6 +232,7 @@
     },
     "fightTimeline": "Fight timeline",
     "replay": {
+      "noOthersTiming": "Replay excludes Others because their hit times were not recorded. End replay to see the observed total.",
       "label": "Replay",
       "title": "Replay",
       "play": "Play replay",

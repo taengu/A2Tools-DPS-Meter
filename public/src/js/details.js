@@ -22,6 +22,19 @@ const foldDotRows = (rows) => {
   return out;
 };
 
+// A field boss's observed HP loss is an aggregate, not a set of recorded
+// skills. Keep it separate so partial replay can show only its timed hits.
+const detailsWorldBossTotal = (target) => {
+  const raw = Number(target?.totalDamage);
+  const observed = Number(target?.worldBossObservedDamage);
+  return Math.max(Number.isFinite(raw) ? raw : 0, Number.isFinite(observed) ? observed : 0, 0);
+};
+
+const detailsWorldBossAggregate = (targets) => targets.some((target) => Number.isFinite(Number(target?.worldBossObservedDamage))
+  && Number(target.worldBossObservedDamage) > 0)
+  ? targets.reduce((sum, target) => sum + detailsWorldBossTotal(target), 0)
+  : null;
+
 const createDetailsUI = ({
   detailsPanel,
   detailsClose,
@@ -556,6 +569,8 @@ const createDetailsUI = ({
     const playerColor = showSplit && selectedAttackerIds.length === 1
       ? getJobColor(getActorJob(selectedAttackerIds[0]))
       : "";
+    const targets = selectedTargetId ? detailsTargets.filter((target) => Number(target.targetId) === Number(selectedTargetId)) : detailsTargets;
+    const observedTotal = detailsMode === "dmg" ? detailsWorldBossAggregate(targets) : null;
 
     for (let i = 0; i < statSlots.length; i++) {
       const slot = statSlots[i];
@@ -577,11 +592,19 @@ const createDetailsUI = ({
       slot.valueEl.style.justifyContent = "";
       slot.valueEl.style.alignItems = "";
 
+      // Only these three figures include unattributed HP loss. Counts,
+      // skill shares and peak DPS still describe the recorded hits.
+      const valueOf = (data, wholeFight) => {
+        let shown = data;
+        if (observedTotal > 0 && ["details.stats.totalDamage", "details.stats.contribution", "details.stats.avgDps"].includes(statKey)) {
+          shown = { ...data, totalDmg: wholeFight ? observedTotal : data.totalDmg,
+            contributionPct: wholeFight ? 100 : Number(data.totalDmg) * 100 / observedTotal };
+        }
+        return detailsMode === "heal" ? def.getValue(shown) : resolveStatValue(statKey, shown);
+      };
       if (showSplit && statKey !== "details.stats.empty") {
-        // Heal stats are read straight off their definitions.
-        const valueOf = (d) => (detailsMode === "heal" ? def.getValue(d) : resolveStatValue(statKey, d));
-        const playerVal = valueOf(details);
-        const totalVal = valueOf(lastUnfilteredDetails);
+        const playerVal = valueOf(details, false);
+        const totalVal = valueOf(lastUnfilteredDetails, true);
         slot.valueEl.style.display = "flex";
         slot.valueEl.style.gap = "3px";
         slot.valueEl.style.justifyContent = "flex-end";
@@ -605,7 +628,7 @@ const createDetailsUI = ({
         slot.valueEl.appendChild(sepSpan);
         slot.valueEl.appendChild(totalSpan);
       } else {
-        slot.valueEl.textContent = def.getValue(details);
+        slot.valueEl.textContent = valueOf(details, !hasPlayerSelected);
       }
     }
   };
@@ -659,17 +682,21 @@ const createDetailsUI = ({
         combined.set(actorId, (combined.get(actorId) || 0) + (Number(dmg) || 0));
       });
     });
-    if (combined.size === 0) return null;
-    const total = [...combined.values()].reduce((s, v) => s + v, 0) || 1;
+    const recorded = [...combined.values()].reduce((s, v) => s + v, 0);
+    const observed = detailsWorldBossAggregate(targets);
+    const total = Math.max(recorded, observed || 0);
+    if (total <= 0) return null;
+    const stats = [...combined.entries()]
+      .map(([actorId, dmg]) => ({
+        actorId,
+        job: detectedJobByActorId.get(actorId) || detailsActors.get(actorId)?.job || "",
+        totalDmg: dmg,
+        contributionPct: (dmg / total) * 100,
+      }));
+    if (observed > recorded) stats.push({ isOthers: true, totalDmg: observed - recorded,
+      contributionPct: (observed - recorded) / total * 100 });
     return {
-      stats: [...combined.entries()]
-        .map(([actorId, dmg]) => ({
-          actorId,
-          job: detectedJobByActorId.get(actorId) || detailsActors.get(actorId)?.job || "",
-          totalDmg: dmg,
-          contributionPct: (dmg / total) * 100,
-        }))
-        .sort((a, b) => b.totalDmg - a.totalDmg),
+      stats: stats.sort((a, b) => b.totalDmg - a.totalDmg),
       battleTimeMs: maxBattleTimeMs,
     };
   };
@@ -766,8 +793,10 @@ const createDetailsUI = ({
     detailsPartyListEl.innerHTML = "";
     const allActors = Array.isArray(stats) ? stats : [];
     if (allActors.length === 0) return;
-    // Cap party list to 8 players to prevent overflow in large fights
-    const actors = allActors.slice(0, 8);
+    // Keep the same eight players, plus the unattributed aggregate when
+    // present. Others must not push a real player out of the list.
+    const actors = [...allActors.filter((actor) => !actor.isOthers).slice(0, 8),
+      ...allActors.filter((actor) => actor.isOthers)].sort((a, b) => b.totalDmg - a.totalDmg);
 
     const topDmg = actors.reduce((m, a) => Math.max(m, Number(a.totalDmg) || 0), 1);
     const btMs = Number(battleTimeMs) || Number(lastDetails?.battleTimeMs) || 0;
@@ -791,9 +820,9 @@ const createDetailsUI = ({
     detailsPartyListEl.appendChild(allBar);
 
     actors.forEach((actor) => {
-      const actorId = Number(actor.actorId);
-      const job = actor.job || getActorJob(actorId);
-      const name = detailsActors.get(actorId)?.nickname || resolveActorLabel(actorId);
+      const actorId = actor.isOthers ? 0 : Number(actor.actorId);
+      const job = actor.isOthers ? "" : actor.job || getActorJob(actorId);
+      const name = actor.isOthers ? labelText("meter.others", "Others") : detailsActors.get(actorId)?.nickname || resolveActorLabel(actorId);
       const dmg = Number(actor.totalDmg) || 0;
       const pct = Number(actor.contributionPct) || 0;
       const ratio = topDmg > 0 ? dmg / topDmg : 0;
@@ -801,7 +830,7 @@ const createDetailsUI = ({
       const isSelected = Array.isArray(selectedAttackerIds) && selectedAttackerIds.includes(actorId);
 
       const bar = document.createElement("div");
-      bar.className = "detailsPartyBar" + (isSelected ? " isSelected" : "") + (actorId === localId ? " isUser" : "");
+      bar.className = "detailsPartyBar" + (isSelected ? " isSelected" : "") + (!actor.isOthers && actorId === localId ? " isUser" : "");
       // The meter's colour theme: the class colour, and the place from the
       // top (for the spectrum themes).
       if (color) bar.style.setProperty("--class-fill", color);
@@ -857,7 +886,7 @@ const createDetailsUI = ({
 
       const dpsEl = document.createElement("span");
       dpsEl.className = "detailsPartyBarDps";
-      const peak = peakFor(actorId);
+      const peak = actor.isOthers ? 0 : peakFor(actorId);
       const peakText = peak > 0 ? `${formatDamageCompact(peak)}${dpsSuffix}` : "";
       dpsEl.textContent = btMs > 0 ? `${formatDamageCompact(dmg / btMs * 1000)}${dpsSuffix}` : "-";
       if (showPeak && btMs > 0 && peak > 0) {
@@ -869,7 +898,7 @@ const createDetailsUI = ({
       // The figure is over the whole fight; the tooltip gives it over the time
       // this player was hitting (first hit to last; at least a second), and
       // their best 5 seconds.
-      const span = spans.get(actorId);
+      const span = actor.isOthers ? null : spans.get(actorId);
       const tip = [];
       if (span && btMs > 0) {
         const activeMs = Math.max(1000, span.last - span.first);
@@ -934,8 +963,13 @@ const createDetailsUI = ({
       bar.appendChild(contentEl);
 
       // Clicks are taken by one listener on the list (below renderPartyBars).
-      bar.dataset.actorId = String(actorId);
-      bar.dataset.actorName = name;
+      if (actor.isOthers) {
+        bar.dataset.others = "1";
+        bar.style.cursor = "default";
+      } else {
+        bar.dataset.actorId = String(actorId);
+        bar.dataset.actorName = name;
+      }
 
       detailsPartyListEl.appendChild(bar);
     });
@@ -955,7 +989,7 @@ const createDetailsUI = ({
   // added afresh each time (2026-10-18).
   detailsPartyListEl?.addEventListener("click", async (event) => {
     const bar = event.target instanceof Element ? event.target.closest(".detailsPartyBar") : null;
-    if (!bar || !detailsPartyListEl.contains(bar)) return;
+    if (!bar || !detailsPartyListEl.contains(bar) || bar.dataset.others) return;
     const actorId = Number(bar.dataset.actorId);
     if (bar.dataset.partyAll || !(actorId > 0) || selectedAttackerIds?.includes?.(actorId)) {
       selectedAttackerIds = null;
@@ -3604,7 +3638,8 @@ const createDetailsUI = ({
     const bossTargetSummary = {
       targetId: record.targetId,
       targetName: record.bossName,
-      totalDamage: record.totalDamage,
+      totalDamage: detailsWorldBossTotal(record),
+      worldBossObservedDamage: record.worldBossObservedDamage,
       battleTime: record.durationMs,
       lastDamageTime: record.startTimeMs + record.durationMs,
       actorDamage: historyActorDamage,
@@ -3640,7 +3675,7 @@ const createDetailsUI = ({
     window._historyDetailsOverride = record.details;
     const processedDetails = await getDetails(fakeRow, {
       targetId: record.targetId,
-      totalTargetDamage: record.totalDamage,
+      totalTargetDamage: bossTargetSummary.totalDamage,
       showSkillIcons: true,
     });
     if (seq !== openSeq) return;

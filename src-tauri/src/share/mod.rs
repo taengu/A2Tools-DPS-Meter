@@ -461,6 +461,7 @@ mod tests {
             start_time_ms: 1_700_000_000_000,
             duration_ms: 60_000,
             total_damage: 1_000,
+            world_boss_observed_damage: None,
             jobs: vec!["Sorcerer".into()],
             job_ids: vec![15],
             details: TargetDetailsResponse {

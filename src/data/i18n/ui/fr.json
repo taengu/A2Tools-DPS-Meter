@@ -227,6 +227,7 @@
     },
     "fightTimeline": "Chronologie du combat",
     "replay": {
+      "noOthersTiming": "La relecture exclut les autres joueurs, car les instants de leurs coups n’ont pas été enregistrés. Quittez la relecture pour voir le total observé.",
       "label": "Relecture",
       "title": "Relecture",
       "play": "Lancer la relecture",

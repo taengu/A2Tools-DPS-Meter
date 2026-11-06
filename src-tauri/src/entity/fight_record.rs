@@ -14,6 +14,11 @@ pub struct FightRecord {
     pub start_time_ms: i64,
     pub duration_ms: i64,
     pub total_damage: i32,
+    /// HP loss observed on an open-world boss, including damage whose hits
+    /// the server did not send. An aggregate only, never attributed to skills
+    /// or actors. Absent in older fights and when no matching reading exists.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub world_boss_observed_damage: Option<i64>,
     /// Job class prefix IDs (e.g. [11, 14, 17]) for language-independent storage.
     pub jobs: Vec<String>,
     /// Job class prefix IDs for i18n resolution (new field).
@@ -81,6 +86,10 @@ pub struct FightSummary {
     pub start_time_ms: i64,
     pub duration_ms: i64,
     pub total_damage: i32,
+    /// Optional observed aggregate for display; `total_damage` remains the
+    /// recorded hits used by personal bests and derived fights.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub world_boss_observed_damage: Option<i64>,
     pub jobs: Vec<String>,
     #[serde(default)]
     pub job_ids: Vec<i32>,
@@ -199,7 +208,24 @@ mod tests {
         let record: FightRecord = serde_json::from_value(old_record()).unwrap();
         assert!(record.buffs.is_none());
         assert!(record.stagger.is_none());
+        assert!(record.world_boss_observed_damage.is_none());
         assert_eq!(serde_json::to_value(&record).unwrap(), old_record());
+    }
+
+    #[test]
+    fn observed_world_boss_damage_round_trips_separately_from_hits() {
+        let mut json = old_record();
+        json["worldBossObservedDamage"] = serde_json::json!(5_000_000_000i64);
+        let record: FightRecord = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(record.total_damage, 1000);
+        assert_eq!(record.details.total_target_damage, 1000);
+        #[cfg(feature = "desktop")]
+        {
+            let summary = crate::history::summary::of(&record);
+            assert_eq!(summary.total_damage, 1000);
+            assert_eq!(summary.world_boss_observed_damage, Some(5_000_000_000));
+        }
+        assert_eq!(serde_json::to_value(&record).unwrap(), json);
     }
 
     #[test]

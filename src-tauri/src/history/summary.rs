@@ -44,6 +44,7 @@ pub fn of(record: &FightRecord) -> FightSummary {
         start_time_ms: record.start_time_ms,
         duration_ms: record.duration_ms,
         total_damage: record.total_damage,
+        world_boss_observed_damage: record.world_boss_observed_damage,
         jobs: record.jobs.clone(),
         job_ids: record.job_ids.clone(),
         is_train: record.is_train,

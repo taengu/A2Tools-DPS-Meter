@@ -227,6 +227,7 @@
     },
     "fightTimeline": "戰鬥時間軸",
     "replay": {
+      "noOthersTiming": "其他玩家的命中時間未被記錄，因此重播不包含「其他」。結束重播即可查看觀測到的總傷害。",
       "label": "重播",
       "title": "重播",
       "play": "播放重播",

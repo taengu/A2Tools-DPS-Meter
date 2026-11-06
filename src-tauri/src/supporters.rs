@@ -407,6 +407,7 @@ mod tests {
             start_time_ms: 0,
             duration_ms: 1000,
             total_damage: 1,
+            world_boss_observed_damage: None,
             jobs: vec![],
             job_ids: vec![],
             details: TargetDetailsResponse {

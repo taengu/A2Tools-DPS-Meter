@@ -227,6 +227,7 @@
     },
     "fightTimeline": "Kampfverlauf",
     "replay": {
+      "noOthersTiming": "Andere sind im Replay nicht enthalten, da ihre Trefferzeiten fehlen. Beende das Replay, um die beobachtete Gesamtsumme zu sehen.",
       "label": "Wiedergabe",
       "title": "Wiedergabe",
       "play": "Wiedergabe abspielen",

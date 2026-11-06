@@ -227,6 +227,7 @@
     },
     "fightTimeline": "Cronología del combate",
     "replay": {
+      "noOthersTiming": "La repetición excluye a los demás porque no se registraron los momentos de sus golpes. Finaliza la repetición para ver el total observado.",
       "label": "Repetición",
       "title": "Repetición",
       "play": "Reproducir repetición",
