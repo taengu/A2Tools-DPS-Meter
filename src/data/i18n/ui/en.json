@@ -605,6 +605,12 @@
         "highestDamage": "Highest Damage"
       }
     },
+    "trainTimeLimit": {
+      "label": "Train time limit",
+      "options": {
+        "off": "No limit"
+      }
+    },
     "showSupporterColors": "Show supporter colours",
     "showSupporterColorsHint": "Supporters' names render gold. Cosmetic only — it never changes any number.",
     "account": {
@@ -667,6 +673,7 @@
       "barTexture": "A pattern over the meter's bars. A thank-you for supporting A2 Tools.",
       "textureOffset": "Each bar starts its texture at a different place, so the bars don't all look alike.",
       "trainingMode": "In Train mode, which dummies the Details window shows: all of them together, or only the one you hit hardest.",
+      "trainTimeLimit": "In Train mode, hits on training dummies count for this long after your first one. The meter then stops until you press refresh, which starts the time again.",
       "allTargetsWindow": "In All Targets mode, the meter adds up every target hit within this time of the latest hit.",
       "updateRate": "How often the meter's numbers refresh. Faster shows hits sooner but uses more CPU.",
       "partyPresence": "Party members who also use A2Tools see a small A2 tag beside your name, and you see theirs. Anyone in your party using A2Tools can see it, so they'll know you use a third-party meter. Only hashes of character names and servers are sent.",
@@ -840,6 +847,7 @@
     "all": "All Targets",
     "identifying": "Identifying you...",
     "train": "Training Scarecrow",
+    "trainLimitReached": "Time limit reached",
     "boss": "Boss Targets"
   },
   "classes": {

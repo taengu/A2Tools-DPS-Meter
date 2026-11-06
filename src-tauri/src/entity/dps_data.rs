@@ -37,6 +37,10 @@ pub struct DpsData {
     /// time-to-kill estimate only then.
     #[serde(default)]
     pub target_is_boss: bool,
+    /// The Train time limit has run out: hits on dummies no longer count
+    /// until the refresh (Settings → Advanced).
+    #[serde(default)]
+    pub train_limit_reached: bool,
     /// The current target's NPC code (0 = none or unknown). `target_id` is
     /// the entity; the page looks names and a boss's own level up by code
     /// (Nightmare's bosses have ten codes each, one per level).
@@ -71,6 +75,7 @@ impl DpsData {
             target_current_hp: -1,
             target_stagger_pct: -1.0,
             target_is_boss: false,
+            train_limit_reached: false,
             target_mob_code: 0,
             dungeon_id: 0,
             party_generation: 0,

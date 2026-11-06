@@ -597,6 +597,12 @@
         "highestDamage": "最高伤害"
       }
     },
+    "trainTimeLimit": {
+      "label": "训练时间限制",
+      "options": {
+        "off": "不限制"
+      }
+    },
     "showSupporterColors": "显示赞助者颜色",
     "showSupporterColorsHint": "赞助者的名字显示为金色。仅为外观，不会改变任何数值。",
     "account": {
@@ -658,6 +664,7 @@
       "barTexture": "为计量条加上纹理，感谢您对 A2 Tools 的支持。",
       "textureOffset": "每条的纹理从不同位置开始，让各条看起来不一样。",
       "trainingMode": "训练模式下详情窗口显示哪些木桩：全部一起，或只显示你打得最多的那个。",
+      "trainTimeLimit": "训练模式下，只记录你第一次攻击后这段时间内对训练假人的攻击。之后计量器会停止，直到按下刷新，时间才会重新开始。",
       "allTargetsWindow": "全部目标模式下，计量器汇总最后一次命中前这段时间内命中的所有目标。",
       "updateRate": "统计数字多久刷新一次。越快越早显示伤害，但占用更多 CPU。",
       "partyPresence": "同样使用 A2Tools 的队友会在你的名字旁看到小小的 A2 标记，你也会看到他们的。队伍中任何使用 A2Tools 的人都看得到，因此会知道你使用第三方计量器。只会发送角色名称与服务器的哈希值。",
@@ -840,6 +847,7 @@
     "all": "所有目标",
     "identifying": "正在识别你...",
     "train": "训练用稻草人",
+    "trainLimitReached": "已达时间限制",
     "boss": "首领目标"
   },
   "classes": {

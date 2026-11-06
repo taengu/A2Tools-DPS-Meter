@@ -82,11 +82,21 @@ const createBattleTimeUI = ({
 
   const VISUAL_TICK_MS = 5000;
 
-  const update = (now, battleTimeMs) => {
+  // `capMs`: the Train time limit, when one is on: the timer never shows
+  // more, and stops there.
+  const update = (now, battleTimeMs, { capMs = 0 } = {}) => {
     lastSeenAt = now;
 
     const bt = Number(battleTimeMs);
     if (!Number.isFinite(bt)) return;
+    if (capMs > 0 && bt >= capMs) {
+      lastBattleTimeMs = bt;
+      lastChangedAt = now;
+      const formatted = formatMMSS(capMs);
+      if (tickEl && tickEl.textContent !== formatted) tickEl.textContent = formatted;
+      setState("state-ended");
+      return;
+    }
 
     if (lastBattleTimeMs === null) {
       lastBattleTimeMs = bt;
@@ -115,7 +125,7 @@ const createBattleTimeUI = ({
       // Keep the timer visually ticking for at least VISUAL_TICK_MS
       // so the display doesn't appear frozen between damage hits
       if (frozenMs < VISUAL_TICK_MS) {
-        const visualMs = bt + frozenMs;
+        const visualMs = capMs > 0 ? Math.min(bt + frozenMs, capMs) : bt + frozenMs;
         const formatted = formatMMSS(visualMs);
         if (tickEl && tickEl.textContent !== formatted) tickEl.textContent = formatted;
       }

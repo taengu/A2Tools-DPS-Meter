@@ -597,6 +597,12 @@
         "highestDamage": "Höchster Schaden"
       }
     },
+    "trainTimeLimit": {
+      "label": "Trainingszeitlimit",
+      "options": {
+        "off": "Kein Limit"
+      }
+    },
     "showSupporterColors": "Unterstützerfarben anzeigen",
     "showSupporterColorsHint": "Namen von Unterstützern erscheinen golden. Rein kosmetisch — es ändert keine Zahl.",
     "account": {
@@ -658,6 +664,7 @@
       "barTexture": "Ein Muster auf den Balken des Meters. Ein Dankeschön für die Unterstützung von A2 Tools.",
       "textureOffset": "Jeder Balken beginnt seine Textur an einer anderen Stelle, damit nicht alle gleich aussehen.",
       "trainingMode": "Im Trainingsmodus: welche Puppen das Detailfenster zeigt – alle zusammen oder nur die, die du am stärksten triffst.",
+      "trainTimeLimit": "Im Trainingsmodus zählen Treffer auf Trainingspuppen so lange nach deinem ersten. Danach hält das Meter an, bis du auf Aktualisieren drückst, was die Zeit neu startet.",
       "allTargetsWindow": "Im Modus „Alle Ziele“ zählt das Meter alle Ziele, die innerhalb dieser Zeit vor dem letzten Treffer getroffen wurden.",
       "updateRate": "Wie oft sich die Zahlen des Meters aktualisieren. Schneller zeigt Treffer früher, braucht aber mehr CPU.",
       "partyPresence": "Gruppenmitglieder, die auch A2Tools nutzen, sehen ein kleines A2 neben deinem Namen und du ihres. Jeder in deiner Gruppe mit A2Tools sieht es und weiß damit, dass du ein Drittanbieter-Meter nutzt. Gesendet werden nur Hashes von Charakternamen und Servern.",
@@ -840,6 +847,7 @@
     "all": "Alle Ziele",
     "identifying": "Identifiziere dich...",
     "train": "Trainingspuppe",
+    "trainLimitReached": "Zeitlimit erreicht",
     "boss": "Boss-Ziele"
   },
   "classes": {

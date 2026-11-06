@@ -689,6 +689,14 @@ struct Inner {
     /// restarted, next to them never learned what they were, and Train mode
     /// showed nothing however long the player hit them (2026-10-07).
     hp_reset_dummy_ids: HashSet<i32>,
+    /// Train time limit (Settings): how long after the player's first hit on
+    /// a training dummy its damage counts; 0, no limit. Past it, every hit on
+    /// a dummy is left out until the meter's refresh starts the clock again.
+    train_limit_ms: i64,
+    /// When that first hit landed (packet time), since the last refresh.
+    train_started_at: Option<i64>,
+    /// A hit was left out for it: the limit has run out.
+    train_limit_hit: bool,
     /// On a training dummy, DoT ticks that landed after their actor's latest
     /// direct hit, keyed (target, actor). They are counted when that actor
     /// hits directly again; if the player has stopped attacking, they never
@@ -867,6 +875,9 @@ impl DataStorage {
                 training_dummy_ids: HashSet::new(),
                 hp_floored_ids: HashSet::new(),
                 hp_reset_dummy_ids: HashSet::new(),
+                train_limit_ms: 0,
+                train_started_at: None,
+                train_limit_hit: false,
                 held_dot_ticks: HashMap::new(),
                 has_boss_in_segment: false,
                 current_target: 0,
@@ -1977,6 +1988,42 @@ impl DataStorage {
             inner.has_boss_in_segment = true;
         }
 
+        // The Train time limit: on a dummy, only the player's own damage (and
+        // their summons'), from their first direct hit, for train_limit_ms;
+        // nothing after it until the refresh. Other players at the dummies
+        // don't start the clock or show in the fight.
+        if inner.train_limit_ms > 0
+            && (inner.training_dummy_ids.contains(&target_id) || inner.hp_reset_dummy_ids.contains(&target_id))
+        {
+            let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok());
+            if me != Some(resolved) {
+                return;
+            }
+            match inner.train_started_at {
+                None if pdp.is_dot() => return,
+                None => inner.train_started_at = Some(pdp.timestamp()),
+                Some(at) if pdp.timestamp() > at + inner.train_limit_ms => {
+                    // The fight is the limit long: its time ends there, not
+                    // at the last hit before it.
+                    if !inner.train_limit_hit {
+                        inner.train_limit_hit = true;
+                        let end = at + inner.train_limit_ms;
+                        let dummies: Vec<i32> =
+                            inner.training_dummy_ids.iter().chain(&inner.hp_reset_dummy_ids).copied().collect();
+                        for id in dummies {
+                            if let Some(t) = inner.target_combat.get_mut(&id) {
+                                if t.first_damage_time <= end {
+                                    t.last_damage_time = t.last_damage_time.max(end);
+                                }
+                            }
+                        }
+                        self.damage_generation.fetch_add(1, Ordering::Relaxed);
+                    }
+                    return;
+                }
+                Some(_) => {}
+            }
+        }
         if inner.training_dummy_ids.contains(&target_id) {
             let key = (target_id, actor_id);
             if pdp.is_dot() {
@@ -2038,7 +2085,9 @@ impl DataStorage {
         }
         #[cfg(not(feature = "online"))]
         let _ = before;
-        // A spawn names the NPC: the table says what it is from here on.
+        // A spawn names the NPC: the table says what it is from here on
+        // (register_training_dummy follows for a dummy).
+        inner.training_dummy_ids.remove(&mid);
         inner.hp_floored_ids.remove(&mid);
         inner.hp_reset_dummy_ids.remove(&mid);
 
@@ -2288,6 +2337,31 @@ impl DataStorage {
     /// An entity the NPC table calls a training dummy. See `held_dot_ticks`.
     pub fn register_training_dummy(&self, entity_id: i32) {
         self.inner.write().training_dummy_ids.insert(entity_id);
+    }
+
+    /// The Train time limit, in ms (0: none). A change starts it again.
+    pub fn set_train_limit_ms(&self, ms: i64) {
+        let mut inner = self.inner.write();
+        inner.train_limit_ms = ms.max(0);
+        inner.train_started_at = None;
+        inner.train_limit_hit = false;
+    }
+
+    /// The meter's refresh: the Train time limit counts from the next hit.
+    pub fn restart_train_limit(&self) {
+        let mut inner = self.inner.write();
+        inner.train_started_at = None;
+        inner.train_limit_hit = false;
+    }
+
+    /// Whether a Train time limit is set.
+    pub fn train_limit_on(&self) -> bool {
+        self.inner.read().train_limit_ms > 0
+    }
+
+    /// Whether the Train time limit has run out: hits on dummies no longer count.
+    pub fn train_limit_reached(&self) -> bool {
+        self.inner.read().train_limit_hit
     }
 
     pub fn is_boss(&self, entity_id: i32) -> bool {
@@ -2744,7 +2818,12 @@ impl DataStorage {
             && inner.hp_floored_ids.contains(&id)
             && !inner.dead_entity_ids.contains(&id)
         {
-            inner.hp_reset_dummy_ids.insert(id);
+            // Under a Train time limit, a dummy known only now (by its HP)
+            // starts clean: what came before is other players' and uncounted.
+            if inner.hp_reset_dummy_ids.insert(id) && inner.train_limit_ms > 0 {
+                inner.target_combat.remove(&id);
+                inner.held_dot_ticks.retain(|&(target, _), _| target != id);
+            }
         }
         let max = inner.mob_hp_data.entry(id).or_insert(0);
         if hp > *max {
@@ -2898,7 +2977,6 @@ impl DataStorage {
         let mut inner = self.inner.write();
         inner.target_combat.clear();
         inner.held_dot_ticks.clear();
-        inner.training_dummy_ids.clear();
         inner.actor_jobs.clear();
         inner.known_player_ids.clear();
         inner.actor_power_scalars.clear();
@@ -2908,7 +2986,6 @@ impl DataStorage {
         inner.mob_hp_data.clear();
         inner.mob_current_hp.clear();
         inner.hp_floored_ids.clear();
-        inner.hp_reset_dummy_ids.clear();
         inner.heal_storage.clear();
         inner.current_target = 0;
     }
@@ -4085,6 +4162,48 @@ mod tests {
         s.append_damage(hit(1454, 500, 4_000, 50, true));
         s.append_damage(hit(1454, 500, 5_000, 50, true));
         assert_eq!(totals(&s, 500), (250, 2_000), "time ends at the last direct hit");
+    }
+
+    /// With a Train time limit, a dummy fight is the player's own: from their
+    /// first direct hit, for the limit. Other players' hits never count,
+    /// nothing on a dummy counts after it, a boss still does, and only the
+    /// refresh starts it again (after which the dummy is still known for one).
+    #[test]
+    fn the_train_time_limit_ends_a_dummy_fight_until_the_refresh() {
+        let s = DataStorage::new();
+        s.set_local_player_id(Some(1454));
+        s.register_training_dummy(500);
+        s.set_train_limit_ms(60_000);
+        s.append_damage(hit(2000, 500, 0, 10, false));
+        s.append_damage(hit(1454, 500, 5_000, 100, false));
+        s.append_damage(hit(2000, 500, 20_000, 10, false));
+        s.append_damage(hit(1454, 500, 30_000, 100, false));
+        s.append_damage(hit(1454, 500, 55_000, 100, false));
+        s.append_damage(hit(1454, 500, 65_000, 100, false));
+        assert!(!s.train_limit_reached());
+        assert_eq!(totals(&s, 500), (400, 60_000), "the player's first minute, from their first hit, and no one else's");
+        s.append_damage(hit(1454, 500, 65_001, 100, false));
+        s.append_damage(hit(2000, 500, 70_000, 10, false));
+        s.append_damage(hit(1454, 600, 70_000, 100, false));
+        assert!(s.train_limit_reached());
+        assert_eq!(totals(&s, 500), (400, 60_000), "nothing after it");
+        assert_eq!(totals(&s, 600).0, 100, "not a dummy: counted");
+
+        // An hour later: still over until the refresh.
+        s.append_damage(hit(1454, 500, 3_600_000, 100, false));
+        assert_eq!(totals(&s, 500).0, 400);
+        s.flush();
+        s.restart_train_limit();
+        assert!(!s.train_limit_reached());
+        s.append_damage(hit(2000, 500, 3_650_000, 10, false));
+        s.append_damage(hit(1454, 500, 3_660_000, 5, true));
+        assert!(s.get_combat_snapshot().get(&500).is_none(), "before the player's first direct hit, nothing");
+        s.append_damage(hit(1454, 500, 3_700_000, 100, false));
+        assert!(!s.train_limit_reached());
+        s.append_damage(hit(1454, 500, 3_760_001, 1, true));
+        s.append_damage(hit(1454, 500, 3_780_000, 100, false));
+        assert_eq!(totals(&s, 500), (100, 60_000), "a new minute from the refresh: the tick and the hit after it left out, the time the whole minute");
+        assert!(s.train_limit_reached());
     }
 
     #[test]

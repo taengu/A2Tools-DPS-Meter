@@ -264,6 +264,8 @@ impl DpsCalculator {
                 self.npc_lookup.is_boss(code) && !self.npc_lookup.is_training_dummy(code)
             });
         dps_data.target_is_boss = target_is_boss;
+        let train_limit_reached = self.data_storage.train_limit_reached();
+        dps_data.train_limit_reached = train_limit_reached;
         let target_mob_code = if self.current_target != 0 {
             self.data_storage.mob_code(self.current_target).unwrap_or(0)
         } else {
@@ -324,6 +326,7 @@ impl DpsCalculator {
                 snapshot.target_current_hp = target_current_hp;
                 snapshot.target_stagger_pct = target_stagger_pct;
                 snapshot.target_is_boss = target_is_boss;
+                snapshot.train_limit_reached = train_limit_reached;
                 snapshot.target_mob_code = target_mob_code;
                 snapshot.dungeon_id = dps_data.dungeon_id;
                 let mut snap = snapshot.clone();
@@ -561,9 +564,15 @@ impl DpsCalculator {
         // Heal data: per-actor totals windowed to the fight
         let heal_totals = self.data_storage.get_heal_totals_in_window(fight_start, fight_end);
         let mut resolved_heals: HashMap<i32, i64> = HashMap::new();
+        // Under a Train time limit the fight is the player's alone: no one
+        // else's heals either.
+        let own_only = (self.target_selection_mode == TargetSelectionMode::TrainTargets
+            && self.data_storage.train_limit_on())
+        .then(|| self.data_storage.local_player_id().map(|id| id as i32));
         for (&actor_id, &heal) in &heal_totals {
             let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
             if raw_uid <= 0 { continue; }
+            if own_only.is_some_and(|me| me != Some(raw_uid)) { continue; }
             let nickname = resolve_nickname(raw_uid, &nickname_data, &summon_data);
             let uid = *canonical.get(&nickname).unwrap_or(&raw_uid);
             *resolved_heals.entry(uid).or_insert(0) += heal;
@@ -729,7 +738,10 @@ impl DpsCalculator {
     fn finalize_rows(&self, dps_data: &mut DpsData) {
         dps_data.party_generation = self.data_storage.party_generation();
         (dps_data.zone_generation, dps_data.instance_generation) = self.data_storage.zone_generations();
-        self.add_party_rows(dps_data);
+        // Under a Train time limit the fight is the player's alone.
+        if !(self.target_selection_mode == TargetSelectionMode::TrainTargets && self.data_storage.train_limit_on()) {
+            self.add_party_rows(dps_data);
+        }
         self.mark_supporters(dps_data);
     }
 

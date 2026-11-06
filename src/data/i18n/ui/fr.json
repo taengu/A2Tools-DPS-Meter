@@ -597,6 +597,12 @@
         "highestDamage": "Dégâts les plus élevés"
       }
     },
+    "trainTimeLimit": {
+      "label": "Limite de temps d'entraînement",
+      "options": {
+        "off": "Aucune limite"
+      }
+    },
     "showSupporterColors": "Afficher les couleurs des soutiens",
     "showSupporterColorsHint": "Le nom des soutiens s'affiche en doré. Purement esthétique — aucun chiffre n'est modifié.",
     "account": {
@@ -658,6 +664,7 @@
       "barTexture": "Un motif sur les barres du compteur. Un merci pour votre soutien à A2 Tools.",
       "textureOffset": "Chaque barre commence sa texture à un endroit différent, pour qu'elles ne se ressemblent pas toutes.",
       "trainingMode": "En mode entraînement, quels mannequins la fenêtre Détails affiche : tous ensemble, ou seulement celui que tu frappes le plus.",
+      "trainTimeLimit": "En mode Entraînement, les coups sur les mannequins comptent pendant cette durée après votre premier. Le compteur s'arrête ensuite jusqu'à ce que vous appuyiez sur Actualiser, qui relance le temps.",
       "allTargetsWindow": "En mode Toutes les cibles, le compteur additionne chaque cible touchée dans ce délai avant le dernier coup.",
       "updateRate": "À quelle fréquence les chiffres du compteur se rafraîchissent. Plus rapide affiche les coups plus tôt mais utilise plus de CPU.",
       "partyPresence": "Les membres du groupe qui utilisent aussi A2Tools voient une petite étiquette A2 à côté de votre nom, et vous voyez la leur. Tout membre du groupe utilisant A2Tools peut la voir et saura donc que vous utilisez un meter tiers. Seuls des hachages des noms de personnages et des serveurs sont envoyés.",
@@ -840,6 +847,7 @@
     "all": "Toutes les cibles",
     "identifying": "Identification en cours...",
     "train": "Mannequin d'entraînement",
+    "trainLimitReached": "Limite de temps atteinte",
     "boss": "Cibles boss"
   },
   "classes": {

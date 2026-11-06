@@ -597,6 +597,12 @@
         "highestDamage": "Maior dano"
       }
     },
+    "trainTimeLimit": {
+      "label": "Limite de tempo de treino",
+      "options": {
+        "off": "Sem limite"
+      }
+    },
     "showSupporterColors": "Mostrar cores dos apoiadores",
     "showSupporterColorsHint": "Os nomes dos apoiadores aparecem em dourado. Apenas estético — não altera nenhum número.",
     "account": {
@@ -658,6 +664,7 @@
       "barTexture": "Um padrão sobre as barras do medidor. Um agradecimento por apoiar o A2 Tools.",
       "textureOffset": "Cada barra começa a textura num ponto diferente, para que não fiquem todas iguais.",
       "trainingMode": "No modo treino, quais bonecos a janela de detalhes mostra: todos juntos ou só o que você mais acerta.",
+      "trainTimeLimit": "No modo Treino, os golpes nos bonecos contam por este tempo após o primeiro. Depois o medidor para até você pressionar Atualizar, que reinicia o tempo.",
       "allTargetsWindow": "No modo Todos os alvos, o medidor soma cada alvo atingido dentro deste tempo antes do último golpe.",
       "updateRate": "Com que frequência os números do medidor atualizam. Mais rápido mostra os golpes antes, mas usa mais CPU.",
       "partyPresence": "Membros do grupo que também usam o A2Tools veem uma pequena etiqueta A2 ao lado do seu nome, e você vê a deles. Qualquer pessoa do grupo usando o A2Tools pode vê-la e saberá que você usa um medidor de terceiros. Só são enviados hashes de nomes de personagem e servidores.",
@@ -840,6 +847,7 @@
     "all": "Todos os alvos",
     "identifying": "Identificando você...",
     "train": "Boneco de treino",
+    "trainLimitReached": "Limite de tempo atingido",
     "boss": "Alvos chefe"
   },
   "classes": {
