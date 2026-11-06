@@ -143,6 +143,7 @@ impl DpsCalculator {
             self.last_damage_gen = -1;
         }
         self.target_selection_mode = mode;
+        self.data_storage.set_train_mode(mode == TargetSelectionMode::TrainTargets);
     }
 
     pub fn set_all_targets_window_ms(&mut self, ms: i64) {
@@ -1265,7 +1266,8 @@ impl DpsCalculator {
 
             let id = format!("auto_{}_{}", target_id, target_data.first_damage_time);
 
-            let is_train = self.npc_lookup.is_training_dummy(mob_code);
+            // One known by its HP alone has no NPC code to say so.
+            let is_train = self.npc_lookup.is_training_dummy(mob_code) || self.data_storage.is_dummy(target_id);
             let buffs = crate::combat::fight_buffs::for_fight(
                 &self.data_storage,
                 target_id,
@@ -1801,9 +1803,14 @@ impl DpsCalculator {
         // (same nickname/orphan resolution as damage). Reuses DetailSkillEntry:
         // dmg = heal amount, time = tick count, is_dot = HoT.
         let mut heal_map: HashMap<(i32, i32), DetailSkillEntry> = HashMap::new();
+        // Under a Train time limit a dummy fight is the player's alone: no one
+        // else's heals (the saved fight's players come from these too).
+        let own_only = (self.data_storage.train_limit_on() && self.data_storage.is_dummy(target_id))
+            .then(|| self.data_storage.local_player_id().map(|id| id as i32));
         for (&actor_id, skills) in &self.data_storage.get_heal_snapshot() {
             let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
             if raw_uid <= 0 { continue; }
+            if own_only.is_some_and(|me| me != Some(raw_uid)) { continue; }
             let remapped = *orphan_to_owner.get(&raw_uid).unwrap_or(&raw_uid);
             let nickname = resolve_nickname(remapped, &nickname_data, &summon_data);
             let uid = *canonical.get(&nickname).unwrap_or(&remapped);

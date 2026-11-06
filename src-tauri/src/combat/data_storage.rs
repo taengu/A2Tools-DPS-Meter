@@ -693,6 +693,8 @@ struct Inner {
     /// a training dummy its damage counts; 0, no limit. Past it, every hit on
     /// a dummy is left out until the meter's refresh starts the clock again.
     train_limit_ms: i64,
+    /// The meter is in Train mode: the limit applies only there.
+    train_mode: bool,
     /// When that first hit landed (packet time), since the last refresh.
     train_started_at: Option<i64>,
     /// A hit was left out for it: the limit has run out.
@@ -876,6 +878,7 @@ impl DataStorage {
                 hp_floored_ids: HashSet::new(),
                 hp_reset_dummy_ids: HashSet::new(),
                 train_limit_ms: 0,
+                train_mode: false,
                 train_started_at: None,
                 train_limit_hit: false,
                 held_dot_ticks: HashMap::new(),
@@ -1992,7 +1995,7 @@ impl DataStorage {
         // their summons'), from their first direct hit, for train_limit_ms;
         // nothing after it until the refresh. Other players at the dummies
         // don't start the clock or show in the fight.
-        if inner.train_limit_ms > 0
+        if train_limit_active(&inner)
             && (inner.training_dummy_ids.contains(&target_id) || inner.hp_reset_dummy_ids.contains(&target_id))
         {
             let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok());
@@ -2001,22 +2004,15 @@ impl DataStorage {
             }
             match inner.train_started_at {
                 None if pdp.is_dot() => return,
-                None => inner.train_started_at = Some(pdp.timestamp()),
-                Some(at) if pdp.timestamp() > at + inner.train_limit_ms => {
-                    // The fight is the limit long: its time ends there, not
-                    // at the last hit before it.
+                None => {
+                    // The fight starts here: what the dummies hold from before
+                    // (another mode's hits, everyone's) is not part of it.
+                    clear_dummy_fights(&mut inner);
+                    inner.train_started_at = Some(pdp.timestamp());
+                }
+                Some(_) if train_time_up(&inner, pdp.timestamp()) => {
                     if !inner.train_limit_hit {
-                        inner.train_limit_hit = true;
-                        let end = at + inner.train_limit_ms;
-                        let dummies: Vec<i32> =
-                            inner.training_dummy_ids.iter().chain(&inner.hp_reset_dummy_ids).copied().collect();
-                        for id in dummies {
-                            if let Some(t) = inner.target_combat.get_mut(&id) {
-                                if t.first_damage_time <= end {
-                                    t.last_damage_time = t.last_damage_time.max(end);
-                                }
-                            }
-                        }
+                        end_train_fight(&mut inner);
                         self.damage_generation.fetch_add(1, Ordering::Relaxed);
                     }
                     return;
@@ -2347,6 +2343,23 @@ impl DataStorage {
         inner.train_limit_hit = false;
     }
 
+    /// Whether the meter is in Train mode, the only one the time limit
+    /// applies in. A change starts the limit again.
+    pub fn set_train_mode(&self, on: bool) {
+        let mut inner = self.inner.write();
+        if inner.train_mode != on {
+            inner.train_mode = on;
+            inner.train_started_at = None;
+            inner.train_limit_hit = false;
+            // Into Train mode under a limit: the dummies' hits so far were
+            // recorded for another mode, everyone's, and are no fight of yours.
+            if train_limit_active(&inner) {
+                clear_dummy_fights(&mut inner);
+                self.damage_generation.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
     /// The meter's refresh: the Train time limit counts from the next hit.
     pub fn restart_train_limit(&self) {
         let mut inner = self.inner.write();
@@ -2354,14 +2367,35 @@ impl DataStorage {
         inner.train_limit_hit = false;
     }
 
-    /// Whether a Train time limit is set.
+    /// A training dummy: by the NPC table, or for one whose spawn the meter
+    /// missed, by its HP.
+    pub fn is_dummy(&self, id: i32) -> bool {
+        let inner = self.inner.read();
+        inner.training_dummy_ids.contains(&id) || inner.hp_reset_dummy_ids.contains(&id)
+    }
+
+    /// Whether a Train time limit is set and the meter is in Train mode.
     pub fn train_limit_on(&self) -> bool {
-        self.inner.read().train_limit_ms > 0
+        train_limit_active(&self.inner.read())
     }
 
     /// Whether the Train time limit has run out: hits on dummies no longer count.
+    /// Read every meter update, so the fight ends when its time is up, not
+    /// only at the next hit after it: a player who stops then kept the time
+    /// of their last hit (0:27 of 0:30).
     pub fn train_limit_reached(&self) -> bool {
-        self.inner.read().train_limit_hit
+        {
+            let inner = self.inner.read();
+            if inner.train_limit_hit || !train_time_up(&inner, now_ms()) {
+                return inner.train_limit_hit;
+            }
+        }
+        let mut inner = self.inner.write();
+        if !inner.train_limit_hit && train_time_up(&inner, now_ms()) {
+            end_train_fight(&mut inner);
+            self.damage_generation.fetch_add(1, Ordering::Relaxed);
+        }
+        true
     }
 
     pub fn is_boss(&self, entity_id: i32) -> bool {
@@ -2820,9 +2854,31 @@ impl DataStorage {
         {
             // Under a Train time limit, a dummy known only now (by its HP)
             // starts clean: what came before is other players' and uncounted.
-            if inner.hp_reset_dummy_ids.insert(id) && inner.train_limit_ms > 0 {
-                inner.target_combat.remove(&id);
-                inner.held_dot_ticks.retain(|&(target, _), _| target != id);
+            if inner.hp_reset_dummy_ids.insert(id) && train_limit_active(&inner) {
+                if inner.train_started_at.is_none() {
+                    inner.target_combat.remove(&id);
+                    inner.held_dot_ticks.retain(|&(target, _), _| target != id);
+                } else {
+                    // Your timed fight is under way: only the others' hits go.
+                    let me = inner.local_player_id.and_then(|v| i32::try_from(v).ok());
+                    let summons = inner.summon_storage.clone();
+                    if let Some(t) = inner.target_combat.get_mut(&id) {
+                        let others: Vec<i32> = t
+                            .actors
+                            .keys()
+                            .copied()
+                            .filter(|&a| me != Some(summon_resolver::resolve(a, &summons)))
+                            .collect();
+                        for a in others {
+                            if let Some(data) = t.actors.remove(&a) {
+                                t.total_damage -= data.total_damage;
+                            }
+                        }
+                    }
+                    inner
+                        .held_dot_ticks
+                        .retain(|&(target, actor), _| target != id || me == Some(summon_resolver::resolve(actor, &summons)));
+                }
             }
         }
         let max = inner.mob_hp_data.entry(id).or_insert(0);
@@ -3134,6 +3190,44 @@ fn has_cjk(s: &str) -> bool {
         || (0x3400..=0x4DBF).contains(&cp) || (0x20000..=0x2A6DF).contains(&cp)
         || (0x1100..=0x11FF).contains(&cp)
     })
+}
+
+/// Whether the Train time limit's time is up at `now`.
+fn train_time_up(inner: &Inner, now: i64) -> bool {
+    train_limit_active(inner) && inner.train_started_at.is_some_and(|at| now > at + inner.train_limit_ms)
+}
+
+/// Forget what the training dummies hold, for a Train fight to start clean.
+fn clear_dummy_fights(inner: &mut Inner) {
+    let dummies: Vec<i32> = inner.training_dummy_ids.iter().chain(&inner.hp_reset_dummy_ids).copied().collect();
+    for id in dummies {
+        inner.target_combat.remove(&id);
+        inner.held_dot_ticks.retain(|&(target, _), _| target != id);
+    }
+}
+
+/// A Train time limit is set and the meter is in Train mode.
+fn train_limit_active(inner: &Inner) -> bool {
+    inner.train_limit_ms > 0 && inner.train_mode
+}
+
+/// The Train time limit has run out: the dummy fight is the limit long, on
+/// every dummy in it. Its time ends there, not at the last hit before it, and
+/// starts at the player's first hit on any of them (one first hit later, its
+/// own fight read 0:27 of 0:30).
+fn end_train_fight(inner: &mut Inner) {
+    inner.train_limit_hit = true;
+    let Some(at) = inner.train_started_at else { return };
+    let end = at + inner.train_limit_ms;
+    let dummies: Vec<i32> = inner.training_dummy_ids.iter().chain(&inner.hp_reset_dummy_ids).copied().collect();
+    for id in dummies {
+        if let Some(t) = inner.target_combat.get_mut(&id) {
+            if t.first_damage_time <= end {
+                t.first_damage_time = at;
+                t.last_damage_time = t.last_damage_time.max(end);
+            }
+        }
+    }
 }
 
 /// Count one damage record into its target's and actor's aggregates.
@@ -4174,12 +4268,21 @@ mod tests {
         s.set_local_player_id(Some(1454));
         s.register_training_dummy(500);
         s.set_train_limit_ms(60_000);
+        // Hits from before Train mode: no part of the fight.
+        s.append_damage(hit(2000, 500, -20_000, 999, false));
+        s.set_train_mode(true);
+        assert!(s.get_combat_snapshot().get(&500).is_none(), "Train mode under a limit starts clean");
         s.append_damage(hit(2000, 500, 0, 10, false));
         s.append_damage(hit(1454, 500, 5_000, 100, false));
         s.append_damage(hit(2000, 500, 20_000, 10, false));
         s.append_damage(hit(1454, 500, 30_000, 100, false));
         s.append_damage(hit(1454, 500, 55_000, 100, false));
         s.append_damage(hit(1454, 500, 65_000, 100, false));
+        // A second dummy, first hit 15 s in.
+        s.register_training_dummy(501);
+        s.append_damage(hit(1454, 501, 20_000, 100, false));
+        s.append_damage(hit(1454, 501, 45_000, 100, false));
+        crate::clock::set_override(Some(65_000));
         assert!(!s.train_limit_reached());
         assert_eq!(totals(&s, 500), (400, 60_000), "the player's first minute, from their first hit, and no one else's");
         s.append_damage(hit(1454, 500, 65_001, 100, false));
@@ -4187,6 +4290,7 @@ mod tests {
         s.append_damage(hit(1454, 600, 70_000, 100, false));
         assert!(s.train_limit_reached());
         assert_eq!(totals(&s, 500), (400, 60_000), "nothing after it");
+        assert_eq!(totals(&s, 501), (200, 60_000), "every dummy's fight the whole minute");
         assert_eq!(totals(&s, 600).0, 100, "not a dummy: counted");
 
         // An hour later: still over until the refresh.
@@ -4199,11 +4303,35 @@ mod tests {
         s.append_damage(hit(1454, 500, 3_660_000, 5, true));
         assert!(s.get_combat_snapshot().get(&500).is_none(), "before the player's first direct hit, nothing");
         s.append_damage(hit(1454, 500, 3_700_000, 100, false));
+        crate::clock::set_override(Some(3_740_000));
         assert!(!s.train_limit_reached());
-        s.append_damage(hit(1454, 500, 3_760_001, 1, true));
-        s.append_damage(hit(1454, 500, 3_780_000, 100, false));
-        assert_eq!(totals(&s, 500), (100, 60_000), "a new minute from the refresh: the tick and the hit after it left out, the time the whole minute");
+        // The player stops; the minute runs out with no hit after it.
+        crate::clock::set_override(Some(3_760_001));
         assert!(s.train_limit_reached());
+        assert_eq!(totals(&s, 500), (100, 60_000), "a new minute from the refresh, the time the whole minute");
+        s.append_damage(hit(1454, 500, 3_760_002, 1, true));
+        s.append_damage(hit(1454, 500, 3_780_000, 100, false));
+        assert_eq!(totals(&s, 500), (100, 60_000), "nothing after it");
+        crate::clock::set_override(None);
+    }
+
+    /// The Train time limit is Train mode's: in the others, everyone's hits
+    /// on a dummy count, for as long as they go on.
+    #[test]
+    fn the_train_time_limit_is_only_for_train_mode() {
+        let s = DataStorage::new();
+        s.set_local_player_id(Some(1454));
+        s.register_training_dummy(500);
+        s.set_train_limit_ms(30_000);
+        for at in (0..=60_000).step_by(10_000) {
+            s.append_damage(hit(1454, 500, at, 100, false));
+            s.append_damage(hit(2000, 500, at, 10, false));
+        }
+        assert_eq!(totals(&s, 500), (770, 60_000));
+        assert!(!s.train_limit_on());
+        crate::clock::set_override(Some(60_000));
+        assert!(!s.train_limit_reached());
+        crate::clock::set_override(None);
     }
 
     #[test]

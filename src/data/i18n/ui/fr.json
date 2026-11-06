@@ -848,6 +848,9 @@
     "identifying": "Identification en cours...",
     "train": "Mannequin d'entraînement",
     "trainLimitReached": "Limite de temps atteinte",
+    "timed": "Chrono : {time}",
+    "timedSeconds": "{n} s",
+    "timedMinutes": "{n} min",
     "boss": "Cibles boss"
   },
   "classes": {

@@ -848,6 +848,9 @@
     "identifying": "Identifying you...",
     "train": "Training Scarecrow",
     "trainLimitReached": "Time limit reached",
+    "timed": "Timed: {time}",
+    "timedSeconds": "{n}sec",
+    "timedMinutes": "{n}min",
     "boss": "Boss Targets"
   },
   "classes": {

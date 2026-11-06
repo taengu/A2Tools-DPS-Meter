@@ -848,6 +848,9 @@
     "identifying": "正在识别你...",
     "train": "训练用稻草人",
     "trainLimitReached": "已达时间限制",
+    "timed": "限时：{time}",
+    "timedSeconds": "{n}秒",
+    "timedMinutes": "{n}分钟",
     "boss": "首领目标"
   },
   "classes": {

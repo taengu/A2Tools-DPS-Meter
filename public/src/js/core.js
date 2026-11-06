@@ -691,6 +691,12 @@ class DpsApp {
     // Each metric in its own colour (styles.css); on unless turned off.
     this.statColours = this.safeGetStorage(this.storageKeys.statColours) !== "false";
     document.body.classList.toggle("noStatColours", !this.statColours);
+    // Turned on or off in the meter: the other windows (Details) follow.
+    window.addEventListener("storage", (event) => {
+      if (event.key !== this.storageKeys.statColours) return;
+      this.statColours = event.newValue !== "false";
+      document.body.classList.toggle("noStatColours", !this.statColours);
+    });
     // The death count badge (meter.js); off unless turned on.
     this.showDeaths = this.safeGetStorage(this.storageKeys.showDeaths) === "true";
     document.body.classList.toggle("noDeaths", !this.showDeaths);
@@ -950,7 +956,7 @@ class DpsApp {
   // In Train mode, the Train time limit (ms) the timer stops at; 0 for none.
   trainTimeCapMs(targetMode = this.lastTargetMode) {
     if (targetMode !== "trainTargets") return 0;
-    const ms = Number(this.settingsSelections?.trainTimeLimitMs || this.safeGetSetting?.(this.storageKeys.trainTimeLimitMs));
+    const ms = Number(this.safeGetSetting?.(this.storageKeys.trainTimeLimitMs));
     return Number.isFinite(ms) && ms > 0 ? ms : 0;
   }
 
@@ -1677,6 +1683,13 @@ class DpsApp {
     // when it ran out, until the refresh.
     if (targetMode === "trainTargets" && trainLimitReached) {
       nextTargetLabel = this.i18n?.t("target.trainLimitReached", "Time limit reached") ?? "Time limit reached";
+    } else if (targetMode === "trainTargets" && this.trainTimeCapMs(targetMode) > 0) {
+      // While it runs, the title says so: "TRAINING SCARECROW (Timed: 30sec)".
+      const ms = this.trainTimeCapMs(targetMode);
+      const time = ms < 60000
+        ? (this.i18n?.t("target.timedSeconds", "{n}sec") ?? "{n}sec").replace("{n}", String(Math.round(ms / 1000)))
+        : (this.i18n?.t("target.timedMinutes", "{n}min") ?? "{n}min").replace("{n}", String(Math.round(ms / 60000)));
+      nextTargetLabel = `${nextTargetLabel} (${(this.i18n?.t("target.timed", "Timed: {time}") ?? "Timed: {time}").replace("{time}", time)})`;
     }
     if (this.elBossName) {
       if (this.elBossName.textContent !== nextTargetLabel) {
@@ -5584,7 +5597,10 @@ class DpsApp {
     if (persist) {
       this.safeSetStorage(this.storageKeys.targetSelection, String(this.targetSelection));
     }
-    if (syncBackend) {
+    // Details and History run this too, with the default mode: theirs put
+    // the live meter in it as they opened (a Train fight then went on with no
+    // time limit and everyone's damage). The meter and Settings set it.
+    if (syncBackend && window.A2_VIEW !== "details" && window.A2_VIEW !== "history") {
       window.javaBridge?.setTargetSelection?.(this.targetSelection);
     }
     if (previousSelection !== this.targetSelection) {
@@ -5864,7 +5880,14 @@ class DpsApp {
     this.targetMenuOpen = false;
 
     const choose = (mode) => {
+      const wasTrain = this.targetSelection === "trainTargets";
       this.setTargetSelection(mode, { persist: true, syncBackend: true, reason: "target menu" });
+      // Into Train mode with a time limit: the timed fight starts from 0:00 at
+      // your first hit, so the last mode's rows and timer go (the backend
+      // has cleared the dummies too).
+      if (mode === "trainTargets" && !wasTrain && this.trainTimeCapMs(mode) > 0) {
+        this.resetAll({ callBackend: false });
+      }
       this.renderTargetMenu();
       if (!this.isCollapse) this.fetchDps();
     };

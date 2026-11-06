@@ -848,6 +848,9 @@
     "identifying": "あなたを識別中...",
     "train": "訓練用かかし",
     "trainLimitReached": "時間制限に達しました",
+    "timed": "制限: {time}",
+    "timedSeconds": "{n}秒",
+    "timedMinutes": "{n}分",
     "boss": "ボスターゲット"
   },
   "classes": {

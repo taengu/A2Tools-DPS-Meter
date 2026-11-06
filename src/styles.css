@@ -1083,6 +1083,9 @@ body:not(.noStatColours) .list .item .dps [data-metric="damageReceived"] { color
 body:not(.noStatColours) .list .item .dps [data-metric="hps"] { color: var(--metric-hps); }
 body:not(.noStatColours) .list .item .dps [data-metric="totalHeal"] { color: var(--metric-totalHeal); }
 body:not(.noStatColours) .list .item .dps [data-metric="stagger"] { color: var(--metric-stagger); }
+/* The same colours on Details' party bars: DPS and damage. */
+body:not(.noStatColours) .detailsPanel .detailsPartyBarDps { color: var(--metric-dps); }
+body:not(.noStatColours) .detailsPanel .detailsPartyBarDmg { color: var(--metric-totalDamage); }
 .list .item .dps .dpsContribution {
   font-variation-settings: "wght" 600, "wdth" 75;
   font-size: 11px;
@@ -6874,6 +6877,19 @@ body.isHistoryWindow .historyPanel .historyHeader .closeX {
 }
 .detailsPanel .detailsPartyBarDmg {
   color: var(--hud-sub);
+}
+/* The party bars' figures over the bar's colour: a hard edge all round,
+   then a short drop, so they read on any class colour or texture. */
+.detailsPanel .detailsPartyBar .detailsPartyBarDps,
+.detailsPanel .detailsPartyBar .detailsPartyBarDmg,
+.detailsPanel .detailsPartyBar .detailsPartyBarPct {
+  text-shadow:
+    -1px 0 0 rgba(0, 0, 0, 0.95),
+    1px 0 0 rgba(0, 0, 0, 0.95),
+    0 -1px 0 rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(0, 0, 0, 0.95),
+    0 1px 2px rgba(0, 0, 0, 1),
+    0 2px 4px rgba(0, 0, 0, 0.85);
 }
 .detailsPanel .detailsPartyBarPct {
   font-variation-settings: "wght" 600, "wdth" 75;

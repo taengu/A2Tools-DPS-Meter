@@ -848,6 +848,9 @@
     "identifying": "사용자를 식별하는 중...",
     "train": "훈련용 허수아비",
     "trainLimitReached": "시간 제한 도달",
+    "timed": "제한: {time}",
+    "timedSeconds": "{n}초",
+    "timedMinutes": "{n}분",
     "boss": "보스 대상"
   },
   "classes": {

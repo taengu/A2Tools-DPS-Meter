@@ -848,6 +848,9 @@
     "identifying": "Identificando você...",
     "train": "Boneco de treino",
     "trainLimitReached": "Limite de tempo atingido",
+    "timed": "Limite: {time}",
+    "timedSeconds": "{n} s",
+    "timedMinutes": "{n} min",
     "boss": "Alvos chefe"
   },
   "classes": {

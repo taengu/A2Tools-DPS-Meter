@@ -848,6 +848,9 @@
     "identifying": "Identifiziere dich...",
     "train": "Trainingspuppe",
     "trainLimitReached": "Zeitlimit erreicht",
+    "timed": "Zeitlimit: {time}",
+    "timedSeconds": "{n} Sek.",
+    "timedMinutes": "{n} Min.",
     "boss": "Boss-Ziele"
   },
   "classes": {

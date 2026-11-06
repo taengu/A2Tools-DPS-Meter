@@ -848,6 +848,9 @@
     "identifying": "Identificándote...",
     "train": "Muñeco de entrenamiento",
     "trainLimitReached": "Límite de tiempo alcanzado",
+    "timed": "Límite: {time}",
+    "timedSeconds": "{n} s",
+    "timedMinutes": "{n} min",
     "boss": "Objetivos jefe"
   },
   "classes": {

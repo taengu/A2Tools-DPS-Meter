@@ -848,6 +848,9 @@
     "identifying": "Определяем вас...",
     "train": "Тренировочное чучело",
     "trainLimitReached": "Лимит времени достигнут",
+    "timed": "Лимит: {time}",
+    "timedSeconds": "{n} сек",
+    "timedMinutes": "{n} мин",
     "boss": "Цели-боссы"
   },
   "classes": {
