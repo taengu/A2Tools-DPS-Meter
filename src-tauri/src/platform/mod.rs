@@ -33,6 +33,7 @@ mod os;
 #[path = "unsupported/mod.rs"]
 mod os;
 
+pub mod game_input;
 pub mod hotkeys;
 pub mod kwin_rules;
 pub mod meter_anchor;

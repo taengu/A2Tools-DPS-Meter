@@ -42,6 +42,7 @@
       if ((event === "bossMap" || event === "bossLive" || event === "abyss") && !allowed("feed:boss-timers")) return;
       if (event === "deathRecap" && !allowed("events:death-recap")) return;
       if (event === "lootRoll" && !allowed("events:loot-rolls")) return;
+      if (event === "input" && !allowed("events:input")) return;
       const msg = { event, data, ...extra };
       if (ready) send(msg);
       else queue.push(msg);
@@ -94,6 +95,13 @@
       "fps.watch": ([on]) => {
         if (!allowed("fps")) throw new Error('the plugin lacks the "fps" permission');
         return call("plugin_fps_watch", { on: !!on });
+      },
+      // Esc, and clicks in parts of the game's window (meter 2.0.89): "input"
+      // events while asked.
+      "input.watch": ([zones]) => {
+        if (!allowed("events:input")) throw new Error('the plugin lacks the "events:input" permission');
+        const zone = (z) => ({ x: Number(z?.x), y: Number(z?.y), width: Number(z?.width), height: Number(z?.height) });
+        return call("plugin_input_watch", { zones: Array.isArray(zones) ? zones.map(zone) : null });
       },
       // Run the meter as administrator, for the frame rate: the meter asks.
       "fps.admin": () => {
@@ -211,7 +219,8 @@
     const startState = (hello) => {
       const out = [["language", hello.language || "en"], ["theme", hello.theme], ["compact", compact]];
       if (hello.character && allowed("events:character")) out.push(["character", hello.character]);
-      if (typeof hello.game === "boolean") out.push(["game", { running: hello.game }]);
+      // Where the game's window is, too (meter 2.0.89 on; null while not known).
+      if (typeof hello.game === "boolean") out.push(["game", { running: hello.game, area: hello.gameArea ?? null }]);
       // Its window (or dock tab) shown or hidden (meter 2.0.77 on).
       if (typeof hello.visible === "boolean") out.push(["visible", hello.visible]);
       // The ping to the game server (meter 2.0.73 on); null until it is known.

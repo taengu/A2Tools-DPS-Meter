@@ -759,6 +759,7 @@
       "permFps": "Show the game's frame rate (on Windows, the meter asks to run as administrator for it)",
       "permDeathRecap": "After a player kills you: who they were and the damage they did to you",
       "permLootRolls": "See Dice Roll loot: the item, who rolled what, and who won it",
+      "permInput": "See when you press Esc, or left-click the parts of the game's window it marks, while the game is in front (nothing else)",
       "permScreenshot": "Take screenshots of its own window, to the clipboard and your screenshot folder",
       "testHint": "Early versions for anyone to try, signed like the others. They may change or have rough edges: tell us what you find.",
       "testTitle": "Test plugins",

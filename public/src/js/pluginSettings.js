@@ -138,6 +138,9 @@
       if (permission === "events:loot-rolls") {
         return t("settings.plugins.permLootRolls", "See Dice Roll loot: the item, who rolled what, and who won it");
       }
+      if (permission === "events:input") {
+        return t("settings.plugins.permInput", "See when you press Esc, or left-click the parts of the game's window it marks, while the game is in front (nothing else)");
+      }
       if (permission.startsWith("decoder:")) {
         return t("settings.plugins.permDecoder", "Read selected game fields (may include other players): {name}", { name: permission.slice(8) });
       }

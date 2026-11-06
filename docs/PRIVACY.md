@@ -30,7 +30,11 @@ manifest.
 **The supporter list and the plugin catalog.** Downloaded from the CDN and used
 on your machine (see below). Plugins run sandboxed with no network access; a
 plugin that shows field boss timers gets them through the meter, which fetches
-the server's published timers.
+the server's published timers. A plugin you allow to see your input
+(`events:input`, listed before you install it) is told only when you press Esc,
+or left-click one of the parts of the game's window it named, while the game
+is in front and the plugin asks: not where you clicked, no other key, nothing
+in other windows, and the meter keeps none of it.
 
 **Your account, if you connect one.** Signing in under *Settings → A2 Tools
 Account* opens a2tools.app in your browser to approve the meter, which then
