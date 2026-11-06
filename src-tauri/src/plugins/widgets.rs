@@ -447,7 +447,12 @@ pub fn plugin_widget_where(app: tauri::AppHandle, window: tauri::WebviewWindow, 
     let id = window_plugin(&window, plugin.as_deref())?;
     require(&app, &id, "widgets")?;
     let Some(widget) = app.get_webview_window(&label(&id, &name)) else { return Ok(Value::Null) };
-    let at = widget.outer_position().map_err(|e| e.to_string())?;
+    // On KDE Wayland the window's own position is not known; where the player
+    // dragged it is (meter 2.0.89 on).
+    let at = match crate::platform::window::known_position(&widget) {
+        Some((x, y)) => tauri::PhysicalPosition::new(x, y),
+        None => widget.outer_position().map_err(|e| e.to_string())?,
+    };
     let size = widget.outer_size().map_err(|e| e.to_string())?;
     let screen = widget.current_monitor().ok().flatten().map(|m| {
         let area = m.work_area();

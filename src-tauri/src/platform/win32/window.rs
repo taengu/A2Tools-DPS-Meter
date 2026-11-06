@@ -412,6 +412,12 @@ pub fn places_own_windows() -> bool {
     true
 }
 
+/// Where a window is, when the window cannot say: never here, its own
+/// position is right.
+pub fn known_position(_window: &tauri::WebviewWindow) -> Option<(i32, i32)> {
+    None
+}
+
 /// Windows are placed by the meter itself here (Linux on Wayland asks KWin).
 pub fn keep_places(
     _save: impl Fn(&str, (i32, i32, i32, i32)) + Send + Sync + 'static,
