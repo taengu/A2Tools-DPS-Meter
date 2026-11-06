@@ -10,6 +10,12 @@
 //!   https://cdn.a2tools.app/plugins/index.json       the catalog
 //!   https://cdn.a2tools.app/plugins/index.json.sig   its signature, hex
 //!   https://cdn.a2tools.app/plugins/<id>/<version>/<file>
+//!   https://cdn.a2tools.app/plugins/<id>/<version>.a2pk  all of them, packed
+//!
+//! A version's pack (2.0.90 on) is one download instead of a request per
+//! file; its hash is the entry's `pack`, and each file in it is checked
+//! against its own hash as a file downloaded alone would be. Without a pack,
+//! or when it fails, the files come down one by one as before.
 //!
 //! Test plugins (meter 2.0.78 on) are in a second catalog, signed the same
 //! way, that older meters never read: `plugins/test/index.json` (+ `.sig`).
@@ -99,6 +105,10 @@ pub struct Entry {
     pub source: String,
     /// Each file's path in the plugin folder → its SHA-256 (hex).
     pub files: BTreeMap<String, String>,
+    /// The SHA-256 (hex) of the version's pack, `<version>.a2pk`; none in
+    /// catalogs before 2026-11-06.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pack: Option<String>,
     /// From the test catalog (set here, not in the file).
     #[serde(default, skip_deserializing)]
     pub test: bool,
@@ -282,6 +292,129 @@ pub async fn install(http: &reqwest::Client, entry: &Entry, plugins_dir: &Path, 
     if let Some(path) = entry.files.keys().find(|path| !safe_path(path)) {
         return Err(format!("{}: file {path:?} is not allowed", entry.name));
     }
+    let files = match download_pack(http, entry).await {
+        Some(Ok(files)) => files,
+        Some(Err(e)) => {
+            tracing::info!("Plugins: {e}; downloading its files one by one");
+            download_files(http, entry).await?
+        }
+        None => download_files(http, entry).await?,
+    };
+    downloaded();
+
+    let staging = plugins_dir.join(format!(".staging-{}", entry.id));
+    let target = plugins_dir.join(&entry.id);
+    let _ = std::fs::remove_dir_all(&staging);
+    for (path, bytes) in &files {
+        let file = staging.join(path);
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&file, bytes).map_err(|e| e.to_string())?;
+    }
+    let loaded = super::load_folder(&staging)?;
+    // What the consent dialog showed (the catalog's permissions) is what the
+    // manifest grants (audit L2).
+    let mut asked = entry.permissions.clone();
+    let mut granted = loaded.manifest.permissions.clone();
+    asked.sort();
+    granted.sort();
+    if loaded.manifest.id != entry.id || loaded.manifest.version != entry.version || asked != granted {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(format!("{}: its manifest does not match the catalog", entry.name));
+    }
+    // Never back to an older version (an old catalog served again, L2).
+    if let Ok(old) = super::load_folder(&target) {
+        if newer(&old.manifest.version, &entry.version) {
+            let _ = std::fs::remove_dir_all(&staging);
+            return Err(format!("{} {} is installed, newer than the catalog's {}", entry.name, old.manifest.version, entry.version));
+        }
+    }
+    let _ = std::fs::remove_dir_all(&target);
+    std::fs::rename(&staging, &target).map_err(|e| e.to_string())?;
+    write_proof(entry, plugins_dir)?;
+    Ok(target)
+}
+
+/// `entry`'s pack, unpacked and checked; `None` when the catalog has none.
+async fn download_pack(http: &reqwest::Client, entry: &Entry) -> Option<Result<Vec<(String, Vec<u8>)>, String>> {
+    let hash = entry.pack.as_ref()?;
+    let url = format!("{}/{}/{}.a2pk", base_url(), entry.id, entry.version);
+    Some(async {
+        let bytes = match get(http, &url, MAX_PACK).await {
+            Ok(bytes) => bytes,
+            Err(_) => get(http, &url, MAX_PACK).await?,
+        };
+        if !sha256_hex(&bytes).eq_ignore_ascii_case(hash) {
+            return Err(format!("{}: its pack does not match the catalog", entry.name));
+        }
+        unpack(entry, &bytes)
+    }
+    .await)
+}
+
+/// The largest pack downloaded: gzip can grow what it can't shrink, a little.
+const MAX_PACK: usize = MAX_PLUGIN + 64 * 1024;
+const PACK_MAGIC: &[u8] = b"A2PK1\n";
+
+/// The next `n` bytes of `rest`, taken off it.
+fn take<'a>(rest: &mut &'a [u8], n: usize) -> Option<&'a [u8]> {
+    if rest.len() < n {
+        return None;
+    }
+    let (head, tail) = rest.split_at(n);
+    *rest = tail;
+    Some(head)
+}
+
+/// A pack's files (see the plugins repo's tools/build_catalog.py): gzip of
+/// `A2PK1\n`, then per file a u16 LE path length, the path, a u32 LE size
+/// and the bytes. Exactly `entry`'s files, each matching its hash, at most
+/// MAX_PLUGIN in all.
+fn unpack(entry: &Entry, packed: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
+    use std::io::Read;
+    let bad = |why: &str| format!("{}: its pack {why}", entry.name);
+    // The files, and each one's path and sizes.
+    let limit = MAX_PLUGIN + PACK_MAGIC.len() + entry.files.len() * (2 + 128 + 4);
+    let mut raw = Vec::new();
+    flate2::read::GzDecoder::new(packed)
+        .take(limit as u64 + 1)
+        .read_to_end(&mut raw)
+        .map_err(|_| bad("is not readable"))?;
+    if raw.len() > limit {
+        return Err(format!("{} is larger than {MAX_PLUGIN} bytes", entry.name));
+    }
+    let mut rest = raw.strip_prefix(PACK_MAGIC).ok_or_else(|| bad("is not one this meter reads"))?;
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut total = 0;
+    while !rest.is_empty() {
+        let short = || bad("is cut short");
+        let len = take(&mut rest, 2).ok_or_else(short)?;
+        let path = take(&mut rest, u16::from_le_bytes([len[0], len[1]]) as usize).ok_or_else(short)?;
+        let path = String::from_utf8(path.to_vec()).map_err(|_| bad("has a bad file name"))?;
+        let size = take(&mut rest, 4).ok_or_else(short)?;
+        let bytes = take(&mut rest, u32::from_le_bytes([size[0], size[1], size[2], size[3]]) as usize).ok_or_else(short)?;
+        total += bytes.len();
+        if total > MAX_PLUGIN {
+            return Err(format!("{} is larger than {MAX_PLUGIN} bytes", entry.name));
+        }
+        let Some(hash) = entry.files.get(&path) else { return Err(bad(&format!("has {path:?}, not one of its files"))) };
+        if files.iter().any(|(p, _)| *p == path) {
+            return Err(bad(&format!("has {path} twice")));
+        }
+        if !sha256_hex(bytes).eq_ignore_ascii_case(hash) {
+            return Err(format!("{}: {path} does not match the catalog, not installing", entry.name));
+        }
+        files.push((path, bytes.to_vec()));
+    }
+    if let Some(missing) = entry.files.keys().find(|f| files.iter().all(|(p, _)| p != *f)) {
+        return Err(bad(&format!("is missing {missing}")));
+    }
+    Ok(files)
+}
+
+/// `entry`'s files one by one, each checked against its hash.
+async fn download_files(http: &reqwest::Client, entry: &Entry) -> Result<Vec<(String, Vec<u8>)>, String> {
     // PARALLEL_DOWNLOADS at a time, each tried a second time if the first
     // fails (a dropped request no longer fails the update).
     use futures_util::StreamExt;
@@ -319,40 +452,7 @@ pub async fn install(http: &reqwest::Client, entry: &Entry, plugins_dir: &Path, 
         }
         files.push((path, bytes));
     }
-    downloaded();
-
-    let staging = plugins_dir.join(format!(".staging-{}", entry.id));
-    let target = plugins_dir.join(&entry.id);
-    let _ = std::fs::remove_dir_all(&staging);
-    for (path, bytes) in &files {
-        let file = staging.join(path);
-        if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        std::fs::write(&file, bytes).map_err(|e| e.to_string())?;
-    }
-    let loaded = super::load_folder(&staging)?;
-    // What the consent dialog showed (the catalog's permissions) is what the
-    // manifest grants (audit L2).
-    let mut asked = entry.permissions.clone();
-    let mut granted = loaded.manifest.permissions.clone();
-    asked.sort();
-    granted.sort();
-    if loaded.manifest.id != entry.id || loaded.manifest.version != entry.version || asked != granted {
-        let _ = std::fs::remove_dir_all(&staging);
-        return Err(format!("{}: its manifest does not match the catalog", entry.name));
-    }
-    // Never back to an older version (an old catalog served again, L2).
-    if let Ok(old) = super::load_folder(&target) {
-        if newer(&old.manifest.version, &entry.version) {
-            let _ = std::fs::remove_dir_all(&staging);
-            return Err(format!("{} {} is installed, newer than the catalog's {}", entry.name, old.manifest.version, entry.version));
-        }
-    }
-    let _ = std::fs::remove_dir_all(&target);
-    std::fs::rename(&staging, &target).map_err(|e| e.to_string())?;
-    write_proof(entry, plugins_dir)?;
-    Ok(target)
+    Ok(files)
 }
 
 /// The folder, in the plugins folder, of each install's signed catalog.
@@ -551,6 +651,52 @@ mod tests {
         std::fs::remove_file(dir.join("p/img/a.png")).unwrap();
         assert!(matches!(check(), Err(Unverified::Changed(_))));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A pack as the plugins repo's build_catalog.py writes one: manifest.json
+    /// `{}`, index.html `<p>`, img/a.png `png`.
+    const PACK: &str = "1f8b080000000000020a73340af036e4e264c8cc4dd74fd42bc84b6766606000525c0c997929a9157a1925b93920219b023b5e86dcc4bcccb4d4e212bdace2fc3c26a068752d00724c839b40000000";
+
+    fn pack(files: &[(&str, &[u8])]) -> Vec<u8> {
+        use std::io::Write;
+        let mut body = PACK_MAGIC.to_vec();
+        for (path, bytes) in files {
+            body.extend((path.len() as u16).to_le_bytes());
+            body.extend(path.as_bytes());
+            body.extend((bytes.len() as u32).to_le_bytes());
+            body.extend(*bytes);
+        }
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&body).unwrap();
+        gz.finish().unwrap()
+    }
+
+    /// A pack unpacks to exactly its entry's files; one with a changed, an
+    /// extra, a missing or a repeated file, or cut short, is refused.
+    #[test]
+    fn a_pack_holds_exactly_its_files() {
+        let dir = std::env::temp_dir().join(format!("a2-pack-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (_, entry) = plugin_with(&dir, &[("manifest.json", "{}"), ("index.html", "<p>"), ("img/a.png", "png")]);
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut files = unpack(&entry, &hex_bytes(PACK).unwrap()).unwrap();
+        files.sort();
+        assert_eq!(files, [("img/a.png".into(), b"png".to_vec()), ("index.html".into(), b"<p>".to_vec()), ("manifest.json".into(), b"{}".to_vec())]);
+        let good: [(&str, &[u8]); 3] = [("manifest.json", b"{}"), ("index.html", b"<p>"), ("img/a.png", b"png")];
+        assert!(unpack(&entry, &pack(&good)).is_ok());
+        assert!(unpack(&entry, &pack(&[good[0], ("index.html", b"<script>"), good[2]])).is_err(), "changed");
+        assert!(unpack(&entry, &pack(&[good[0], good[1], good[2], ("x.js", b"x")])).is_err(), "extra");
+        assert!(unpack(&entry, &pack(&good[..2])).is_err(), "missing");
+        assert!(unpack(&entry, &pack(&[good[0], good[1], good[2], good[1]])).is_err(), "twice");
+        let whole = pack(&good);
+        let mut short = flate2::read::GzDecoder::new(&whole[..]);
+        let mut raw = Vec::new();
+        std::io::Read::read_to_end(&mut short, &mut raw).unwrap();
+        raw.pop();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        std::io::Write::write_all(&mut gz, &raw).unwrap();
+        assert!(unpack(&entry, &gz.finish().unwrap()).is_err(), "cut short");
+        assert!(unpack(&entry, b"not a pack").is_err());
     }
 
     #[test]
