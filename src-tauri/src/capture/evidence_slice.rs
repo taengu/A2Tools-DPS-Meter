@@ -1194,7 +1194,7 @@ pub fn build(
     // it falls outside the fight window, because dropping one would leave the
     // next segment starting mid-packet — the window selects what is *kept*, not
     // what is parsed.
-    let mut streams: HashMap<&str, PacketAccumulator> = HashMap::new();
+    let mut streams: HashMap<&str, (PacketAccumulator, super::tunnel::Unwrapper)> = HashMap::new();
     // The latest map load and party roster from before the prelude: what
     // says which dungeon this is. A run entered more than PRELUDE_MS before
     // its last boss uploaded neither, and the service filed the fight as the
@@ -1203,17 +1203,26 @@ pub fn build(
     let mut whereabouts: Vec<(i64, Vec<u8>)> = Vec::new();
 
     for cap in packets {
-        let acc = streams
+        let (acc, tunnel) = streams
             .entry(cap.stream.as_str())
-            .or_insert_with(PacketAccumulator::new);
+            .or_insert_with(|| (PacketAccumulator::new(), Default::default()));
         acc.append(&cap.bytes);
 
         // Before the lead-in, state only; a segment is still framed either way
         // so the stream stays in step.
         let keep = if cap.captured_at_ms < from { Keep::State } else { Keep::All };
         let mut kept = Vec::new();
-        let consumed = filter_stream(acc.snapshot(), &mut blinder, &mut kept, &mut stats, keep);
-        acc.discard_bytes(consumed);
+        // A tunnelled connection's slice holds the game's packets, out of the
+        // envelope (`capture::tunnel`), as the meter read them.
+        if let Some(used) = tunnel.feed(acc.snapshot()) {
+            acc.discard_bytes(used);
+            let game = tunnel.game().to_vec();
+            let framed = filter_stream(&game, &mut blinder, &mut kept, &mut stats, keep);
+            tunnel.consumed(framed);
+        } else {
+            let consumed = filter_stream(acc.snapshot(), &mut blinder, &mut kept, &mut stats, keep);
+            acc.discard_bytes(consumed);
+        }
 
         if cap.captured_at_ms < from - PRELUDE_MS {
             for packet in kept {

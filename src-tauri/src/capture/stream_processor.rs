@@ -77,6 +77,9 @@ pub struct StreamProcessor {
     pending_compact_skill_context: Option<PendingCompactSkillContext>,
     /// When set, override the timestamp on all created packets (for replay mode).
     override_timestamp: Option<i64>,
+    /// The game's bytes out of a tunnel's envelope, for a connection that has
+    /// one (`capture::tunnel`).
+    tunnel: super::tunnel::Unwrapper,
 }
 
 /// The `42 36` flag of an entity leaving the world, a spirit unsummoned among
@@ -93,6 +96,7 @@ impl StreamProcessor {
             dot_damage_skill_ids: HashSet::new(), // loaded lazily
             pending_compact_skill_context: None,
             override_timestamp: None,
+            tunnel: Default::default(),
         }
     }
 
@@ -118,6 +122,18 @@ impl StreamProcessor {
     /// Parse as many complete packets as possible from the buffer.
     /// Returns the number of bytes consumed.
     pub fn consume_stream(&mut self, buffer: &[u8]) -> usize {
+        // A tunnelled connection: the game's bytes are framed out of its
+        // envelope, and the envelope bytes it used are what is consumed.
+        if let Some(used) = self.tunnel.feed(buffer) {
+            let game = self.tunnel.game().to_vec();
+            let framed = self.consume_game(&game);
+            self.tunnel.consumed(framed);
+            return used;
+        }
+        self.consume_game(buffer)
+    }
+
+    fn consume_game(&mut self, buffer: &[u8]) -> usize {
         // Framing lives in `capture::framing` so the Evidence Slice builder can
         // split a capture the same way this does. See that module.
         let framing = super::framing::walk(buffer);
