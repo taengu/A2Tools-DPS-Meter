@@ -573,6 +573,7 @@ impl StreamProcessor {
                 if (1..=1_000_000_000).contains(&limit) && points <= limit {
                     let now = self.override_timestamp.unwrap_or_else(crate::clock::now_ms);
                     self.data_storage.set_abyss_points(points, limit, now);
+                    self.data_storage.note_abyss_points_total(points, now);
                 }
             }
             _ => {}
@@ -979,6 +980,9 @@ impl StreamProcessor {
                 self.note_death(data, r);
                 continue;
             }
+            // Another player's death, for your kills and assists.
+            let at = self.override_timestamp.unwrap_or_else(crate::clock::now_ms);
+            self.data_storage.note_player_killed(summon_id, owner_id, at);
             if self.data_storage.is_confirmed_summon(summon_id) {
                 self.data_storage.append_summon(owner_id, summon_id);
             }
@@ -4721,6 +4725,22 @@ mod tests {
         p.parse_perfect_packet(&hex("13abfff908020000000000a025260000000000"));
         assert_eq!(storage.abyss_points_at(now + 5_000), Some((132_456, 2_500_000)));
         assert_eq!(storage.abyss_points_at(now + 8_000), Some((133_369, 2_500_000)));
+    }
+
+    /// The Abyss Points as the game sent them on 2026-11-02 (132,456, then
+    /// 133,369 after a kill whose chat line said 913), and the Abyss map
+    /// loaded just before.
+    #[test]
+    fn abyss_points_gained_and_the_abyss_entered() {
+        let (storage, mut p) = processor();
+        let load = hex("3421360100000014000000b3071a0000000000ebc8504754ba50c700629f460000074300000000000000000000004f0000");
+        p.parse_perfect_packet(&load);
+        p.parse_perfect_packet(&hex("13abff6805020000000000a025260000000000"));
+        p.parse_perfect_packet(&hex("13abff6805020000000000a025260000000000"));
+        p.parse_perfect_packet(&hex("13abfff908020000000000a025260000000000"));
+        let (_, events) = storage.kda_since(0).unwrap();
+        let told: Vec<_> = events.iter().map(|e| (e.amount, e.abyss)).collect();
+        assert_eq!(told, vec![(None, Some(true)), (Some(913), None)]);
     }
 
     /// Kinah gained today at a login, then a pickup; the week's Abyss Points

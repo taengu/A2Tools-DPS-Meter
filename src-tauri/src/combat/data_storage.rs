@@ -6,6 +6,7 @@ use parking_lot::{Mutex, RwLock};
 
 use crate::capture::abnormal;
 use crate::combat::death_recap::{self, DeathRecaps};
+use crate::combat::kda::{Kda, KdaEvent, Kind as KdaKind};
 use crate::combat::stagger::{End, Outcome, StaggerHit, StaggerLog, StaggerWindow};
 
 use crate::entity::damage_packet::ParsedDamagePacket;
@@ -535,6 +536,8 @@ pub struct DataStorage {
     death_recaps: Mutex<DeathRecaps>,
     /// Dice Roll loot as read (`capture::loot_rolls`), for plugins.
     loot_rolls: Mutex<crate::capture::loot_rolls::LootRolls>,
+    /// Your kills, assists and deaths (see `combat::kda`). Its own lock.
+    kda: Mutex<Kda>,
 }
 
 /// The timeline and when it was last pruned.
@@ -905,6 +908,7 @@ impl DataStorage {
             stagger: Mutex::new(StaggerLog::default()),
             death_recaps: Mutex::new(DeathRecaps::default()),
             loot_rolls: Mutex::new(Default::default()),
+            kda: Mutex::new(Kda::default()),
         }
     }
 
@@ -1768,6 +1772,11 @@ impl DataStorage {
         inner.login_abyss_points = Some((points, limit, at));
     }
 
+    /// The Abyss Points total the game just sent, for the K/D/A feed.
+    pub fn note_abyss_points_total(&self, total: u64, at: i64) {
+        self.kda.lock().abyss_points(total, at);
+    }
+
     /// The week's Abyss Points and limit at `now` (unix ms): 0 points once a
     /// weekly reset has passed since seen.
     pub fn abyss_points_at(&self, now: i64) -> Option<(u64, u64)> {
@@ -1928,6 +1937,12 @@ impl DataStorage {
                 && inner.known_player_ids.contains(&attacker)
             {
                 self.death_recaps.lock().note_hit(attacker, pdp.timestamp(), pdp.total_damage() as i64, skill_code);
+            }
+            // Your own hit on an enemy, for an assist: a heal or buff on
+            // someone in your party is no part of one.
+            let target = summon_resolver::resolve(target_id, &inner.summon_storage);
+            if attacker == me && target_id != me && !in_party(&inner, target) {
+                self.kda.lock().note_my_hit(target, pdp.timestamp());
             }
         }
 
@@ -2191,7 +2206,39 @@ impl DataStorage {
     }
 
     pub fn push_death_recap(&self, recap: death_recap::DeathRecap) {
+        self.kda.lock().died(recap.at);
         self.death_recaps.lock().push(recap);
+    }
+
+    /// The record that names who killed `victim` came at `at`. Counted when
+    /// the victim is a player and the record names you (a kill) or you hit
+    /// them just before (an assist).
+    pub fn note_player_killed(&self, victim: i32, killer: i32, at_ms: i64) -> Option<KdaKind> {
+        let by_me = {
+            let inner = self.inner.read();
+            let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok())?;
+            if victim == me {
+                return None;
+            }
+            let player = inner.known_player_ids.contains(&victim) || self.death_recaps.lock().knows(victim);
+            if !player {
+                // A mob's loot record, unless you had just hit it.
+                if let Some(age) = self.kda.lock().hit_age(victim, at_ms) {
+                    tracing::debug!("KDA: {victim} died {age} ms after your hit, not known as a player");
+                }
+                return None;
+            }
+            killer == me
+        };
+        let kind = self.kda.lock().player_died(victim, by_me, at_ms);
+        tracing::debug!("KDA: player {victim} died, killer {killer}{}: {kind:?}", if by_me { " (you)" } else { "" });
+        kind
+    }
+
+    /// The kills, assists and deaths counted since `seq` was read, and the
+    /// count to ask with next time; None when there are none.
+    pub fn kda_since(&self, seq: u64) -> Option<(u64, Vec<KdaEvent>)> {
+        self.kda.lock().since(seq)
     }
 
     /// The death recaps made since `seq` was read, and the count to ask with
@@ -2511,6 +2558,7 @@ impl DataStorage {
         // an entity that is gone.
         inner.loot_identity.scope_counts.clear();
         let from = inner.current_map_id.replace(map_id);
+        self.kda.lock().map_loaded(map_id, crate::clock::now_ms());
         inner.zone_generation += 1;
         if !(from.is_some_and(is_open_world_map) && is_open_world_map(map_id)) {
             inner.instance_generation += 1;
@@ -3589,6 +3637,11 @@ fn fight_of(inner: &mut Inner, actor: i32, mob: Option<i32>) -> Option<&mut Acto
     inner.target_combat.get_mut(&tid)?.actors.get_mut(&actor)
 }
 
+/// Whether `entity` is a member of your party (by the roster's names).
+fn in_party(inner: &Inner, entity: i32) -> bool {
+    inner.nickname_storage.get(&entity).is_some_and(|name| inner.party_members.contains_key(name))
+}
+
 fn is_friendly_action(inner: &Inner, actor_id: i32, target_id: i32) -> bool {
     let resolved_actor = summon_resolver::resolve(actor_id, &inner.summon_storage);
     let resolved_target = summon_resolver::resolve(target_id, &inner.summon_storage);
@@ -3648,6 +3701,20 @@ fn is_mob(inner: &Inner, id: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Your party's members are told by the roster's names, so a heal on one
+    /// is no hit on an enemy (an assist counts only those).
+    #[test]
+    fn party_members_are_not_enemies() {
+        let s = DataStorage::new();
+        s.set_party_roster(vec![("Ally".into(), PartyMember { slot: 1, ..Default::default() })], true);
+        s.append_nickname_authoritative(500, "Ally");
+        s.append_nickname_authoritative(501, "Stranger");
+        let inner = s.inner.read();
+        assert!(in_party(&inner, 500));
+        assert!(!in_party(&inner, 501));
+        assert!(!in_party(&inner, 502));
+    }
 
     #[test]
     fn your_own_and_a_known_players_hp_log_deaths_and_a_strangers_does_not() {

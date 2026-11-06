@@ -274,6 +274,11 @@ impl DeathRecaps {
         }
     }
 
+    /// Whether a record gave this player's profile.
+    pub fn knows(&self, id: i32) -> bool {
+        self.profiles.contains_key(&id)
+    }
+
     /// Another player's hit on you.
     pub fn note_hit(&mut self, attacker: i32, at: i64, damage: i64, skill: i32) {
         self.hits.entry(attacker).or_default().push_back(Hit { at, damage, skill });
