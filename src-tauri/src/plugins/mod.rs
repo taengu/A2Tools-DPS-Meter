@@ -1962,13 +1962,32 @@ pub async fn plugin_open(app: tauri::AppHandle, id: String) -> Result<(), String
     Ok(())
 }
 
+/// The plugins the player closed with × this run (a window's, or the
+/// dock's for every tab it showed), and not opened since. × only hides: a
+/// plugin that hides its own window (an alert over) isn't in it.
+fn user_closed() -> &'static std::sync::Mutex<HashSet<String>> {
+    static CLOSED: std::sync::OnceLock<std::sync::Mutex<HashSet<String>>> = std::sync::OnceLock::new();
+    CLOSED.get_or_init(Default::default)
+}
+
+pub(crate) fn note_user_closed(id: &str, closed: bool) {
+    let mut set = user_closed().lock().unwrap_or_else(|e| e.into_inner());
+    if closed {
+        set.insert(id.to_string());
+    } else {
+        set.remove(id);
+    }
+}
+
 /// Open again every plugin closed with × this run and still turned on, as
 /// its Open button would (in the dock when it docks): the "plugin windows"
 /// hotkey, with `bring_back_windows` for those still open. Players closed a
-/// window (Pet Souls) and expected the key to bring it back (2026-11-07).
+/// window (Pet Souls, docked) and expected the key to bring it back
+/// (2026-11-07). 2.0.91 read the list of plugins stopped with ×, which ×
+/// no longer does, and so opened none.
 pub fn reopen_closed(app: &tauri::AppHandle) {
     let Ok(host) = host(app) else { return };
-    let mut closed: Vec<String> = host.closed.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
+    let mut closed: Vec<String> = user_closed().lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
     closed.sort();
     let off = disabled(app);
     for id in closed {
@@ -1987,6 +2006,7 @@ pub fn reopen_closed(app: &tauri::AppHandle) {
 
 /// A plugin opened by hand (Open, or turned on) starts again after reloads.
 fn reopened(app: &tauri::AppHandle, id: &str) {
+    note_user_closed(id, false);
     if let Ok(host) = host(app) {
         host.closed.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
     }
@@ -2167,6 +2187,7 @@ pub fn plugin_close(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
     let id = window_plugin(&window, plugin.as_deref())?;
     dock::cancel_manual_open();
     remember_window(&app, &id, Some("hidden"));
+    note_user_closed(&id, true);
     // Docked: its tab goes; the dock with the last one (dock::sync).
     if window.label() == dock::LABEL {
         dock::sync(&app, None);

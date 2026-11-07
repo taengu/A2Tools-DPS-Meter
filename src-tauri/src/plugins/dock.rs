@@ -338,6 +338,9 @@ pub fn dock_close(app: tauri::AppHandle) {
     if let Some(state) = app.try_state::<AppState>() {
         state.settings.set(CLOSED_WITH_KEY, &serde_json::to_string(&open).unwrap_or_default());
     }
+    for id in &open {
+        super::note_user_closed(id, true);
+    }
     for id in members(&app) {
         super::remember_window(&app, &id, Some("hidden"));
     }
