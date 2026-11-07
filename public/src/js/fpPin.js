@@ -6,6 +6,7 @@
   const timeEl = document.querySelector(".time");
   const invoke = window.__TAURI__?.core?.invoke;
   let fp = null;
+  const smooth = window.fpSmoother();
 
   const maxOf = (reading) => {
     if (Number(reading?.max) > 0) return Number(reading.max);
@@ -18,7 +19,7 @@
   };
 
   const render = () => {
-    const t = window.fpTime(fp, maxOf(fp));
+    const t = smooth(window.fpTime(fp, maxOf(fp)));
     if (!t) {
       pin.classList.remove("isShown");
       return;
@@ -33,7 +34,7 @@
     fp = event.payload;
     render();
   });
-  setInterval(render, 200);
+  setInterval(render, 100);
 
   document.addEventListener("mousedown", (event) => {
     if (event.button === 0) invoke?.("fp_pin_drag").catch(() => {});

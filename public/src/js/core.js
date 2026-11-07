@@ -7164,7 +7164,8 @@ class DpsApp {
     const saved = this.safeParseJSON(this.safeGetStorage(this.storageKeys.fpMaxLast) || "{}", {}) || {};
     const max = Number(fp?.max) > 0 ? Number(fp.max) : Number(saved[owner]) || 0;
     // In flight, the flight time left; else the time until full (fpTime.js).
-    const left = this.showFpTimer && !this.showFpPin ? window.fpTime?.(fp, max) : null;
+    this._fpSmooth ||= window.fpSmoother?.();
+    const left = this._fpSmooth?.(this.showFpTimer && !this.showFpPin ? window.fpTime?.(fp, max) : null);
     if (!left) {
       el.classList.remove("isVisible");
       return;

@@ -15,7 +15,7 @@
 //! the entries. FP_Max came only in that sheet. A Superior Wind Serum
 //! (FpHeal_Item 200000) showed as one jump of +199000 while flying.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use serde::Serialize;
 
@@ -27,6 +27,16 @@ const FP_MAX: u8 = 13;
 const DEFAULT_RATE: u32 = 4000;
 /// What flying drained each second: 1000 every ~0.1 s.
 const DEFAULT_DRAIN: u32 = 10_000;
+/// In the air while FP fell this recently: readings come ~10 a second in
+/// the air, once a second on the ground.
+const AIRBORNE_MS: i64 = 1_200;
+/// The game sends a reading this many times a second in the air, each one
+/// a step down: gliding 750, flying 1000, faster 1500; a dash is a second
+/// of 2500s (2026-11-08).
+const READINGS_PER_S: u32 = 10;
+/// A fall this big in one reading is a burst (taking off 2500-3500, a dash's
+/// second of 2500s): taken off FP, not the way of flying it returns to.
+const ONE_OFF: u32 = 2_000;
 
 /// What one `00 8D` says about an entity's flight power.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,9 +96,11 @@ pub struct FlightPower {
     pub max: Option<u32>,
     /// What it refills by each second.
     pub rate_per_s: u32,
-    /// Falling at the last reading: in flight.
+    /// In the air: FP fell within the last moment.
     pub flying: bool,
-    /// What flying drains each second.
+    /// What it falls by each second in the air: from the size of the last
+    /// steps down (gliding, flying), so it changes the moment the way of
+    /// flying does.
     pub drain_per_s: u32,
     /// When `current` was read (ms).
     pub at_ms: i64,
@@ -101,6 +113,9 @@ struct Entity {
     rate: Option<u32>,
     drain: Option<u32>,
     flying: bool,
+    last_fall: Option<i64>,
+    /// The last steps down in the air, one-offs left out.
+    steps: VecDeque<u32>,
 }
 
 /// Each entity's flight power as read (the game sends it for you only).
@@ -122,22 +137,33 @@ impl FlightPowers {
             // The refill rate, from a rise one tick (about a second) after
             // the last reading: a serum's jump, or a reading ~0.1 s apart in
             // flight, says nothing about it.
+            let mut fell = None;
             if let Some((was, was_at)) = e.current {
-                let step = current.saturating_sub(was);
                 let dt = at_ms - was_at;
-                if current > was && (700..=1500).contains(&dt) && step <= 50_000 {
-                    e.rate = Some(step);
+                if current > was && (700..=1500).contains(&dt) && current - was <= 50_000 {
+                    e.rate = Some(current - was);
                 }
-                // In flight: the drain from a ~0.1 s step, smoothed; a
-                // take-off's own cost (2500, 3500 at once) left out.
-                e.flying = current < was;
-                let fall = was.saturating_sub(current);
-                if current < was && fall <= 2_000 && (50..=400).contains(&dt) {
-                    let per_s = (fall as i64 * 1000 / dt) as u32;
-                    e.drain = Some(match e.drain {
-                        Some(d) => (d * 7 + per_s) / 8,
-                        None => per_s,
-                    });
+                if current < was {
+                    e.last_fall = Some(at_ms);
+                    fell = Some(was - current);
+                }
+            }
+            // In the air while it fell a moment ago.
+            e.flying = e.last_fall.is_some_and(|fall| at_ms - fall <= AIRBORNE_MS);
+            if e.flying {
+                if let Some(step) = fell.filter(|&step| step < ONE_OFF) {
+                    e.steps.push_back(step);
+                    while e.steps.len() > 3 {
+                        e.steps.pop_front();
+                    }
+                }
+                // The middle of the last three steps: one odd step (a
+                // packet's timing) moves nothing.
+                if !e.steps.is_empty() {
+                    let mut steps: Vec<u32> = e.steps.iter().copied().collect();
+                    steps.sort_unstable();
+                    // No refill in the air in the captures (2026-11-08).
+                    e.drain = Some(steps[steps.len() / 2] * READINGS_PER_S);
                 }
             }
             e.current = Some((current, at_ms));
@@ -208,14 +234,33 @@ mod tests {
         );
         // Take-off (3500 at once), then flying: 1000 a tenth of a second.
         fp.note(read(301_000), 2_900);
-        for (k, at) in (3_000..3_600).step_by(100).enumerate() {
-            fp.note(read(300_000 - 1_000 * k as u32), at);
+        let mut v = 301_000u32;
+        for k in 1..=40 {
+            v -= 1_000;
+            fp.note(read(v), 2_900 + 100 * k);
+            assert!(fp.of(7).unwrap().flying);
         }
         let f = fp.of(7).unwrap();
-        assert!(f.flying);
-        assert!((9_000..=11_000).contains(&f.drain_per_s), "{}", f.drain_per_s);
-        // Landed: refilling again.
-        fp.note(read(299_000), 4_600);
+        assert_eq!(f.drain_per_s, 10_000);
+        // A dash: a second of 2500s, taken off, the drain as it was.
+        for k in 1..=10 {
+            v -= 2_500;
+            fp.note(read(v), 6_900 + 100 * k);
+        }
+        let g = fp.of(7).unwrap();
+        assert_eq!(g.drain_per_s, 10_000, "a dash is no way of flying");
+        assert!(g.current < f.current - 20_000, "but it is taken off");
+        // Gliding: 750 a step, shown from its second step.
+        for k in 1..=20 {
+            v -= 750;
+            fp.note(read(v), 7_900 + 100 * k);
+            if k == 2 {
+                assert_eq!(fp.of(7).unwrap().drain_per_s, 7_500, "a glide shows at once");
+            }
+        }
+        // Landed: refills once a second, no falls.
+        fp.note(read(v + 4_000), 11_500);
+        fp.note(read(v + 8_000), 12_500);
         assert!(!fp.of(7).unwrap().flying);
     }
 }
