@@ -1152,6 +1152,10 @@ fn start_hotkeys(app: &tauri::AppHandle, settings: &Settings) {
         let app = h.clone();
         // Window calls belong on the main thread.
         let _ = h.run_on_main_thread(move || crate::plugins::bring_back_windows(&app));
+        // And those closed this run, opened again: windows are built off the
+        // main thread (on Windows, building one there deadlocks).
+        let app = h.clone();
+        tauri::async_runtime::spawn(async move { crate::plugins::reopen_closed(&app) });
     }));
 
     hotkeys.manager.start(

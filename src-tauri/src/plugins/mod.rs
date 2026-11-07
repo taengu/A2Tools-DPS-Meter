@@ -1962,6 +1962,29 @@ pub async fn plugin_open(app: tauri::AppHandle, id: String) -> Result<(), String
     Ok(())
 }
 
+/// Open again every plugin closed with × this run and still turned on, as
+/// its Open button would (in the dock when it docks): the "plugin windows"
+/// hotkey, with `bring_back_windows` for those still open. Players closed a
+/// window (Pet Souls) and expected the key to bring it back (2026-11-07).
+pub fn reopen_closed(app: &tauri::AppHandle) {
+    let Ok(host) = host(app) else { return };
+    let mut closed: Vec<String> = host.closed.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect();
+    closed.sort();
+    let off = disabled(app);
+    for id in closed {
+        if off.contains(&id) || host.with(&id, |_| ()).is_none() {
+            continue;
+        }
+        tracing::info!("Plugins: {id} opened again by the hotkey");
+        reopened(app, &id);
+        remember_window(app, &id, Some("shown"));
+        let opened = if dock::docks(app, &id) { dock::open_manually(app, &id) } else { open_window(app, &id, true) };
+        if let Err(e) = opened {
+            tracing::info!("Plugins: {id} didn't open again: {e}");
+        }
+    }
+}
+
 /// A plugin opened by hand (Open, or turned on) starts again after reloads.
 fn reopened(app: &tauri::AppHandle, id: &str) {
     if let Ok(host) = host(app) {
