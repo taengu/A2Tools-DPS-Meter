@@ -1,3 +1,7 @@
+// The game's chat box takes a line about this long: the copied result is
+// kept to it (chatLineFor).
+const CHAT_LINE_MAX = 100;
+
 const SETTING_CHOICES = {
   defaultMeterMode: { allowed: ["bossTargets", "lastHitByMe", "allTargets", "trainTargets"], fallback: "bossTargets" },
   allTargetsWindowMs: { allowed: ["30000", "60000", "120000", "180000", "300000"], fallback: "120000" },
@@ -590,6 +594,11 @@ class DpsApp {
           .catch(() => { if (!isFightWindow) this.historyUI?.open?.(); })
           .then(() => { if (isFightWindow) window.javaBridge?.closeToolWindow?.(); });
       },
+    });
+    const detailsChatCopyBtn = document.querySelector(".detailsChatCopyBtn");
+    detailsChatCopyBtn?.addEventListener("click", async () => {
+      const copied = await this.copyText(this.chatLineFor(this.detailsUI?.getChatResult?.()));
+      this.flashCopied(detailsChatCopyBtn, copied);
     });
     if (this.detailsScreenshotBtn) {
       let screenshotNoteTimer = null;
@@ -1624,7 +1633,10 @@ class DpsApp {
       }
     } else if (!isOutOfCombat) {
       this.lastSnapshot = rows;
-    } else if (this.lastSnapshot) {
+    } else if (this.lastSnapshot?.length) {
+      // An empty one (a refresh's) never hides new rows: shown nothing, the
+      // timer was never updated, so the meter stayed "out of combat" and
+      // showed nothing (a Train fight ended by its time limit, then refresh).
       const updatedSnapshot = this.updateSnapshotNicknameForUser(rows, this.lastSnapshot);
       this.lastSnapshot = updatedSnapshot;
       rowsToRender = updatedSnapshot;
@@ -2714,6 +2726,123 @@ class DpsApp {
       });
       historyBtn.setAttribute("data-no-drag", "true");
     }
+
+    // Your result as one line for the game's chat box.
+    const chatCopyBtn = document.querySelector(".chatCopyBtn");
+    if (chatCopyBtn) {
+      const copy = async () => {
+        if (this.isWindowDragging) return;
+        const copied = await this.copyText(this.chatLineFor(this.meterChatResult()));
+        this.flashCopied(chatCopyBtn, copied);
+      };
+      chatCopyBtn.addEventListener("click", copy);
+      chatCopyBtn.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          copy();
+        }
+      });
+      chatCopyBtn.setAttribute("data-no-drag", "true");
+    }
+  }
+
+  // Your row in the fight on the meter, for the chat line.
+  meterChatResult() {
+    const rows = (Array.isArray(this.lastSnapshot) ? this.lastSnapshot : [])
+      .filter((row) => !row.isOthers && row.totalDamage > 0)
+      .sort((a, b) => b.totalDamage - a.totalDamage);
+    const index = rows.findIndex((row) => row.isUser);
+    if (index < 0) return null;
+    const total = rows.reduce((sum, row) => sum + row.totalDamage, 0) || 1;
+    return {
+      name: rows[index].name,
+      target: this.getTargetLabel({
+        targetId: this.lastTargetId,
+        targetName: this.lastTargetName,
+        targetMode: this.lastTargetMode,
+        dungeonId: this.lastDungeonId,
+      }),
+      timeMs: Number(this._lastBattleTimeMs) || 0,
+      damage: rows[index].totalDamage,
+      pct: (rows[index].totalDamage / total) * 100,
+      rank: index + 1,
+      count: rows.length,
+    };
+  }
+
+  // The line copied to game chat: your name, the fight and its time, your
+  // DPS, damage, share and place, short enough for one message. A long
+  // target name gives way first.
+  chatLineFor(result) {
+    if (!result) return "";
+    const t = (key, fallback) => this.i18n?.t?.(key, fallback) ?? fallback;
+    const compact = (value) => {
+      const n = Number(value) || 0;
+      if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}m`;
+      if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+      return String(Math.round(n));
+    };
+    const ms = Math.max(0, Number(result.timeMs) || 0);
+    const sec = Math.round(ms / 1000);
+    const time = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+    const dps = ms > 0 ? compact((result.damage / ms) * 1000) : "-";
+    const template = result.count > 1
+      ? t("chatCopy.line", "{name} vs {target} ({time}) | {dps} DPS | {damage} dmg | {pct} | #{rank}/{count}")
+      : t("chatCopy.lineSolo", "{name} vs {target} ({time}) | {dps} DPS | {damage} dmg");
+    const fill = (target) => template
+      .replace("{name}", result.name)
+      .replace("{target}", target)
+      .replace("{time}", time)
+      .replace("{dps}", dps)
+      .replace("{damage}", compact(result.damage))
+      .replace("{pct}", `${(Number(result.pct) || 0).toFixed(1)}%`)
+      .replace("{rank}", String(result.rank))
+      .replace("{count}", String(result.count));
+    let target = String(result.target || "").trim();
+    let line = fill(target);
+    while (line.length > CHAT_LINE_MAX && target.length > 6) {
+      target = target.slice(0, -1);
+      line = fill(`${target.trimEnd()}...`);
+    }
+    return line;
+  }
+
+  async copyText(value) {
+    if (!value) return false;
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return copied;
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  // A moment's tick on a copy button: copied, or nothing to copy.
+  flashCopied(button, copied) {
+    if (!button) return;
+    const t = (key, fallback) => this.i18n?.t?.(key, fallback) ?? fallback;
+    button.classList.remove("isCopied", "isCopyFailed");
+    button.classList.add(copied ? "isCopied" : "isCopyFailed");
+    button.title = copied
+      ? t("chatCopy.copied", "Copied: paste it into the game's chat")
+      : t("chatCopy.nothing", "Nothing to copy: no damage of yours in this fight");
+    window.clearTimeout(button._copyTimer);
+    button._copyTimer = window.setTimeout(() => {
+      button.classList.remove("isCopied", "isCopyFailed");
+      button.title = t("chatCopy.title", "Copy your result for the game's chat");
+    }, 1500);
   }
 
   setAccountState(text) {
@@ -6256,6 +6385,11 @@ class DpsApp {
     this.lastSnapshot = [];
     this._lastRenderedRowsSummary = null;
     this._lastRenderedListSignature = "";
+    // The timer starts again too: left "ended", the next fight was taken
+    // for the last one's tail.
+    this._lastBattleTimeMs = null;
+    this._battleTimeVisible = false;
+    this.battleTime?.reset?.();
     this.meterUI?.onResetMeterUi?.();
     this.renderCurrentRows();
 

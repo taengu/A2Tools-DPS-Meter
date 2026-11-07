@@ -988,5 +988,12 @@
     "odyle": "Energía de Odyle",
     "ping": "Ping",
     "jitter": "Fluctuación: {ms} ms"
+  },
+  "chatCopy": {
+    "title": "Copiar tu resultado para el chat del juego",
+    "copied": "Copiado: pégalo en el chat del juego",
+    "nothing": "Nada que copiar: no hiciste daño en este combate",
+    "line": "{name} vs {target} ({time}) | {dps} DPS | {damage} daño | {pct} | #{rank}/{count}",
+    "lineSolo": "{name} vs {target} ({time}) | {dps} DPS | {damage} daño"
   }
 }

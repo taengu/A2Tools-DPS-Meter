@@ -988,5 +988,12 @@
     "odyle": "Энергия Одила",
     "ping": "Пинг",
     "jitter": "Джиттер: {ms} мс"
+  },
+  "chatCopy": {
+    "title": "Скопировать свой результат для чата игры",
+    "copied": "Скопировано: вставьте в чат игры",
+    "nothing": "Нечего копировать: в этом бою нет вашего урона",
+    "line": "{name} vs {target} ({time}) | {dps} DPS | урон {damage} | {pct} | #{rank}/{count}",
+    "lineSolo": "{name} vs {target} ({time}) | {dps} DPS | урон {damage}"
   }
 }

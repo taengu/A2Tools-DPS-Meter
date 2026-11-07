@@ -988,5 +988,12 @@
     "odyle": "奧德能量",
     "ping": "延遲",
     "jitter": "抖動：{ms} 毫秒"
+  },
+  "chatCopy": {
+    "title": "複製我的結果到遊戲聊天",
+    "copied": "已複製：貼到遊戲聊天中",
+    "nothing": "沒有可複製的內容：這場戰鬥中沒有你的傷害",
+    "line": "{name} vs {target} ({time}) | DPS {dps} | 傷害 {damage} | {pct} | 第{rank}/{count}",
+    "lineSolo": "{name} vs {target} ({time}) | DPS {dps} | 傷害 {damage}"
   }
 }

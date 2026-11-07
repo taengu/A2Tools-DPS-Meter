@@ -4315,6 +4315,32 @@ mod tests {
         crate::clock::set_override(None);
     }
 
+    /// After the time runs out on the clock, the refresh (as `reset_combat`
+    /// does it) starts a new timed fight at the next hit.
+    #[test]
+    fn after_the_time_runs_out_the_refresh_starts_again() {
+        let s = DataStorage::new();
+        s.set_local_player_id(Some(1454));
+        s.register_training_dummy(500);
+        s.set_train_limit_ms(30_000);
+        s.set_train_mode(true);
+        s.append_damage(hit(1454, 500, 1_000, 100, false));
+        crate::clock::set_override(Some(40_000));
+        assert!(s.train_limit_reached());
+        s.append_damage(hit(1454, 500, 45_000, 100, false));
+        s.flush();
+        s.forget_guessed_nicknames();
+        s.hide_party_placeholders();
+        s.restart_train_limit();
+        crate::clock::set_override(Some(50_000));
+        assert!(!s.train_limit_reached());
+        s.append_damage(hit(1454, 500, 50_000, 100, false));
+        s.append_damage(hit(1454, 500, 55_000, 100, false));
+        assert!(!s.train_limit_reached());
+        assert_eq!(totals(&s, 500), (200, 5_000));
+        crate::clock::set_override(None);
+    }
+
     /// The Train time limit is Train mode's: in the others, everyone's hits
     /// on a dummy count, for as long as they go on.
     #[test]

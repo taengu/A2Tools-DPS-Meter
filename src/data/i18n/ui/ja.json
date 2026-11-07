@@ -988,5 +988,12 @@
     "odyle": "オードエネルギー",
     "ping": "ping",
     "jitter": "ジッター: {ms} ms"
+  },
+  "chatCopy": {
+    "title": "ゲームチャット用に自分の結果をコピー",
+    "copied": "コピーしました：ゲームのチャットに貼り付けてください",
+    "nothing": "コピーする内容なし：この戦闘にあなたのダメージがありません",
+    "line": "{name} vs {target} ({time}) | DPS {dps} | ダメージ {damage} | {pct} | {rank}/{count}位",
+    "lineSolo": "{name} vs {target} ({time}) | DPS {dps} | ダメージ {damage}"
   }
 }

@@ -3714,7 +3714,8 @@ body.noDeaths .list .item .deathCount { display: none !important; }
       margin-left: 4px;
     }
 
-    .detailsScreenshotBtn {
+    .detailsScreenshotBtn,
+    .detailsChatCopyBtn {
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -3726,7 +3727,8 @@ body.noDeaths .list .item .deathCount { display: none !important; }
       color: var(--isUser-fill);
     }
 
-    .detailsScreenshotBtn svg {
+    .detailsScreenshotBtn svg,
+    .detailsChatCopyBtn svg {
       width: 18px;
       height: 18px;
     }
@@ -4156,7 +4158,8 @@ body.noDeaths .list .item .deathCount { display: none !important; }
   gap: 8px;
   margin: 0;
 }
-.detailsPanel .detailsHeader .detailsScreenshotBtn {
+.detailsPanel .detailsHeader .detailsScreenshotBtn,
+.detailsPanel .detailsHeader .detailsChatCopyBtn {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -4167,7 +4170,8 @@ body.noDeaths .list .item .deathCount { display: none !important; }
   background: transparent;
   color: var(--isUser-fill);
 }
-.detailsPanel .detailsHeader .detailsScreenshotBtn svg {
+.detailsPanel .detailsHeader .detailsScreenshotBtn svg,
+.detailsPanel .detailsHeader .detailsChatCopyBtn svg {
   width: 28px;
   height: 28px;
 }
@@ -5771,6 +5775,7 @@ body.noDeaths .list .item .deathCount { display: none !important; }
 .historyPanel .historyTrainToggle,
 .historyPanel .historyDeleteToggle,
 .detailsPanel .detailsHeader .detailsScreenshotBtn,
+.detailsPanel .detailsHeader .detailsChatCopyBtn,
 .detailsPanel .detailsHeader .detailsSettingsBtn,
 .detailsPanel .detailsHeader .detailsRefreshBtn,
 .historyPanel .historyHeader .closeX,
@@ -5797,6 +5802,7 @@ body.noDeaths .list .item .deathCount { display: none !important; }
 .historyPanel .historyTrainToggle:hover,
 .historyPanel .historyDeleteToggle:hover,
 .detailsPanel .detailsHeader .detailsScreenshotBtn:hover,
+.detailsPanel .detailsHeader .detailsChatCopyBtn:hover,
 .detailsPanel .detailsHeader .detailsSettingsBtn:hover,
 .detailsPanel .detailsHeader .detailsRefreshBtn:hover,
 .historyPanel .historyHeader .closeX:hover,
@@ -5817,6 +5823,7 @@ body.noDeaths .list .item .deathCount { display: none !important; }
 .historyPanel .historyTrainToggle svg,
 .historyPanel .historyDeleteToggle svg,
 .detailsPanel .detailsHeader .detailsScreenshotBtn svg,
+.detailsPanel .detailsHeader .detailsChatCopyBtn svg,
 .detailsPanel .detailsHeader .detailsSettingsBtn svg,
 .detailsPanel .detailsHeader .detailsRefreshBtn svg {
   width: 14px;
@@ -6597,10 +6604,12 @@ body.isHistoryWindow .historyPanel .historyHeader .closeX {
   border-color: color-mix(in srgb, var(--row-fill) 64%, transparent);
 }
 
-.detailsPanel .detailsHeader .detailsScreenshotBtn {
+.detailsPanel .detailsHeader .detailsScreenshotBtn,
+.detailsPanel .detailsHeader .detailsChatCopyBtn {
   color: var(--hud-sub);
 }
-.detailsPanel .detailsHeader .detailsScreenshotBtn svg {
+.detailsPanel .detailsHeader .detailsScreenshotBtn svg,
+.detailsPanel .detailsHeader .detailsChatCopyBtn svg {
   width: 14px;
   height: 14px;
 }
@@ -9701,3 +9710,9 @@ html.a2-offline .historyUploadBtn {
 .detailsPanel .staggerTick.isAmbiguous {
   outline: 1px solid var(--stagger-warn);
 }
+/* The copy-for-chat buttons: a moment green when copied, red when there was
+   nothing of yours to copy. */
+.header .headerBtn.chatCopyBtn.isCopied,
+.detailsPanel .detailsHeader .detailsChatCopyBtn.isCopied { color: var(--metric-hps, #7ee2a8); }
+.header .headerBtn.chatCopyBtn.isCopyFailed,
+.detailsPanel .detailsHeader .detailsChatCopyBtn.isCopyFailed { color: #ff6b6b; }

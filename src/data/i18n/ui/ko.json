@@ -988,5 +988,12 @@
     "odyle": "오드 에너지",
     "ping": "핑",
     "jitter": "지터: {ms} ms"
+  },
+  "chatCopy": {
+    "title": "게임 채팅용으로 내 결과 복사",
+    "copied": "복사됨: 게임 채팅에 붙여 넣으세요",
+    "nothing": "복사할 내용 없음: 이 전투에 내 피해가 없습니다",
+    "line": "{name} vs {target} ({time}) | DPS {dps} | 피해 {damage} | {pct} | {rank}/{count}위",
+    "lineSolo": "{name} vs {target} ({time}) | DPS {dps} | 피해 {damage}"
   }
 }

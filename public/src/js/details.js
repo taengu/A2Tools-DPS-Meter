@@ -614,10 +614,10 @@ const createDetailsUI = ({
   // Falls back to null if context has no actorDamage data (history fights use details.perActorStats).
   // Returns { stats, battleTimeMs } where battleTimeMs is the context's overall fight time.
   // Always uses ALL targets so stats stay stable regardless of which player is selected.
-  const buildPartyBarStats = () => {
+  const buildPartyBarStats = (mode = detailsMode) => {
     // Heal mode: bars become a healing leaderboard, aggregated per actor from the
     // fight's healSkills (dmg field = heal amount).
-    if (detailsMode === "heal") {
+    if (mode === "heal") {
       // Leaderboard always shows ALL members, so use the unfiltered details even when
       // a single member is selected (their per-skill view is rendered separately).
       const src = lastUnfilteredDetails || lastDetails;
@@ -3809,5 +3809,25 @@ const createDetailsUI = ({
     },
   });
 
-  return { open, close, isOpen, isPinned, render, updateLabels, refresh, updateGridColumns, openHistoryFight, resetDetailsMode, refreshPartyStat };
+  // Your result in the fight shown, for the line copied to game chat: by
+  // damage whatever DMG / HEAL shows, among everyone in the fight.
+  const getChatResult = () => {
+    if (!isOpen()) return null;
+    const ctx = buildPartyBarStats("dmg");
+    const stats = ctx?.stats || [];
+    const me = historyRecord ? Number(historyRecord.localActorId) : Number(window._dpsApp?.localPlayerId);
+    const index = stats.findIndex((s) => s.actorId === me);
+    if (!(me > 0) || index < 0) return null;
+    return {
+      name: resolveActorLabel(me),
+      target: fightBossName,
+      timeMs: ctx.battleTimeMs,
+      damage: stats[index].totalDmg,
+      pct: stats[index].contributionPct,
+      rank: index + 1,
+      count: stats.length,
+    };
+  };
+
+  return { open, close, isOpen, isPinned, render, updateLabels, refresh, updateGridColumns, openHistoryFight, resetDetailsMode, refreshPartyStat, getChatResult };
 };
