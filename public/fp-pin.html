@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FP</title>
+    <style>
+      /* The flight power pin (fp_pin.rs): big text over a transparent window,
+         to sit on the game's own flight gauge. Draining: an amber arrow down;
+         refilling: a neon blue arrow up. */
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+        user-select: none;
+        font-family: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .pin {
+        display: none;
+        align-items: center;
+        gap: 5px;
+        font-size: 24px;
+        line-height: 1;
+        color: #3ee8ff;
+        /* A hard dark edge and a drop first, so it reads over the game's own
+           bright flight icon; the glow after. */
+        text-shadow:
+          -1px 0 0 #000, 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0 #000,
+          0 0 3px rgba(0, 0, 0, 1), 0 2px 4px rgba(0, 0, 0, 0.95),
+          0 0 8px rgba(0, 174, 255, 0.6);
+      }
+      .pin.isShown { display: flex; }
+      .arrow {
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-bottom: 9px solid currentColor;
+        filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.95));
+      }
+      .pin.isDraining {
+        color: #ffb648;
+        text-shadow:
+          -1px 0 0 #000, 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0 #000,
+          0 0 3px rgba(0, 0, 0, 1), 0 2px 4px rgba(0, 0, 0, 0.95),
+          0 0 8px rgba(255, 120, 0, 0.55);
+      }
+      .pin.isDraining .arrow { border-bottom: 0; border-top: 9px solid currentColor; }
+    </style>
+  </head>
+  <body>
+    <div class="pin"><span class="arrow"></span><span class="time"></span></div>
+    <script src="/src/js/fpTime.js"></script>
+    <script src="/src/js/fpPin.js"></script>
+  </body>
+</html>

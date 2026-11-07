@@ -54,6 +54,8 @@ const FOOTER_DISPLAYS = [
   ["showTtk", "footerMenu.ttk", "Time to kill estimate"],
   ["showTotalDps", "footerMenu.partyTotal", "Party total"],
   ["showOdyle", "footerMenu.odyle", "Odyle energy"],
+  ["showFpTimer", "footerMenu.fpTimer", "Flight power refill time"],
+  ["showFpPin", "footerMenu.fpPin", "Flight power as a pin"],
   ["showPing", "footerMenu.ping", "Ping"],
 ];
 
@@ -136,6 +138,9 @@ class DpsApp {
       showPing: "dpsMeter.showPing",
       showOdyle: "dpsMeter.showOdyle",
       odyleLast: "dpsMeter.odyleLast",
+      showFpTimer: "dpsMeter.showFpTimer",
+      showFpPin: "dpsMeter.showFpPin",
+      fpMaxLast: "dpsMeter.fpMaxLast",
       showTtk: "dpsMeter.showTtk",
       extraMetrics: "dpsMeter.extraMetrics",
       showBossStagger: "dpsMeter.showBossStagger",
@@ -373,6 +378,7 @@ class DpsApp {
       // Opening settings must not construct or lay out the hidden combat views.
       this.showPing = this.safeGetSetting(this.storageKeys.showPing) !== "false";
       this.showOdyle = this.safeGetSetting(this.storageKeys.showOdyle) === "true";
+      this.showFpTimer = this.safeGetSetting(this.storageKeys.showFpTimer) === "true";
       this.showTtk = this.safeGetSetting(this.storageKeys.showTtk) !== "false";
       this.showTotalDps = this.safeGetSetting(this.storageKeys.showTotalDps) !== "false";
       this.roundDps = this.safeGetSetting(this.storageKeys.roundDps) !== "false";
@@ -530,6 +536,13 @@ class DpsApp {
     this.showOdyle = this.safeGetSetting(this.storageKeys.showOdyle) === "true";
     this.odyleEnergy = null;
     this.updateOdyle();
+    // Flight power: how long until it is full again, off unless turned on.
+    this.fpTimerEl = document.querySelector(".fpTimer");
+    this.showFpTimer = this.safeGetSetting(this.storageKeys.showFpTimer) === "true";
+    // Or as a pin over the game (fp_pin.rs), dragged anywhere.
+    this.showFpPin = this.safeGetSetting(this.storageKeys.showFpPin) === "true";
+    if (this.showFpPin && window.A2_VIEW === "main") window.javaBridge?.setFpPin?.(true);
+    this.flightPower = null;
     // Time to kill beside the battle timer, for bosses; on unless turned off.
     this.showTtk = this.safeGetSetting(this.storageKeys.showTtk) !== "false";
     this.ttk = typeof createTtkEstimator === "function" ? createTtkEstimator() : null;
@@ -6130,6 +6143,11 @@ class DpsApp {
       this.safeSetSetting(this.storageKeys[key], String(this[key]));
       if (key === "showTtk" && !this.showTtk) this.battleTime?.setTtk?.(null);
       if (key === "showOdyle") this.updateOdyle();
+      if (key === "showFpTimer") this.renderFpTimer();
+      if (key === "showFpPin") {
+        window.javaBridge?.setFpPin?.(this.showFpPin);
+        this.renderFpTimer();
+      }
       if (key === "showPing") this.updatePing();
       if (key === "showTotalDps") this.renderCurrentRows();
       this.renderFooterMenu();
@@ -7114,6 +7132,55 @@ class DpsApp {
     el.querySelector(".odyleBasic").textContent = String(shown.basic);
     el.querySelector(".odyleCharged").textContent = shown.charged > 0 ? `(+${shown.charged})` : "";
     el.classList.toggle("isRemembered", !live);
+    el.classList.add("isVisible");
+  }
+
+  // Flight power from the backend (capture/flight_power.rs), in hundredths:
+  // where it was at `atMs`, its maximum and what it refills by each second.
+  // The game sends the maximum only at login, so it is kept by character.
+  updateFlightPower(fp) {
+    if (!fp || typeof fp.current !== "number") return;
+    this.flightPower = fp;
+    const owner = String(fp.name ?? this.USER_NAME ?? "").trim();
+    if (owner && typeof fp.max === "number" && fp.max > 0) {
+      const saved = this.safeParseJSON(this.safeGetStorage(this.storageKeys.fpMaxLast) || "{}", {}) || {};
+      if (saved[owner] !== fp.max) {
+        saved[owner] = fp.max;
+        this.safeSetStorage(this.storageKeys.fpMaxLast, JSON.stringify(saved));
+      }
+    }
+    this.renderFpTimer();
+    // Counted down between readings, which come only once a second.
+    if (!this._fpTimerTick) this._fpTimerTick = setInterval(() => this.renderFpTimer(), 250);
+  }
+
+  // The footer's FP timer: the time until flight power is full, in neon
+  // blue; hidden when full or while its maximum is not known.
+  renderFpTimer() {
+    const el = this.fpTimerEl;
+    if (!el) return;
+    const fp = this.flightPower;
+    const owner = String(fp?.name ?? this.USER_NAME ?? "").trim();
+    const saved = this.safeParseJSON(this.safeGetStorage(this.storageKeys.fpMaxLast) || "{}", {}) || {};
+    const max = Number(fp?.max) > 0 ? Number(fp.max) : Number(saved[owner]) || 0;
+    // In flight, the flight time left; else the time until full (fpTime.js).
+    const left = this.showFpTimer && !this.showFpPin ? window.fpTime?.(fp, max) : null;
+    if (!left) {
+      el.classList.remove("isVisible");
+      return;
+    }
+    const text = window.fpTimeText(left.ms);
+    const timeEl = el.querySelector(".fpTimerTime");
+    if (timeEl && timeEl.textContent !== text) timeEl.textContent = text;
+    el.classList.toggle("isDraining", left.draining);
+    const t = (key, fallback) => this.i18n?.t?.(key, fallback) ?? fallback;
+    el.title = (left.draining
+      ? t("fpTimer.tipFlying", "Flight power: {now} / {max} ({pct}%), {time} of flight left")
+      : t("fpTimer.tip", "Flight power: {now} / {max} ({pct}%), full in {time}"))
+      .replace("{now}", String(Math.floor(left.now / 100)))
+      .replace("{max}", String(Math.floor(max / 100)))
+      .replace("{pct}", String(Math.floor((left.now / max) * 100)))
+      .replace("{time}", text);
     el.classList.add("isVisible");
   }
 

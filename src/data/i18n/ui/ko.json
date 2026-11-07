@@ -987,7 +987,9 @@
     "partyTotal": "파티 합계",
     "odyle": "오드 에너지",
     "ping": "핑",
-    "jitter": "지터: {ms} ms"
+    "jitter": "지터: {ms} ms",
+    "fpTimer": "비행력 회복 시간",
+    "fpPin": "비행력을 고정 표시로"
   },
   "chatCopy": {
     "title": "게임 채팅용으로 내 결과 복사",
@@ -995,5 +997,9 @@
     "nothing": "복사할 내용 없음: 이 전투에 내 피해가 없습니다",
     "line": "{name} vs {target} ({time}) | DPS {dps} | 피해 {damage} | {pct} | {rank}/{count}위",
     "lineSolo": "{name} vs {target} ({time}) | DPS {dps} | 피해 {damage}"
+  },
+  "fpTimer": {
+    "tip": "비행력: {now} / {max} ({pct}%), {time} 후 가득 참",
+    "tipFlying": "비행력: {now} / {max} ({pct}%), 비행 {time} 남음"
   }
 }

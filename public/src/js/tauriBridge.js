@@ -293,6 +293,10 @@
     window._dpsApp?.updateOdyle?.(event.payload);
   });
 
+  if (viewMode !== "settings") listen("flight-power", (event) => {
+    window._dpsApp?.updateFlightPower?.(event.payload);
+  });
+
   if (viewMode !== "settings") listen("ping-jitter", (event) => {
     window._dpsApp?.updateJitter?.(event.payload);
   });
@@ -678,6 +682,10 @@
     },
     setAllTargetsWindowMs() {},
     setTrainSelectionMode() {},
+    // The flight power pin (fp_pin.rs), opened or closed.
+    setFpPin(on) {
+      invoke("fp_pin_show", { on: !!on }).catch(() => {});
+    },
 
     // --- Window ---
     moveWindow() {

@@ -987,7 +987,9 @@
     "partyTotal": "Итог группы",
     "odyle": "Энергия Одила",
     "ping": "Пинг",
-    "jitter": "Джиттер: {ms} мс"
+    "jitter": "Джиттер: {ms} мс",
+    "fpTimer": "Восстановление полёта",
+    "fpPin": "Энергия полёта значком"
   },
   "chatCopy": {
     "title": "Скопировать свой результат для чата игры",
@@ -995,5 +997,9 @@
     "nothing": "Нечего копировать: в этом бою нет вашего урона",
     "line": "{name} vs {target} ({time}) | {dps} DPS | урон {damage} | {pct} | #{rank}/{count}",
     "lineSolo": "{name} vs {target} ({time}) | {dps} DPS | урон {damage}"
+  },
+  "fpTimer": {
+    "tip": "Энергия полёта: {now} / {max} ({pct}%), полная через {time}",
+    "tipFlying": "Энергия полёта: {now} / {max} ({pct}%), полёта осталось {time}"
   }
 }

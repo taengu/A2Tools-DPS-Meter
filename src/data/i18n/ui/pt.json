@@ -987,7 +987,9 @@
     "partyTotal": "Total do grupo",
     "odyle": "Energia de Odyle",
     "ping": "Ping",
-    "jitter": "Variação: {ms} ms"
+    "jitter": "Variação: {ms} ms",
+    "fpTimer": "Tempo de recarga de voo",
+    "fpPin": "Poder de voo como alfinete"
   },
   "chatCopy": {
     "title": "Copiar seu resultado para o chat do jogo",
@@ -995,5 +997,9 @@
     "nothing": "Nada para copiar: nenhum dano seu nesta luta",
     "line": "{name} vs {target} ({time}) | {dps} DPS | {damage} dano | {pct} | #{rank}/{count}",
     "lineSolo": "{name} vs {target} ({time}) | {dps} DPS | {damage} dano"
+  },
+  "fpTimer": {
+    "tip": "Poder de voo: {now} / {max} ({pct}%), cheio em {time}",
+    "tipFlying": "Poder de voo: {now} / {max} ({pct}%), restam {time} de voo"
   }
 }

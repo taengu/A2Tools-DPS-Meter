@@ -987,7 +987,9 @@
     "partyTotal": "パーティ合計",
     "odyle": "オードエネルギー",
     "ping": "ping",
-    "jitter": "ジッター: {ms} ms"
+    "jitter": "ジッター: {ms} ms",
+    "fpTimer": "飛行力の回復時間",
+    "fpPin": "飛行力をピンで表示"
   },
   "chatCopy": {
     "title": "ゲームチャット用に自分の結果をコピー",
@@ -995,5 +997,9 @@
     "nothing": "コピーする内容なし：この戦闘にあなたのダメージがありません",
     "line": "{name} vs {target} ({time}) | DPS {dps} | ダメージ {damage} | {pct} | {rank}/{count}位",
     "lineSolo": "{name} vs {target} ({time}) | DPS {dps} | ダメージ {damage}"
+  },
+  "fpTimer": {
+    "tip": "飛行力: {now} / {max} ({pct}%)、満タンまで {time}",
+    "tipFlying": "飛行力: {now} / {max} ({pct}%)、残り飛行時間 {time}"
   }
 }

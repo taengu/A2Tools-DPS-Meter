@@ -37,6 +37,7 @@ settings.properties
 !/public/plugin-host.html
 !/public/plugin-widget.html
 !/public/plugin-dock.html
+!/public/fp-pin.html
 !/public/src/
 /public/src/*
 !/public/src/js/

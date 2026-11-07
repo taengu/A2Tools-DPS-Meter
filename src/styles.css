@@ -3544,6 +3544,54 @@ body.noDeaths .list .item .deathCount { display: none !important; }
   opacity: 0.55;
 }
 .meter.slim .odyleDisplay { font-size: 10px; }
+
+/* Flight power refill: the time until FP is full, in neon blue. */
+.fpTimer {
+  display: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--hud-tech);
+  font-variation-settings: "wght" 700, "wdth" 87.5;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  color: #3ee8ff;
+  text-shadow:
+    0 0 3px rgba(62, 232, 255, 0.95),
+    0 0 8px rgba(0, 174, 255, 0.7),
+    0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.fpTimer.isVisible {
+  display: flex;
+}
+.fpTimer .fpTimerLabel {
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+/* Refilling: an arrow up; in flight, draining: amber, an arrow down. */
+.fpTimer .fpTimerArrow {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 6px solid currentColor;
+}
+.fpTimer.isDraining {
+  color: #ffb648;
+  text-shadow:
+    0 0 3px rgba(255, 182, 72, 0.95),
+    0 0 8px rgba(255, 120, 0, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.fpTimer.isDraining .fpTimerArrow {
+  border-bottom: 0;
+  border-top: 6px solid currentColor;
+}
+.meter.slim .fpTimer { font-size: 10px; }
 .meter.slim .odyleDisplay .odyleIcon { width: 12px; height: 12px; }
 
 /* Ping display — sits below the meter, outside the meter viewport */

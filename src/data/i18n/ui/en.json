@@ -987,7 +987,9 @@
     "partyTotal": "Party total",
     "odyle": "Odyle energy",
     "ping": "Ping",
-    "jitter": "Jitter: {ms} ms"
+    "jitter": "Jitter: {ms} ms",
+    "fpTimer": "Flight power refill time",
+    "fpPin": "Flight power as a pin"
   },
   "chatCopy": {
     "title": "Copy your result for the game's chat",
@@ -995,5 +997,9 @@
     "nothing": "Nothing to copy: no damage of yours in this fight",
     "line": "{name} vs {target} ({time}) | {dps} DPS | {damage} dmg | {pct} | #{rank}/{count}",
     "lineSolo": "{name} vs {target} ({time}) | {dps} DPS | {damage} dmg"
+  },
+  "fpTimer": {
+    "tip": "Flight power: {now} / {max} ({pct}%), full in {time}",
+    "tipFlying": "Flight power: {now} / {max} ({pct}%), {time} of flight left"
   }
 }

@@ -1187,6 +1187,9 @@ fn update_settings(
         if key == TRAIN_TIME_LIMIT_KEY {
             state.data_storage.set_train_limit_ms(value.trim().parse().unwrap_or(0));
         }
+        if key == crate::fp_pin::LOCKED_KEY {
+            crate::fp_pin::apply_lock(&app);
+        }
         if key == METER_ANCHOR_KEY {
             platform::window::set_main_anchor(platform::meter_anchor::Anchor::from_setting(Some(&value)));
         }
@@ -3723,6 +3726,12 @@ pub fn run() {
             {
                 save_window_geometry(window.app_handle(), window.label(), FIGHT_WINDOW_KEY);
             }
+            // The flight power pin opens where it was left.
+            if let tauri::WindowEvent::Moved(at) = event
+                && window.label() == crate::fp_pin::LABEL
+            {
+                crate::fp_pin::note_moved(window.app_handle(), *at);
+            }
             // Plugin widgets (#77) open where they were left, and close with
             // their plugin's window.
             if let tauri::WindowEvent::Moved(at) = event
@@ -4219,6 +4228,7 @@ pub fn run() {
                 let mut dock_on_top: Option<bool> = None;
                 let mut others_delay: u32 = 0;
                 let mut last_odyle: Option<((u32, u32), Option<String>)> = None;
+                let mut last_fp: Option<crate::capture::flight_power::FlightPower> = None;
                 loop {
                     interval.tick().await;
                     tick_count += 1;
@@ -4250,6 +4260,19 @@ pub fn run() {
                                     serde_json::json!({ "basic": energy.0, "charged": energy.1, "name": now.1 }),
                                 );
                                 last_odyle = Some(now);
+                            }
+                        }
+
+                        // Flight power, for the footer's FP timer: when it
+                        // changes, and every 2 s for a window opened since.
+                        // With your name, for the window to remember your
+                        // maximum by (the game sends it only at login).
+                        if let Some(fp) = state.data_storage.flight_power() {
+                            if last_fp != Some(fp) || tick_count % 4 == 0 {
+                                let mut payload = serde_json::to_value(fp).unwrap_or_default();
+                                payload["name"] = serde_json::json!(state.data_storage.local_character_name());
+                                let _ = handle.emit("flight-power", payload);
+                                last_fp = Some(fp);
                             }
                         }
 
@@ -4597,6 +4620,8 @@ pub fn run() {
             crate::plugins::widgets::plugin_widget_hello,
             crate::plugins::widgets::plugin_widget_post,
             crate::plugins::widgets::plugin_widget_drag,
+            crate::fp_pin::fp_pin_show,
+            crate::fp_pin::fp_pin_drag,
             crate::plugins::boss_live::plugin_boss_follow,
             crate::plugins::fps::plugin_fps_watch,
             set_run_as_admin,

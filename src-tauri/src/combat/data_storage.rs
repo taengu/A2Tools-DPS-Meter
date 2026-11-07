@@ -535,6 +535,8 @@ pub struct DataStorage {
     death_recaps: Mutex<DeathRecaps>,
     /// Dice Roll loot as read (`capture::loot_rolls`), for plugins.
     loot_rolls: Mutex<crate::capture::loot_rolls::LootRolls>,
+    /// Flight power as read (`capture::flight_power`), for the FP timer.
+    flight_powers: Mutex<crate::capture::flight_power::FlightPowers>,
 }
 
 /// The timeline and when it was last pruned.
@@ -919,6 +921,7 @@ impl DataStorage {
             stagger: Mutex::new(StaggerLog::default()),
             death_recaps: Mutex::new(DeathRecaps::default()),
             loot_rolls: Mutex::new(Default::default()),
+            flight_powers: Mutex::new(Default::default()),
         }
     }
 
@@ -2243,6 +2246,17 @@ impl DataStorage {
     /// next time; None when there are none.
     pub fn death_recaps_since(&self, seq: u64) -> Option<(u64, Vec<death_recap::DeathRecap>)> {
         self.death_recaps.lock().since(seq)
+    }
+
+    /// A flight power reading (`capture::flight_power`).
+    pub fn note_flight_power(&self, reading: crate::capture::flight_power::Reading) {
+        self.flight_powers.lock().note(reading, crate::clock::now_ms());
+    }
+
+    /// Your flight power, once the game has sent it.
+    pub fn flight_power(&self) -> Option<crate::capture::flight_power::FlightPower> {
+        let me = i32::try_from(self.local_player_id()?).ok()?;
+        self.flight_powers.lock().of(me)
     }
 
     /// A Dice Roll packet read, kept for plugins.

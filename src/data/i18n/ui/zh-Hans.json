@@ -987,7 +987,9 @@
     "partyTotal": "队伍总计",
     "odyle": "奥德能量",
     "ping": "延迟",
-    "jitter": "抖动：{ms} 毫秒"
+    "jitter": "抖动：{ms} 毫秒",
+    "fpTimer": "飞行力回满时间",
+    "fpPin": "飞行力以钉选显示"
   },
   "chatCopy": {
     "title": "复制我的结果到游戏聊天",
@@ -995,5 +997,9 @@
     "nothing": "没有可复制的内容：这场战斗中没有你的伤害",
     "line": "{name} vs {target} ({time}) | DPS {dps} | 伤害 {damage} | {pct} | 第{rank}/{count}",
     "lineSolo": "{name} vs {target} ({time}) | DPS {dps} | 伤害 {damage}"
+  },
+  "fpTimer": {
+    "tip": "飞行力：{now} / {max}（{pct}%），{time} 后回满",
+    "tipFlying": "飞行力：{now} / {max}（{pct}%），剩余飞行 {time}"
   }
 }

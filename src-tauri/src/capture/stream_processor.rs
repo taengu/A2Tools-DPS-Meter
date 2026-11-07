@@ -320,6 +320,10 @@ impl StreamProcessor {
         if let Some(state) = crate::capture::abyss_artifacts::parse(packet) {
             self.data_storage.note_abyss_artifacts(state);
         }
+        // Flight power, for the FP timer.
+        if let Some(reading) = crate::capture::flight_power::parse(packet) {
+            self.data_storage.note_flight_power(reading);
+        }
         // Dice Roll loot: an item rolled for, each roll, and who won it.
         if let Some(roll) = crate::capture::loot_rolls::parse(packet) {
             self.data_storage.note_loot_roll(roll);

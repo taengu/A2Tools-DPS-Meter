@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Overlay plus every tool window. Every window label must match something here — a window that is absent gets no permissions at all, so window.__TAURI__.opener is never injected and tauriBridge.js dies on its first destructure, leaving a blank window. details-* covers the per-fight windows, which are labelled by fight id; pw_* covers plugin widgets (pw_<plugin>_<widget>).",
-  "windows": ["main", "settings", "details", "details-*", "history", "plugin-*", "plugins-dock", "pw_*"],
+  "windows": ["main", "settings", "details", "details-*", "history", "plugin-*", "plugins-dock", "pw_*", "fp-pin"],
   "permissions": [
     "core:default",
     "core:window:allow-start-resize-dragging",

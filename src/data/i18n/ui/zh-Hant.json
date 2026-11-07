@@ -987,7 +987,9 @@
     "partyTotal": "隊伍總計",
     "odyle": "奧德能量",
     "ping": "延遲",
-    "jitter": "抖動：{ms} 毫秒"
+    "jitter": "抖動：{ms} 毫秒",
+    "fpTimer": "飛行力回滿時間",
+    "fpPin": "飛行力以釘選顯示"
   },
   "chatCopy": {
     "title": "複製我的結果到遊戲聊天",
@@ -995,5 +997,9 @@
     "nothing": "沒有可複製的內容：這場戰鬥中沒有你的傷害",
     "line": "{name} vs {target} ({time}) | DPS {dps} | 傷害 {damage} | {pct} | 第{rank}/{count}",
     "lineSolo": "{name} vs {target} ({time}) | DPS {dps} | 傷害 {damage}"
+  },
+  "fpTimer": {
+    "tip": "飛行力：{now} / {max}（{pct}%），{time} 後回滿",
+    "tipFlying": "飛行力：{now} / {max}（{pct}%），剩餘飛行 {time}"
   }
 }
