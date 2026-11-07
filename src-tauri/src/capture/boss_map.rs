@@ -8,7 +8,9 @@
 //! ```
 //!
 //! The time is when an up boss appeared, or when a dead one returns; 0 when
-//! the game gives none (the Abyss's scheduled bosses). The boss id is the
+//! the game gives none. The Abyss's scheduled bosses carry 0 or their next
+//! scheduled spawn, which can be days away (2006-2008 were five days out on
+//! 2026-11-08), so a time up to AHEAD_MS ahead is believed. The boss id is the
 //! game's WorldMapFieldNamed id (101006: Bodyguard Teegant in Verteron).
 //!
 //! Some bosses carry one more byte before the time, others never do, and its
@@ -41,9 +43,12 @@ pub struct BossMap {
 }
 
 const OPCODE: [u8; 2] = [0x01, 0x91];
-/// A time this far from now isn't one (a misread).
+/// A time this far from now isn't one (a misread). Ahead, a week and a day:
+/// the Abyss's weekly bosses give their next spawn, up to a week away. Three
+/// days failed the whole Abyss map once 2006-2008 were five days out
+/// (2026-11-08), and no map 20 was reported from then on.
 const PAST_MS: i64 = 14 * 24 * 3600 * 1000;
-const AHEAD_MS: i64 = 3 * 24 * 3600 * 1000;
+const AHEAD_MS: i64 = 8 * 24 * 3600 * 1000;
 
 fn varint(b: &[u8], mut i: usize) -> Option<(u64, usize)> {
     let mut v = 0u64;
@@ -158,6 +163,30 @@ mod tests {
         // Argo, the Spirit King (the extra byte), back in seven hours.
         assert!(map.bosses[0].id == 2001 && map.bosses[0].time_ms > 1_791_993_086_569);
         assert!(map.bosses[1..].iter().all(|b| b.time_ms == 0 && !b.up));
+    }
+
+    #[test]
+    fn the_abyss_weekly_bosses_may_be_days_away() {
+        // 2026-11-08 05:12 (UTC+8): Argo dead with no time, 2003-2005 due that
+        // evening, 2006-2008 five days out; the first entry carries the extra byte.
+        let now = 1_794_085_953_000;
+        let map = parse(&hex(include_str!("testdata/boss_map_abyss_week.hex")), now).unwrap();
+        assert_eq!((map.map_id, map.header, map.bosses.len()), (20, 0, 8));
+        let ids: Vec<u32> = map.bosses.iter().map(|b| b.id).collect();
+        assert_eq!(ids, [2004, 2003, 2001, 2005, 2002, 2006, 2007, 2008]);
+        assert!(map.bosses.iter().all(|b| !b.up));
+        assert_eq!(map.bosses[2].time_ms, 0);
+        assert_eq!(map.bosses[0].time_ms, 1_794_168_300_000);
+        assert!(map.bosses[5..].iter().all(|b| b.time_ms == 1_794_515_700_000));
+        // Minutes earlier: 2002 up (a position, no time) and the extra byte 0x10.
+        let up = "7501910000140000000800d40f10e0a1c3bca101000000d30fe0a1c3bca101000000d10f\
+                  000000000000000000d50fe0a1c3bca101000001d20f5fe2fe468d3937c6009c28460000\
+                  00000000000000d60f208978d1a101000000d70f208978d1a101000000d80f208978d1a1010000000000";
+        let up: String = up.split_whitespace().collect();
+        let map = parse(&hex(&up), now).unwrap();
+        assert_eq!(map.bosses.len(), 8);
+        assert!(map.bosses[4].id == 2002 && map.bosses[4].up && map.bosses[4].time_ms == 0);
+        assert_eq!(map.bosses.iter().filter(|b| b.up).count(), 1);
     }
 
     #[test]
