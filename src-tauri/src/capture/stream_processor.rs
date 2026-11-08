@@ -328,6 +328,10 @@ impl StreamProcessor {
         if let Some(reading) = crate::capture::flight_power::parse(packet) {
             self.data_storage.note_flight_power(reading);
         }
+        // The Black Cloud Merchant's stock, as a tab of the shop is opened.
+        if let Some(market) = crate::capture::black_market::parse(packet) {
+            self.data_storage.note_black_market(market);
+        }
         // Dice Roll loot: an item rolled for, each roll, and who won it.
         if let Some(roll) = crate::capture::loot_rolls::parse(packet) {
             self.data_storage.note_loot_roll(roll);

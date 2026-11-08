@@ -3,6 +3,7 @@ pub mod abnormal;
 pub mod abyss_artifacts;
 pub mod supply_requests;
 pub mod abyss_cores;
+pub mod black_market;
 pub mod boss_map;
 pub mod rankings;
 pub mod flight_power;

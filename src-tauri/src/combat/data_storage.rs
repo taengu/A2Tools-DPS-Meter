@@ -535,6 +535,9 @@ pub struct DataStorage {
     death_recaps: Mutex<DeathRecaps>,
     /// Dice Roll loot as read (`capture::loot_rolls`), for plugins.
     loot_rolls: Mutex<crate::capture::loot_rolls::LootRolls>,
+    /// The Black Cloud Merchant's stock as read (`capture::black_market`),
+    /// for plugins.
+    black_markets: Mutex<crate::capture::black_market::BlackMarkets>,
     /// Flight power as read (`capture::flight_power`), for the FP timer.
     flight_powers: Mutex<crate::capture::flight_power::FlightPowers>,
 }
@@ -925,6 +928,7 @@ impl DataStorage {
             stagger: Mutex::new(StaggerLog::default()),
             death_recaps: Mutex::new(DeathRecaps::default()),
             loot_rolls: Mutex::new(Default::default()),
+            black_markets: Mutex::new(Default::default()),
             flight_powers: Mutex::new(Default::default()),
         }
     }
@@ -2273,6 +2277,18 @@ impl DataStorage {
     /// time; None when there are none.
     pub fn loot_rolls_since(&self, seq: u64) -> Option<(u64, Vec<crate::capture::loot_rolls::LootRollEvent>)> {
         self.loot_rolls.lock().since(seq)
+    }
+
+    /// The Black Cloud Merchant's stock, as a tab of the shop was opened.
+    pub fn note_black_market(&self, market: crate::capture::black_market::BlackMarket) {
+        let at = crate::clock::now_ms();
+        self.black_markets.lock().push(crate::capture::black_market::BlackMarketEvent { at, market });
+    }
+
+    /// The stocks read since `seq`, and the count to ask with next time;
+    /// None when there are none.
+    pub fn black_markets_since(&self, seq: u64) -> Option<(u64, Vec<crate::capture::black_market::BlackMarketEvent>)> {
+        self.black_markets.lock().since(seq)
     }
 
     /// The maps opened since `seq` was read (all of them, newest last), and

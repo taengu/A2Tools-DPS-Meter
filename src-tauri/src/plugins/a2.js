@@ -55,6 +55,13 @@
 //                                              player } who won it. The highest roll wins. A roll can
 //                                              come before its "open" or without one. Once each, kept
 //                                              like a decoder's events
+//   a2.on("blackMarket", (m) => ...)           the Black Cloud Merchants' stock, each time a tab of the
+//                                              shop is opened (permission "events:black-market", meter
+//                                              2.0.93 on): m = { at, kind, refreshAt (unix ms, when the
+//                                              stock changes next), goods: [{ goodsId (RandomShopGoods id),
+//                                              itemId, count, tier (discount: 0 10%, 1 20%, 2 30%, 3 50%),
+//                                              currency, originalPrice, price }] }. Kept like a decoder's
+//                                              events
 //   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
 //                                              (meter 2.0.65 on)
 //   a2.on("ping", ({ ms }) => ...)             the ping to the game server in ms (null while not known),
