@@ -121,6 +121,17 @@ fn apply(app: &tauri::AppHandle, st: &mut State, server: u32) {
     }
 }
 
+/// The HP of world bosses the player is fighting, as their own meter reads
+/// it, to plugins at once ("bossHp": { server, bosses: [{ id, hp }] }, ids
+/// the feed's): the site's word comes back later, or not at all when
+/// reports can't reach it, and a boss's icon stayed at 24% through the
+/// fight (Allula, 2026-11-08).
+pub fn tell_own_hp(app: &tauri::AppHandle, data: Value) {
+    if let Ok(host) = host(app) {
+        host.tell_permitted(app, "feed:boss-timers", "bossHp", data);
+    }
+}
+
 fn tell(app: &tauri::AppHandle, data: Value) {
     if let Ok(host) = host(app) {
         host.tell_permitted(app, "feed:boss-timers", "bossLive", data);

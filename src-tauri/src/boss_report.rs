@@ -135,6 +135,8 @@ const EVENT_WAIT_MS: i64 = 5 * 60_000;
 
 /// HP is sent this often, for the bosses whose percent changed.
 const HP_EVERY: Duration = Duration::from_secs(3);
+/// How long HP that couldn't be sent is tried again: older says nothing.
+const HP_RETRY_MS: i64 = 30_000;
 
 /// The request for a kill: (path, body), or None for a boss a2tools.app
 /// doesn't know.
@@ -274,6 +276,10 @@ fn spawn_events(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut waiting: Vec<(i64, BossEvent)> = Vec::new();
         let mut last_hp = std::time::Instant::now();
+        // HP that couldn't go, by NPC, newest only: tried again each round
+        // for HP_RETRY_MS. It was dropped at once, and with the site busy
+        // through a world boss's kill a boss's HP stopped there for everyone.
+        let mut unsent: std::collections::HashMap<i32, (BossHp, i64)> = std::collections::HashMap::new();
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
             let Some(state) = app.try_state::<AppState>() else { continue };
@@ -282,11 +288,23 @@ fn spawn_events(app: tauri::AppHandle) {
             // when it can't go (HP is only worth anything now).
             if last_hp.elapsed() >= HP_EVERY {
                 last_hp = std::time::Instant::now();
-                let changed = state.data_storage.take_boss_hp(now);
+                let fresh = state.data_storage.take_boss_hp(now);
                 let server = report_server(&state);
+                // Plugins hear the player's own reading at once, shared or not.
+                if server != 0 {
+                    if let Some(own) = hp_request(server, &fresh) {
+                        crate::plugins::boss_live::tell_own_hp(&app, own);
+                    }
+                }
+                for b in fresh {
+                    unsent.insert(b.npc, (b, now));
+                }
+                unsent.retain(|_, (_, at)| now - *at <= HP_RETRY_MS);
+                let changed: Vec<BossHp> = unsent.values().map(|(b, _)| b.clone()).collect();
                 let off = !sharing(&state);
                 let requests = [("/api/boss-timers/hp", hp_request(server, &changed)),
                                 ("/api/boss-timers/cores", cores_hp_request(server, &changed, now))];
+                let mut failed = false;
                 for (path, body) in requests {
                     let (false, false, Some(body)) = (off, server == 0, body) else { continue };
                     let body = with_host(body, server, state.data_storage.game_host());
@@ -300,12 +318,21 @@ fn spawn_events(app: tauri::AppHandle) {
                         // bar that stayed full on Blooming Korin, 2026-10-22).
                         Ok(res) if !res.status().is_success() => {
                             let status = res.status();
+                            // The site busy (5xx): again next round. Refused
+                            // (4xx): it would be refused again.
+                            failed |= status.is_server_error();
                             let why = res.text().await.unwrap_or_default();
                             tracing::info!("Boss timers: HP refused ({path}, {status}): {}", why.chars().take(200).collect::<String>());
                         }
                         Ok(_) => {}
-                        Err(e) => tracing::debug!("Boss timers: could not send HP ({path}): {e}"),
+                        Err(e) => {
+                            failed = true;
+                            tracing::debug!("Boss timers: could not send HP ({path}): {e}");
+                        }
                     }
+                }
+                if !failed {
+                    unsent.clear();
                 }
             }
             let events = state.data_storage.take_boss_events();
