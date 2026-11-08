@@ -106,7 +106,9 @@ pub fn set_on_top_without_showing(window: &tauri::WebviewWindow, on_top: bool) {
 /// one, raised whenever the game takes the front, and the meter and its
 /// widgets went behind it (#184). Only a window of ours that is shown and on
 /// top, and only when a window of another program, shown and on top, lies
-/// over it; true when it was raised.
+/// over it and covers (nearly) its whole screen, as a full-screen overlay
+/// does: a smaller window someone pinned over the game (a Discord pop-out, a
+/// stream chat) keeps its place. True when it was raised.
 pub fn rise_over_foreign_topmost(window: &tauri::WebviewWindow) -> bool {
     use windows::Win32::Foundation::RECT;
     use windows::Win32::System::Threading::GetCurrentProcessId;
@@ -141,7 +143,7 @@ pub fn rise_over_foreign_topmost(window: &tauri::WebviewWindow) -> bool {
             }
             let overlaps = theirs.left < ours.right && ours.left < theirs.right
                 && theirs.top < ours.bottom && ours.top < theirs.bottom;
-            if overlaps {
+            if overlaps && covers_its_screen(other, &theirs) {
                 let _ = SetWindowPos(
                     hwnd, Some(HWND_TOPMOST),
                     0, 0, 0, 0,
@@ -152,6 +154,21 @@ pub fn rise_over_foreign_topmost(window: &tauri::WebviewWindow) -> bool {
         }
     }
     false
+}
+
+/// Whether a window's rectangle covers at least 90% of the screen it is on.
+fn covers_its_screen(hwnd: HWND, rect: &windows::Win32::Foundation::RECT) -> bool {
+    use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+    if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
+        return false;
+    }
+    let m = info.rcMonitor;
+    let area = |l: i32, t: i32, r: i32, b: i32| i64::from((r - l).max(0)) * i64::from((b - t).max(0));
+    let screen = area(m.left, m.top, m.right, m.bottom);
+    let shared = area(rect.left.max(m.left), rect.top.max(m.top), rect.right.min(m.right), rect.bottom.min(m.bottom));
+    screen > 0 && shared * 10 >= screen * 9
 }
 
 /// Hide a window that `show_on_top_without_focus` shows, the same way: Tauri's
