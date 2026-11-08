@@ -84,17 +84,21 @@ pub fn find_aion2_window_title() -> Option<String> {
     })
 }
 
-/// The process id of the AION 2 game window, found as `find_aion2_window_title`
-/// finds it.
-pub(super) fn game_pid() -> Option<u32> {
+/// The AION 2 game window, found as `find_aion2_window_title` finds it.
+pub(super) fn game_hwnd() -> Option<HWND> {
     let windows = top_level_windows();
-    let hwnd = windows.iter().copied().find(|&h| is_game_title(&window_title(h))).or_else(|| {
+    windows.iter().copied().find(|&h| is_game_title(&window_title(h))).or_else(|| {
         windows.iter().copied().find(|&h| {
             unsafe { IsWindowVisible(h) }.as_bool()
                 && !window_title(h).is_empty()
                 && exe_path(h).is_some_and(|p| is_game_exe(&p))
         })
-    })?;
+    })
+}
+
+/// The process id of the AION 2 game window.
+pub(super) fn game_pid() -> Option<u32> {
+    let hwnd = game_hwnd()?;
     let mut pid: u32 = 0;
     unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     (pid != 0).then_some(pid)

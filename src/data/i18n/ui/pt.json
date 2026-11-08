@@ -751,6 +751,7 @@
       "permFps": "Mostrar o FPS do jogo (no Windows, o medidor pede para ser executado como administrador para isso)",
       "permDeathRecap": "Depois que um jogador te mata: quem era e o dano que te causou",
       "permLootRolls": "Ver o saque por dados: o item, quem tirou quanto e quem ganhou",
+      "permInput": "Ver quando você pressiona Esc ou clica com o botão esquerdo nas partes da janela do jogo que ele marca, enquanto o jogo está em primeiro plano (nada mais)",
       "permScreenshot": "Tirar capturas da própria janela, para a área de transferência e sua pasta de capturas",
       "testHint": "Versões iniciais para qualquer um experimentar, assinadas como as outras. Podem mudar ou ter arestas: conte o que encontrar.",
       "testTitle": "Plugins de teste",
