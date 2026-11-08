@@ -43,6 +43,8 @@ mod update_check;
 #[cfg(feature = "online")]
 mod supply_report;
 #[cfg(feature = "online")]
+mod ranking_report;
+#[cfg(feature = "online")]
 mod party_presence;
 #[cfg(feature = "online")]
 mod presence;

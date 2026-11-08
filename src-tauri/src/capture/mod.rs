@@ -4,6 +4,7 @@ pub mod abyss_artifacts;
 pub mod supply_requests;
 pub mod abyss_cores;
 pub mod boss_map;
+pub mod rankings;
 pub mod flight_power;
 pub mod loot_rolls;
 pub mod field_bosses;

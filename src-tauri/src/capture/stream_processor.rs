@@ -316,6 +316,10 @@ impl StreamProcessor {
         if let Some(map) = crate::capture::boss_map::parse(packet, crate::clock::now_ms()) {
             self.data_storage.note_boss_map(map);
         }
+        // A ranking table the player opened.
+        if let Some(table) = crate::capture::rankings::parse(packet) {
+            self.data_storage.note_ranking(table);
+        }
         // Who holds the Abyss artifacts (with the Abyss map, and on entry).
         if let Some(state) = crate::capture::abyss_artifacts::parse(packet) {
             self.data_storage.note_abyss_artifacts(state);

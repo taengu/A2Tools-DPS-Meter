@@ -655,6 +655,9 @@ struct Inner {
     /// (`capture::supply_requests`), and a count that moves with each.
     supply_requests: Vec<crate::capture::supply_requests::Board>,
     supply_requests_seq: u64,
+    /// Ranking tables the player opened, not yet taken by the reporter
+    /// (`capture::rankings`); a few at most.
+    rankings: Vec<crate::capture::rankings::Ranking>,
     /// Entities whose max HP came from their spawn record, so a percentage of
     /// it can be trusted (a peak seen later may be below the real max).
     spawn_hp_ids: HashSet<i32>,
@@ -868,6 +871,7 @@ impl DataStorage {
                 abyss_artifacts_seq: 0,
                 supply_requests: Vec::new(),
                 supply_requests_seq: 0,
+                rankings: Vec::new(),
                 spawn_hp_ids: HashSet::new(),
                 boss_hp_now: HashMap::new(),
                 boss_hp_sent: HashMap::new(),
@@ -2310,6 +2314,22 @@ impl DataStorage {
         let mut inner = self.inner.write();
         inner.supply_requests = boards;
         inner.supply_requests_seq += 1;
+    }
+
+    /// A ranking table the player just opened. Only the newest few wait: a
+    /// table opened again replaces the one waiting.
+    pub fn note_ranking(&self, table: crate::capture::rankings::Ranking) {
+        let mut inner = self.inner.write();
+        inner.rankings.retain(|t| (t.table, t.class) != (table.table, table.class));
+        if inner.rankings.len() >= 16 {
+            inner.rankings.remove(0);
+        }
+        inner.rankings.push(table);
+    }
+
+    /// The ranking tables waiting, taken.
+    pub fn take_rankings(&self) -> Vec<crate::capture::rankings::Ranking> {
+        std::mem::take(&mut self.inner.write().rankings)
     }
 
     /// The boards, when told since `seq`: (the new seq, the boards).
