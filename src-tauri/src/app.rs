@@ -4436,6 +4436,18 @@ pub fn run() {
                             }
                         }
 
+                        // Another program's on-top window over the game
+                        // (Lossless Scaling's frame generation) comes over the
+                        // meter's windows whenever the game takes the front:
+                        // they go back above it (#184).
+                        if tick_count > 20 && platform::window_detector::is_aion2_foreground() {
+                            for (_, w) in handle.webview_windows() {
+                                if platform::window::rise_over_foreign_topmost(&w) && tick_count % 20 == 0 {
+                                    tracing::debug!("{} raised over another program's on-top window", w.label());
+                                }
+                            }
+                        }
+
                         // --- Save window position every ~5 seconds (every 10 ticks) ---
                         if tick_count % 10 == 0 {
                             if let Some(window) = handle.get_webview_window("main") {

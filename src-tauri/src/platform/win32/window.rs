@@ -101,6 +101,59 @@ pub fn set_on_top_without_showing(window: &tauri::WebviewWindow, on_top: bool) {
     }
 }
 
+/// Put an on-top window back above another program's on-top window that has
+/// come over it: Lossless Scaling's frame generation covers the game with
+/// one, raised whenever the game takes the front, and the meter and its
+/// widgets went behind it (#184). Only a window of ours that is shown and on
+/// top, and only when a window of another program, shown and on top, lies
+/// over it; true when it was raised.
+pub fn rise_over_foreign_topmost(window: &tauri::WebviewWindow) -> bool {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::System::Threading::GetCurrentProcessId;
+    let Some(hwnd) = hwnd_of(window) else { return false };
+    let topmost = |h: HWND| unsafe { GetWindowLongW(h, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0 != 0;
+    unsafe {
+        if !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() || !topmost(hwnd) {
+            return false;
+        }
+        let mut ours = RECT::default();
+        if GetWindowRect(hwnd, &mut ours).is_err() {
+            return false;
+        }
+        let own_pid = GetCurrentProcessId();
+        let mut above = GetWindow(hwnd, GW_HWNDPREV).ok();
+        // The on-top band is at the top of the order: what is above a window
+        // in it is on top too, and there are only a few.
+        for _ in 0..64 {
+            let Some(other) = above.filter(|h| !h.0.is_null()) else { break };
+            above = GetWindow(other, GW_HWNDPREV).ok();
+            if !IsWindowVisible(other).as_bool() || IsIconic(other).as_bool() || !topmost(other) {
+                continue;
+            }
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(other, Some(&mut pid));
+            if pid == own_pid {
+                continue;
+            }
+            let mut theirs = RECT::default();
+            if GetWindowRect(other, &mut theirs).is_err() {
+                continue;
+            }
+            let overlaps = theirs.left < ours.right && ours.left < theirs.right
+                && theirs.top < ours.bottom && ours.top < theirs.bottom;
+            if overlaps {
+                let _ = SetWindowPos(
+                    hwnd, Some(HWND_TOPMOST),
+                    0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                );
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Hide a window that `show_on_top_without_focus` shows, the same way: Tauri's
 /// own show and hide go through tao, which keeps a visible flag of its own.
 /// A raw show leaves that flag "hidden", so a tao hide after it changed
