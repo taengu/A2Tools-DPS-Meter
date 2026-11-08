@@ -752,6 +752,7 @@
       "permDeathRecap": "Après qu'un joueur vous a tué : qui c'était et les dégâts qu'il vous a infligés",
       "permLootRolls": "Voir le butin aux dés : l'objet, qui a obtenu quel score et qui l'a remporté",
       "permBlackMarket": "Voir le stock du Marchand du Nuage noir quand vous ouvrez la boutique : les objets et leurs prix",
+      "permKda": "Compter vos éliminations, assistances et morts contre des joueurs (sans noms)",
       "permScreenshot": "Faire des captures de sa propre fenêtre, dans le presse-papiers et votre dossier de captures",
       "testHint": "Des versions précoces que tout le monde peut essayer, signées comme les autres. Elles peuvent changer ou avoir des défauts : dis-nous ce que tu trouves.",
       "testTitle": "Plugins de test",
