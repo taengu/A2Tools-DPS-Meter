@@ -4,7 +4,9 @@
 //! Under Settings' "Sync useful data to A2Tools" (`boss_report::shares_data`).
 //! What is sent: the player's server (which region's tables these are), the
 //! table, the class tab, when the game updates it next, and its places as
-//! the game shows them to everyone. Nothing says who opened it.
+//! the game shows them to everyone. Nothing says who opened it. A table
+//! read before the server is known (the meter started mid-game) waits for
+//! it, and goes only if most of its characters are on that server.
 //!
 //! Rarely: a table is the same until its next update (the countdown in the
 //! window's corner), so a meter sends each table, for each class, once per
@@ -12,6 +14,7 @@
 //! settings, so a restart doesn't send it again. Gzipped: a top 500 is about
 //! 15 KB.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::time::Duration;
 
@@ -65,6 +68,17 @@ fn due(last: Option<&str>, table: &Ranking) -> bool {
     last.and_then(|l| l.parse::<i64>().ok()) != Some(table.next_update_ms)
 }
 
+/// The server most of a table's characters are on: the server it ranks
+/// (about 70% of Kaisinel's tables were Kaisinel's own characters).
+fn home_server(table: &Ranking) -> Option<u16> {
+    let mut counts: HashMap<u16, usize> = HashMap::new();
+    for e in &table.entries {
+        *counts.entry(e.server).or_default() += 1;
+    }
+    let (server, n) = counts.into_iter().max_by_key(|&(_, n)| n)?;
+    (n * 2 > table.entries.len()).then_some(server)
+}
+
 fn gzip(body: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     gz.write_all(body)?;
@@ -73,25 +87,40 @@ fn gzip(body: &[u8]) -> std::io::Result<Vec<u8>> {
 
 pub fn spawn(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
+        let mut waiting: Vec<Ranking> = Vec::new();
         loop {
             tokio::time::sleep(CHECK).await;
             let Some(state) = app.try_state::<AppState>() else { continue };
-            let tables = state.data_storage.take_rankings();
-            if tables.is_empty() || !crate::boss_report::shares_data(|k| state.settings.get(k)) {
+            for table in state.data_storage.take_rankings() {
+                waiting.retain(|t| (t.table, t.class) != (table.table, table.class));
+                waiting.push(table);
+            }
+            let now = crate::clock::now_ms();
+            waiting.retain(|t| t.header == 0 && t.next_update_ms > now);
+            if waiting.is_empty() {
                 continue;
             }
-            // Not known yet (the meter started mid-game): the tables go
-            // when they are opened again.
+            if !crate::boss_report::shares_data(|k| state.settings.get(k)) {
+                waiting.clear();
+                continue;
+            }
+            // Not known yet (the meter started mid-game): the tables wait
+            // for it, until they are out of date.
             let server = crate::boss_report::report_server(&state);
-            if server == 0 || tables.iter().any(|t| t.header != 0) {
+            if server == 0 {
                 continue;
             }
-            for table in tables {
+            for table in std::mem::take(&mut waiting) {
+                // A table read before the player moved to another server's
+                // character isn't this server's.
+                if home_server(&table) != Some(server) {
+                    tracing::info!("Rankings: table {} class {} isn't server {server}'s, not sent", table.table, table.class);
+                    continue;
+                }
                 let key = sent_key(server, &table);
                 if !due(state.settings.get(&key).as_deref(), &table) {
                     continue;
                 }
-                let now = crate::clock::now_ms();
                 let body = crate::boss_report::with_host(report(server, &table, now), server, state.data_storage.game_host());
                 let Ok(body) = gzip(body.to_string().as_bytes()) else { continue };
                 let url = format!("{}/api/rankings/report", crate::account::base_url());
@@ -152,6 +181,18 @@ mod tests {
         assert_eq!(r["entries"][0]["name"], "Dak");
         assert_eq!(r["entries"][0]["change"], -1);
         assert_eq!(r["entries"][0]["record"]["kill_count"], 8069);
+    }
+
+    #[test]
+    fn a_table_belongs_to_the_server_most_of_its_characters_are_on() {
+        let mut t = table(1);
+        assert_eq!(home_server(&t), Some(1305));
+        let mut other = t.entries[0].clone();
+        other.server = 1304;
+        t.entries.push(other.clone());
+        assert_eq!(home_server(&t), None, "half and half says nothing");
+        t.entries.push(other);
+        assert_eq!(home_server(&t), Some(1304));
     }
 
     #[test]
