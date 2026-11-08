@@ -66,7 +66,7 @@
 //                                              a player killed you ("death"), once each, kept like a
 //                                              decoder's events; the event's `at` (unix ms) says when
 //                                              and `seq` (from 1) numbers it, two in the same ms differ by it
-//                                              (permission "events:kda"). No names. Also
+//                                              (permission "events:kda", meter 2.0.94 on). No names. Also
 //                                              "points" with `amount`: Abyss Points just gained, and
 //                                              "zone" with `abyss` true/false: the Abyss entered or
 //                                              left (the first map load of a meter started there too).
