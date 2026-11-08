@@ -27,7 +27,7 @@ fn window_title(hwnd: HWND) -> String {
 
 /// The full path of the program that owns `hwnd`. Needs no elevation for the
 /// player's own processes.
-fn exe_path(hwnd: HWND) -> Option<String> {
+pub(crate) fn exe_path(hwnd: HWND) -> Option<String> {
     use windows::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
     };

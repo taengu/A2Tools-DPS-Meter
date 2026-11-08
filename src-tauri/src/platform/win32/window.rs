@@ -105,10 +105,11 @@ pub fn set_on_top_without_showing(window: &tauri::WebviewWindow, on_top: bool) {
 /// come over it: Lossless Scaling's frame generation covers the game with
 /// one, raised whenever the game takes the front, and the meter and its
 /// widgets went behind it (#184). Only a window of ours that is shown and on
-/// top, and only when a window of another program, shown and on top, lies
-/// over it and covers (nearly) its whole screen, as a full-screen overlay
-/// does: a smaller window someone pinned over the game (a Discord pop-out, a
-/// stream chat) keeps its place. True when it was raised.
+/// top, and only when Lossless Scaling's window, shown and on top, lies over
+/// it and covers (nearly) its whole screen. Not any full-screen overlay:
+/// Discord's in-game overlay is one too, see-through, and puts itself back
+/// on top at once, so the two swapped places twice a second (2026-11-09);
+/// nor a window someone pinned over the game. True when it was raised.
 pub fn rise_over_foreign_topmost(window: &tauri::WebviewWindow) -> bool {
     use windows::Win32::Foundation::RECT;
     use windows::Win32::System::Threading::GetCurrentProcessId;
@@ -143,7 +144,7 @@ pub fn rise_over_foreign_topmost(window: &tauri::WebviewWindow) -> bool {
             }
             let overlaps = theirs.left < ours.right && ours.left < theirs.right
                 && theirs.top < ours.bottom && ours.top < theirs.bottom;
-            if overlaps && covers_its_screen(other, &theirs) {
+            if overlaps && covers_its_screen(other, &theirs) && is_lossless_scaling(other) {
                 let _ = SetWindowPos(
                     hwnd, Some(HWND_TOPMOST),
                     0, 0, 0, 0,
@@ -154,6 +155,14 @@ pub fn rise_over_foreign_topmost(window: &tauri::WebviewWindow) -> bool {
         }
     }
     false
+}
+
+/// Whether a window is Lossless Scaling's (LosslessScaling.exe).
+fn is_lossless_scaling(hwnd: HWND) -> bool {
+    crate::platform::window_detector::exe_path(hwnd).is_some_and(|path| {
+        let exe = path.rsplit(['\\', '/']).next().unwrap_or(&path).to_ascii_lowercase();
+        exe.starts_with("losslessscaling")
+    })
 }
 
 /// Whether a window's rectangle covers at least 90% of the screen it is on.
