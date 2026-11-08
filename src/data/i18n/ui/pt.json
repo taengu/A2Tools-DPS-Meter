@@ -679,7 +679,7 @@
       "hideWhenSolo": "O medidor se oculta enquanto você não está em um grupo e volta quando você entra em um. O atalho de mostrar/ocultar ainda o exibe.",
       "hideOutOfCombat": "O medidor se oculta após esse tempo fora de combate e volta no próximo golpe. Ele continua visível enquanto Configurações, Histórico ou Detalhes estiverem abertos, ou com o mouse sobre ele.",
       "runAsAdmin": "Necessário para mostrar o FPS do jogo. O Windows pergunta toda vez que o medidor inicia.",
-      "shareData": "Compartilha os timers de chefes de campo e os Pedidos de suprimentos do seu servidor com o a2tools.app, para manter o A2Tools atualizado para todos: os chefes no seu mapa, os que você vê serem derrotados e o HP deles, e os quadros de pedidos após cada reinício. Nada sobre o seu personagem é enviado.",
+      "shareData": "Compartilha os timers de chefes de campo e os Pedidos de suprimentos do seu servidor com o a2tools.app, para manter o A2Tools atualizado para todos: os chefes no seu mapa, os que você vê serem derrotados e o HP deles, os quadros de pedidos após cada reinício e os rankings que você abre. Nada sobre o seu personagem é enviado.",
       "pluginAutoUpdate": "Ao iniciar o medidor, as atualizações de plugins se instalam sozinhas, em segundo plano. Uma atualização que pede algo novo continua esperando sua confirmação.",
       "meterAnchor": "A borda do medidor que fica parada quando linhas entram ou saem."
     },

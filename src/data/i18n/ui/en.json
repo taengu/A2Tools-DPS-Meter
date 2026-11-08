@@ -688,7 +688,7 @@
       "hideWhenSolo": "The meter hides while you're not in a party, and comes back when you join one. The Show/Hide keybind still brings it up.",
       "hideOutOfCombat": "The meter hides once you've been out of combat this long, and comes back with the next hit. It stays up while Settings, History or Details is open, or the mouse is over it.",
       "runAsAdmin": "Needed to show the game's frame rate. Windows asks each time the meter starts.",
-      "shareData": "Shares your server's field boss timers and Supply Requests with a2tools.app, to help keep A2Tools in sync for everyone: the bosses on your map, the ones you see killed and their HP, and the request boards after each reset. Nothing about your character is sent.",
+      "shareData": "Shares your server's field boss timers and Supply Requests with a2tools.app, to help keep A2Tools in sync for everyone: the bosses on your map, the ones you see killed and their HP, the request boards after each reset, and the ranking tables you open. Nothing about your character is sent.",
       "pluginAutoUpdate": "When the meter starts, plugin updates install by themselves, in the background. An update that asks for something new still waits for your yes."
     },
     "globalHotkeys": "Use keybinds",

@@ -679,7 +679,7 @@
       "hideWhenSolo": "Le compteur se masque tant que vous n'êtes pas en groupe et réapparaît quand vous en rejoignez un. Le raccourci Afficher/Masquer le fait toujours apparaître.",
       "hideOutOfCombat": "Le compteur se masque après ce délai hors combat et réapparaît au prochain coup. Il reste affiché tant que les Paramètres, l'Historique ou les Détails sont ouverts, ou que la souris est dessus.",
       "runAsAdmin": "Nécessaire pour afficher les FPS du jeu. Windows le demande à chaque démarrage du compteur.",
-      "shareData": "Partage les minuteurs des boss de terrain et les Demandes de ravitaillement de ton serveur avec a2tools.app, pour garder A2Tools à jour pour tout le monde : les boss sur ta carte, ceux que tu vois tomber et leurs PV, et les tableaux de demandes après chaque réinitialisation. Rien sur ton personnage n'est envoyé.",
+      "shareData": "Partage les minuteurs des boss de terrain et les Demandes de ravitaillement de ton serveur avec a2tools.app, pour garder A2Tools à jour pour tout le monde : les boss sur ta carte, ceux que tu vois tomber et leurs PV, les tableaux de demandes après chaque réinitialisation et les classements que tu ouvres. Rien sur ton personnage n'est envoyé.",
       "pluginAutoUpdate": "Au démarrage du compteur, les mises à jour des plugins s'installent d'elles-mêmes, en arrière-plan. Une mise à jour qui demande quelque chose de nouveau attend toujours votre accord.",
       "meterAnchor": "Le bord du compteur qui ne bouge pas quand des lignes apparaissent ou disparaissent."
     },

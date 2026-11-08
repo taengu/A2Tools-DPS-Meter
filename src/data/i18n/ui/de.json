@@ -679,7 +679,7 @@
       "hideWhenSolo": "Das Meter wird ausgeblendet, solange du in keiner Gruppe bist, und erscheint wieder, wenn du einer beitrittst. Die Tastenkombination zum Ein-/Ausblenden holt es trotzdem hervor.",
       "hideOutOfCombat": "Das Meter wird ausgeblendet, wenn du so lange nicht im Kampf warst, und erscheint mit dem nächsten Treffer wieder. Solange Einstellungen, Verlauf oder Details offen sind oder die Maus darüber ist, bleibt es sichtbar.",
       "runAsAdmin": "Nötig, um die Bildrate des Spiels anzuzeigen. Windows fragt bei jedem Start des Meters nach.",
-      "shareData": "Teilt die Feldboss-Timer und Versorgungsaufträge deines Servers mit a2tools.app, damit A2Tools für alle aktuell bleibt: die Bosse auf deiner Karte, die du besiegt siehst, und ihre HP, sowie die Auftragstafeln nach jedem Reset. Nichts über deinen Charakter wird gesendet.",
+      "shareData": "Teilt die Feldboss-Timer und Versorgungsaufträge deines Servers mit a2tools.app, damit A2Tools für alle aktuell bleibt: die Bosse auf deiner Karte, die du besiegt siehst, und ihre HP, die Auftragstafeln nach jedem Reset und die Ranglisten, die du öffnest. Nichts über deinen Charakter wird gesendet.",
       "pluginAutoUpdate": "Beim Start des Meters installieren sich Plugin-Updates im Hintergrund von selbst. Ein Update, das etwas Neues verlangt, wartet weiter auf dein Ja.",
       "meterAnchor": "Der Rand des Meters, der stehen bleibt, wenn Zeilen dazukommen oder wegfallen."
     },
