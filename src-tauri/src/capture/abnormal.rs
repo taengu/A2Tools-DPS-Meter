@@ -493,6 +493,15 @@ impl Timeline {
             }
             Some(Record::Changed(a)) => {
                 let key = (a.entity, a.instance);
+                // Another abnormal in the instance: the old one ends and the
+                // new starts, as in a list. A second Power of the Storm took
+                // over Earth's Blessing's instance with a change, and the
+                // timeline drew it as Earth's Blessing (2026-11-09).
+                if self.live.get(&key).is_some_and(|l| l.abnormal != a.abnormal) {
+                    let old = self.live.remove(&key).unwrap();
+                    self.close(old, ms, End::Removed(0));
+                    self.live.insert(key, Instance::from(&a, ms));
+                }
                 if self.live.get(&key).is_some_and(|l| l.caster != a.caster) {
                     let mut next = self.live.remove(&key).unwrap();
                     self.close(next.clone(), ms, End::Recast);
@@ -926,6 +935,20 @@ mod tests {
         assert_eq!(mine.iter().find(|t| t.owner == 15740).map(|t| (t.start_ms, t.end_ms)), Some((33_279, Some(34_816))));
         let all = tracks(&t.all_instances(), |_| 0);
         assert_eq!(all.iter().map(|t| (t.start_ms, t.end_ms, t.stacks.clone())).collect::<Vec<_>>(), [(10_974, None, vec![(10_974, 1)])]);
+    }
+
+    #[test]
+    fn a_change_to_another_abnormal_ends_the_old_one_and_starts_the_new() {
+        // 2026-11-08, log zDFeeFemDXOBDbNdPgglhA: Earth's Blessing (174000371)
+        // added to entity 2660 as instance 889, then a change of instance 889
+        // to Power of the Storm (182500411, skill 18250040) by entity 2842.
+        let mut t = Timeline::default();
+        t.note(81_259, &hex("342a38e4140113f906f3085f0a204e0000000000004296f2baa1010000e41414ef800901009305a14705a13bc733f90d47"));
+        t.note(93_203, &hex("332b38e41413f9063bbce00a204e000000000000efc4f2baa10100009a1614387916010282b7a347389937c700f60d47"));
+        let got: Vec<_> = t.all_instances().iter().map(|i| (i.instance, i.abnormal, i.caster, i.skill, i.start_ms, i.end_ms)).collect();
+        assert_eq!(got[0].0, 889);
+        assert_eq!((got[0].1, got[0].2, got[0].4, got[0].5), (174_000_371, 2660, 81_259, Some(93_203)));
+        assert_eq!((got[1].1, got[1].2, got[1].3, got[1].4, got[1].5), (182_500_411, 2842, Some(18_250_040), 93_203, None));
     }
 
     #[test]
