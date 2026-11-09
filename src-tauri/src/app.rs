@@ -1245,6 +1245,9 @@ fn get_capture_status(state: tauri::State<'_, AppState>) -> serde_json::Value {
         // When true, characterName is the game's (null = an unnamed tutorial
         // character) and the UI should adopt it rather than push its own.
         "characterNameFromGame": state.data_storage.local_identity_from_self_record(),
+        // The character's server (0 while not known), for what the page keeps
+        // per character: one name can be a character on several servers.
+        "serverId": state.data_storage.own_server(),
     })
 }
 
@@ -4268,7 +4271,12 @@ pub fn run() {
                             if last_odyle.as_ref() != Some(&now) || tick_count % 4 == 0 {
                                 let _ = handle.emit(
                                     "odyle-energy",
-                                    serde_json::json!({ "basic": energy.0, "charged": energy.1, "name": now.1 }),
+                                    serde_json::json!({
+                                        "basic": energy.0,
+                                        "charged": energy.1,
+                                        "name": now.1,
+                                        "server": state.data_storage.own_server(),
+                                    }),
                                 );
                                 last_odyle = Some(now);
                             }
