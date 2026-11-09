@@ -52,16 +52,18 @@ test("a restarted meter shows the character's last energy, dimmed, until the gam
   const storage = new Map();
   const first = meter(storage);
   first.app.USER_NAME = "Nullception";
-  first.app.updateOdyle({ basic: 30, charged: 840, name: "Nullception" });
-  first.app.updateOdyle({ basic: 30, charged: 880, name: "Nullception" });
+  first.app.USER_SERVER = 2001;
+  first.app.updateOdyle({ basic: 30, charged: 840, name: "Nullception", server: 2001 });
+  first.app.updateOdyle({ basic: 30, charged: 880, name: "Nullception", server: 2001 });
   assert.deepEqual(first.shown(), { visible: true, remembered: false, text: "30(+880)" });
 
   const second = meter(storage);
   second.app.USER_NAME = "Nullception";
+  second.app.USER_SERVER = 2001;
   second.app.updateOdyle();
   assert.deepEqual(second.shown(), { visible: true, remembered: true, text: "30(+880)" });
 
-  second.app.updateOdyle({ basic: 45, charged: 880, name: "Nullception" });
+  second.app.updateOdyle({ basic: 45, charged: 880, name: "Nullception", server: 2001 });
   assert.deepEqual(second.shown(), { visible: true, remembered: false, text: "45(+880)" });
 });
 
@@ -71,12 +73,14 @@ test("energy without an owner is shown but not kept, and another character's isn
   const storage = new Map();
   const first = meter(storage);
   first.app.USER_NAME = "Nullception";
-  first.app.updateOdyle({ basic: 30, charged: 840, name: "Nullception" });
+  first.app.USER_SERVER = 2001;
+  first.app.updateOdyle({ basic: 30, charged: 840, name: "Nullception", server: 2001 });
   first.app.updateOdyle({ basic: 12, charged: 0, name: null });
   assert.deepEqual(first.shown(), { visible: true, remembered: false, text: "12" });
 
   const second = meter(storage);
   second.app.USER_NAME = "Nullception";
+  second.app.USER_SERVER = 2001;
   second.app.updateOdyle();
   assert.deepEqual(second.shown(), { visible: true, remembered: true, text: "30(+840)" });
 
@@ -85,12 +89,35 @@ test("energy without an owner is shown but not kept, and another character's isn
   assert.equal(second.shown().visible, false);
 });
 
+// One name can be a character on several servers: each keeps its own energy,
+// and with no server known yet none is shown (#190).
+test("a character of the same name on another server shows its own energy, or none", () => {
+  const storage = new Map();
+  const first = meter(storage);
+  first.app.USER_NAME = "Denatril";
+  first.app.USER_SERVER = 1304;
+  first.app.updateOdyle({ basic: 15, charged: 695, name: "Denatril", server: 1304 });
+
+  const second = meter(storage);
+  second.app.USER_NAME = "Denatril";
+  second.app.USER_SERVER = 1306;
+  second.app.updateOdyle();
+  assert.equal(second.shown().visible, false);
+  second.app.USER_SERVER = 0;
+  second.app.updateOdyle();
+  assert.equal(second.shown().visible, false);
+  second.app.USER_SERVER = 1304;
+  second.app.updateOdyle();
+  assert.deepEqual(second.shown(), { visible: true, remembered: true, text: "15(+695)" });
+});
+
 test("nothing remembered shows nothing, and the setting off hides it", () => {
   const m = meter(new Map());
   m.app.USER_NAME = "Nullception";
+  m.app.USER_SERVER = 2001;
   m.app.updateOdyle();
   assert.equal(m.shown().visible, false);
-  m.app.updateOdyle({ basic: 30, charged: 840, name: "Nullception" });
+  m.app.updateOdyle({ basic: 30, charged: 840, name: "Nullception", server: 2001 });
   m.app.showOdyle = false;
   m.app.updateOdyle();
   assert.equal(m.shown().visible, false);
