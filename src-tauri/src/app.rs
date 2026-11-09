@@ -1096,11 +1096,16 @@ fn hotkey_of(settings: &Settings, key: &str) -> (u32, u32) {
 /// Register the hotkeys from saved settings (or defaults).
 /// Show or hide the meter, and remember it (as Settings → Plugins → Show
 /// the DPS meter does): its keybind and the tray's. Hidden by auto-hide
-/// only, it is shown, as before, and nothing changes.
+/// only, it is shown, as before, and nothing changes. Auto-hide and the
+/// out-of-combat and solo rules minimise it, which Windows still calls
+/// visible: the first press took it for shown and hid it for good, so the
+/// keybind needed two presses to bring it back (2026-11-09).
 pub(crate) fn toggle_meter(app: &tauri::AppHandle) {
     if meter_wanted(app)
         && let Some(window) = app.get_webview_window("main")
-        && (!window.is_visible().unwrap_or(true) || platform::window::is_hidden_in_place(&window))
+        && (!window.is_visible().unwrap_or(true)
+            || window.is_minimized().unwrap_or(false)
+            || platform::window::is_hidden_in_place(&window))
     {
         show_meter_again(app, &window);
         return;
