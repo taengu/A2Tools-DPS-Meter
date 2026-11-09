@@ -60,7 +60,8 @@
 //                                              2.0.93 on): m = { at, kind, refreshAt (unix ms, when the
 //                                              stock changes next), goods: [{ goodsId (RandomShopGoods id),
 //                                              itemId, count, tier (discount: 0 10%, 1 20%, 2 30%, 3 50%),
-//                                              currency, originalPrice, price }] }. Kept like a decoder's
+//                                              currency, originalPrice, price, soldOut (meter 2.0.95 on: this character bought it
+//                                              from this stock) }] }. Kept like a decoder's
 //                                              events
 //   a2.on("kda", ({ kind }) => ...)           you killed a player ("kill"), helped kill one ("assist") or
 //                                              a player killed you ("death"), once each, kept like a
