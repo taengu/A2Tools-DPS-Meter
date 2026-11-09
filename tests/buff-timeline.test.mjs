@@ -113,6 +113,21 @@ test("rows: the player's buffs, their passives and the target's debuffs, filtere
   assert.deepEqual(ids(rows.target), [7, 6]);
 });
 
+test("buffs the game never shows are left out (Dodge's 3015)", () => {
+  const select = get("selectBuffRows");
+  const tracks = [
+    { on: 10, id: 3015, by: 10, skill: 18000100, segs: "8700,11700,1,1", up: 3000 },
+    { on: 10, id: 20112011, by: 10, segs: "0,30000,1,1", up: 30000 },
+  ];
+  const base = { targetId: 900, playerId: 10, actorIds: [10] };
+  assert.deepEqual(plain(select(tracks, base).player.map((r) => r.id)), [20112011, 3015]);
+  const hidden = new Set(["3015"]);
+  assert.deepEqual(plain(select(tracks, { ...base, hidden }).player.map((r) => r.id)), [20112011]);
+  const table = JSON.parse(readFileSync(new URL("../src/data/abnormals.json", import.meta.url), "utf8"));
+  assert.ok(table.hidden.includes(3015), "the shipped table hides it");
+  assert.ok(!table.hidden.includes(20112011), "the mana potion shows");
+});
+
 test("every UI language has the Buffs strings, with the same placeholders", () => {
   const read = (lang) => JSON.parse(readFileSync(new URL(`../src/data/i18n/ui/${lang}.json`, import.meta.url), "utf8"));
   const flatten = (obj, prefix = "") => Object.entries(obj).flatMap(([k, v]) =>

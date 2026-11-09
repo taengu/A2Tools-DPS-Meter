@@ -183,7 +183,8 @@ const firstBuffStart = (track) => {
 
 // The rows to show: the player's timed buffs, their passives, and what was
 // on the target. `caster` is "all", "party" (cast by one of the fight's
-// players) or "self" (cast by the selected player).
+// players) or "self" (cast by the selected player). `hidden`: abnormal ids
+// the game never shows (abnormals.json), left out.
 const selectBuffRows = (tracks, {
   targetId = null,
   playerId = null,
@@ -191,6 +192,7 @@ const selectBuffRows = (tracks, {
   caster = "all",
   hidePassives = true,
   sort = "uptime",
+  hidden = null,
 } = {}) => {
   const party = new Set([...actorIds].map(Number));
   const target = Number(targetId);
@@ -201,7 +203,9 @@ const selectBuffRows = (tracks, {
     if (caster === "self") return player !== null && by === player;
     return true;
   };
-  const list = (Array.isArray(tracks) ? tracks : []).map((t) => ({ ...t, _segments: parseBuffSegments(t.segs) }));
+  const list = (Array.isArray(tracks) ? tracks : [])
+    .filter((t) => !hidden?.has?.(String(t.id)))
+    .map((t) => ({ ...t, _segments: parseBuffSegments(t.segs) }));
   const compare = sort === "first"
     ? (a, b) => firstBuffStart(a) - firstBuffStart(b) || (b.up || 0) - (a.up || 0) || a.id - b.id
     : (a, b) => (b.up || 0) - (a.up || 0) || firstBuffStart(a) - firstBuffStart(b) || a.id - b.id;
@@ -254,6 +258,7 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
   let data = null; // { tracks, durationMs, targetId, targetName, playerId, actorIds, older, loading }
   let abnormalNames = null; // { names, native }
   let abnormalIcons = null; // id -> icon file name
+  let hiddenAbnormals = null; // ids the game never shows (Dodge's 3015)
   let namesLanguage = null;
   let namesPending = false;
   let iconsPending = false;
@@ -295,6 +300,7 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
           if (list[id]?.icon) out[id] = list[id].icon;
         }
         abnormalIcons = out;
+        hiddenAbnormals = new Set((Array.isArray(table?.hidden) ? table.hidden : []).map(String));
       })
       .finally(() => {
         iconsPending = false;
@@ -578,7 +584,7 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
       body.appendChild(note(t("details.buffs.none", "No buffs or debuffs were seen in this fight.")));
       return;
     }
-    const rows = selectBuffRows(tracks, { ...data, ...options });
+    const rows = selectBuffRows(tracks, { ...data, ...options, hidden: hiddenAbnormals });
     const sortRows = (list) => {
       const merged = mergeSameNameTracks(list, buffName, data.durationMs);
       if (merged.length === list.length) return list;
