@@ -2073,21 +2073,28 @@ pub fn restore_windows(app: &tauri::AppHandle) {
     dock::sync(app, None);
 }
 
-/// The plugin windows, dock and widgets the "plugin windows" hotkey hid, to
-/// show again on its next press.
+/// The plugin windows and dock (and widgets, with "Hide plugin pins too")
+/// the "plugin windows" hotkey hid, to show again on its next press.
 fn hotkey_hidden() -> &'static std::sync::Mutex<HashSet<String>> {
     static HIDDEN: std::sync::OnceLock<std::sync::Mutex<HashSet<String>>> = std::sync::OnceLock::new();
     HIDDEN.get_or_init(Default::default)
 }
 
-/// While the hotkey has the plugins hidden, a widget their plugin opens or
+/// The hotkey hid the widgets too, until its next press.
+static PINS_HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The setting that has the hotkey hide the widgets (pins, icons) as well
+/// as the windows and the dock: off, they stay.
+pub const HIDE_PINS_KEY: &str = "dpsMeter.pluginWindowsHidePins";
+
+/// While the hotkey has the pins hidden, a widget their plugin opens or
 /// shows again stays hidden with them (Event Timers' icons come and go
 /// all along), to show on the next press. True when it was held so.
 pub(crate) fn hold_for_hotkey(window: &tauri::WebviewWindow) -> bool {
-    let mut hidden = hotkey_hidden().lock().unwrap_or_else(|e| e.into_inner());
-    if hidden.is_empty() {
+    if !PINS_HIDDEN.load(std::sync::atomic::Ordering::Relaxed) {
         return false;
     }
+    let mut hidden = hotkey_hidden().lock().unwrap_or_else(|e| e.into_inner());
     crate::platform::window::hide_in_place(window);
     hidden.insert(window.label().to_string());
     true
@@ -2099,9 +2106,12 @@ fn shown_on_screen(window: &tauri::WebviewWindow) -> bool {
 
 /// The "plugin windows" hotkey shows or hides them by how they are: any shown
 /// are hidden, and the next press shows them again; with none shown, every
-/// one is brought back (`bring_back_windows`). True when they are being
-/// shown, so the caller also opens again those closed with × this run.
-pub fn toggle_windows(app: &tauri::AppHandle) -> bool {
+/// one is brought back (`bring_back_windows`). It was made for the dock:
+/// the widgets go too only with `pins` ("Hide plugin pins too"). True when
+/// they are being shown, so the caller also opens again those closed with ×
+/// this run.
+pub fn toggle_windows(app: &tauri::AppHandle, pins: bool) -> bool {
+    PINS_HIDDEN.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut hidden = hotkey_hidden().lock().unwrap_or_else(|e| e.into_inner());
     // Hidden by the key and still out of sight: shown again (one its plugin
     // closed or the game keeps hidden stays so).
@@ -2128,7 +2138,7 @@ pub fn toggle_windows(app: &tauri::AppHandle) -> bool {
     let shown: Vec<_> = app
         .webview_windows()
         .into_iter()
-        .filter(|(label, window)| (is_plugin_window(label) || widgets::parse_label(label).is_some()) && shown_on_screen(window))
+        .filter(|(label, window)| (is_plugin_window(label) || (pins && widgets::parse_label(label).is_some())) && shown_on_screen(window))
         .collect();
     if shown.is_empty() {
         drop(hidden);
@@ -2140,6 +2150,7 @@ pub fn toggle_windows(app: &tauri::AppHandle) -> bool {
         crate::platform::window::hide_in_place(&window);
         hidden.insert(label);
     }
+    PINS_HIDDEN.store(pins, std::sync::atomic::Ordering::Relaxed);
     false
 }
 

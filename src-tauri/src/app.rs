@@ -1156,8 +1156,12 @@ fn start_hotkeys(app: &tauri::AppHandle, settings: &Settings) {
         tracing::info!("Hotkey: showing or hiding the plugin windows");
         let app = h.clone();
         // Window calls belong on the main thread.
+        let pins = h
+            .try_state::<AppState>()
+            .and_then(|s| s.settings.get(crate::plugins::HIDE_PINS_KEY))
+            .is_some_and(|v| v == "true");
         let _ = h.run_on_main_thread(move || {
-            if crate::plugins::toggle_windows(&app) {
+            if crate::plugins::toggle_windows(&app, pins) {
                 // Shown: those closed this run opened again too. Windows are
                 // built off the main thread (on Windows, building one there
                 // deadlocks).

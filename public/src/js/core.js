@@ -161,6 +161,7 @@ class DpsApp {
       autoHideMeter: "dpsMeter.autoHideMeter",
       hideWhenGameClosed: "dpsMeter.hideWhenGameClosed",
       closeWithGame: "dpsMeter.closeWithGame",
+      pluginWindowsHidePins: "dpsMeter.pluginWindowsHidePins",
       hideWhenSolo: "dpsMeter.hideWhenSolo",
       hideOutOfCombat: "dpsMeter.hideOutOfCombat",
       globalHotkeys: "dpsMeter.globalHotkeys",
@@ -3428,6 +3429,15 @@ class DpsApp {
         this.safeSetSetting(this.storageKeys.closeWithGame, String(!!event.target?.checked));
       });
     }
+    // The plugin windows keybind hides the plugins' pins too (read by the
+    // backend at each press).
+    this.pluginHidePinsCheckbox = document.querySelector(".pluginHidePinsCheckbox");
+    if (this.pluginHidePinsCheckbox) {
+      this.pluginHidePinsCheckbox.checked = this.safeGetSetting(this.storageKeys.pluginWindowsHidePins) === "true";
+      this.pluginHidePinsCheckbox.addEventListener("change", (event) => {
+        this.safeSetSetting(this.storageKeys.pluginWindowsHidePins, String(!!event.target?.checked));
+      });
+    }
     // And while not in a party (the same loop).
     this.hideWhenSoloCheckbox = document.querySelector(".hideWhenSoloCheckbox");
     if (this.hideWhenSoloCheckbox) {
@@ -5472,6 +5482,7 @@ class DpsApp {
       [this.autoHideMeterCheckbox, "autoHideMeter", false],
       [this.hideWhenGameClosedCheckbox, "hideWhenGameClosed", false],
       [this.closeWithGameCheckbox, "closeWithGame", false],
+      [this.pluginHidePinsCheckbox, "pluginWindowsHidePins", false],
       [this.hideWhenSoloCheckbox, "hideWhenSolo", false],
       [this.globalHotkeysCheckbox, "globalHotkeys", !document.documentElement?.classList?.contains?.("linux")],
       [this.saveRawPacketsCheckbox, "saveRawPackets", false],
