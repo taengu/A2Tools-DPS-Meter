@@ -98,6 +98,11 @@ path = "tools/a2t_derive.rs"
 required-features = ["desktop"]
 
 [[bin]]
+name = "a2t-hits"
+path = "tools/a2t_hits.rs"
+required-features = ["desktop"]
+
+[[bin]]
 name = "a2t-inspect"
 path = "tools/a2t_inspect.rs"
 required-features = ["desktop"]

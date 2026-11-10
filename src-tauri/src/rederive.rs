@@ -26,7 +26,9 @@ use crate::capture::stream_processor::StreamProcessor;
 use crate::combat::data_storage::DataStorage;
 use crate::combat::dps_calculator::DpsCalculator;
 use crate::combat::ping_tracker::PingTracker;
+use crate::entity::damage_packet::ParsedDamagePacket;
 use crate::entity::fight_record::FightRecord;
+use crate::entity::special_damage::SpecialDamage;
 use crate::i18n::lookup::{NpcLookup, SkillLookup};
 
 /// One participant, as re-derived. Identified by the blinded token the slice
@@ -405,17 +407,28 @@ pub fn derive_decoded(
 
 /// `derive_decoded` with the tables already parsed.
 pub fn derive_decoded_with(decoded: &Decoded, tables: &Tables) -> Result<DerivedFight, DeriveError> {
-    match derive_fight_with(decoded, tables, true, false) {
+    match derive_fight_with(decoded, tables, true, false, false) {
         // Slices from early meters (2.0.30 to 2.0.37) have no self record and
         // no dungeon, so `is_our_fight` (2026-10-05, #19) takes the uploader's
         // own boss for a stranger's and nothing is derived: 56 logs a re-derive
         // could not update (2026-10-11). A slice is an upload its owner chose
         // to send, so when "ours only" finds nothing, every fight counts. A
         // slice that derives as it is never comes here, so none changes.
-        Err(DeriveError::NothingDerived) => derive_fight_with(decoded, tables, true, true),
+        Err(DeriveError::NothingDerived) => derive_fight_with(decoded, tables, true, true, false),
         other => other,
     }
-    .map(|(fight, _)| fight)
+    .map(|(fight, _, _)| fight)
+}
+
+/// `derive_decoded_with`, and every hit its record counts (`FightHits`): the
+/// same replay with `DataStorage::set_on_hit` watching, so the hits are the
+/// ones the record was summed from, filed on the record's own rows.
+pub fn derive_hits_with(decoded: &Decoded, tables: &Tables) -> Result<(DerivedFight, FightHits), DeriveError> {
+    match derive_fight_with(decoded, tables, true, false, true) {
+        Err(DeriveError::NothingDerived) => derive_fight_with(decoded, tables, true, true, true),
+        other => other,
+    }
+    .map(|(fight, _, hits)| (fight, hits.unwrap_or_default()))
 }
 
 /// `derive_fight` without `hide_unplaced_summons`: the fight as the parser
@@ -431,7 +444,8 @@ pub fn derive_fight_unhidden(
     dot_ids_json: &str,
 ) -> Result<(DerivedFight, i64), DeriveError> {
     let decoded = evidence_slice::decode(slice).ok_or(DeriveError::NotASlice)?;
-    derive_fight_with(&decoded, &Tables::load(npcs_json, skills_json, dot_ids_json), false, false)
+    derive_fight_with(&decoded, &Tables::load(npcs_json, skills_json, dot_ids_json), false, false, false)
+        .map(|(fight, hidden, _)| (fight, hidden))
 }
 
 /// `derive_fight_unhidden` counting every boss fight in the slice, not only
@@ -444,21 +458,31 @@ pub fn derive_fight_unhidden_every(
     dot_ids_json: &str,
 ) -> Result<(DerivedFight, i64), DeriveError> {
     let decoded = evidence_slice::decode(slice).ok_or(DeriveError::NotASlice)?;
-    derive_fight_with(&decoded, &Tables::load(npcs_json, skills_json, dot_ids_json), false, true)
+    derive_fight_with(&decoded, &Tables::load(npcs_json, skills_json, dot_ids_json), false, true, false)
+        .map(|(fight, hidden, _)| (fight, hidden))
 }
 
 /// The fight, and the damage `hide_unplaced_summons` removes from it (or
-/// would, when `hide` is false and the record is returned whole).
+/// would, when `hide` is false and the record is returned whole), and with
+/// `collect_hits` the record's hits (`FightHits`).
 fn derive_fight_with(
     decoded: &Decoded,
     tables: &Tables,
     hide: bool,
     every_fight: bool,
-) -> Result<(DerivedFight, i64), DeriveError> {
+    collect_hits: bool,
+) -> Result<(DerivedFight, i64, Option<FightHits>), DeriveError> {
     let (records, blind_map) = (&decoded.0, decoded.1.clone());
     let (npcs, skills, dot_ids) = (&tables.npcs, &tables.skills, &tables.dot_ids);
     let replay = |upto: usize| {
         let storage = Arc::new(DataStorage::new());
+        // Every applied hit, as the hook sees it (raw ids): sorted out once
+        // the record says which target and rows they belong to.
+        let seen: Arc<std::sync::Mutex<Vec<RawHit>>> = Arc::default();
+        if collect_hits {
+            let seen = seen.clone();
+            storage.set_on_hit(move |p| seen.lock().unwrap().push(RawHit::of(p)));
+        }
         let mut processor = StreamProcessor::new(storage.clone(), skills.clone(), npcs.clone());
         // The live meter loads these too (app.rs); without them a DoT tick is
         // filed as a direct hit and the skill table splits differently.
@@ -476,7 +500,7 @@ fn derive_fight_with(
                 reset_at = Some(n);
             }
         }
-        (storage, processor, reset_at)
+        (storage, processor, reset_at, seen)
     };
     // A teleport after the fight (a wipe sends everyone back; a kill is often
     // followed by leaving) is a zone change, and the meter clears combat on
@@ -487,9 +511,9 @@ fn derive_fight_with(
     // The party ending resets combat too: the others leaving after a kill
     // leave you alone in it (38 logs at 2.0.76.4, 2026-10-23, once a roster
     // with a member from another world read whole).
-    let (mut storage, mut processor, reset_at) = replay(records.len());
+    let (mut storage, mut processor, reset_at, mut seen) = replay(records.len());
     if let Some(n) = reset_at {
-        (storage, processor, _) = replay(n);
+        (storage, processor, _, seen) = replay(n);
     }
     // Keep the clock pinned through the snapshot. It asks for "now" to decide
     // whether a fight has ended; on wasm32 the wall clock panics, and on a
@@ -514,9 +538,7 @@ fn derive_fight_with(
     let mut calc = DpsCalculator::new(storage, skills.clone(), npcs.clone(), Arc::new(PingTracker::new()));
     calc.set_every_fight(every_fight);
     let snapshot = calc.snapshot_boss_fights_force();
-    processor.set_override_timestamp(None);
-    crate::clock::set_override(None);
-    let mut record = snapshot
+    let record = snapshot
         .into_iter()
         // The slice is cut around one fight, but adds and another boss can
         // share it: the lead-in reaches a minute back, so the previous boss of
@@ -527,7 +549,15 @@ fn derive_fight_with(
         // Captain Raur killed 37 seconds before it, and a scarecrow upload as
         // someone else's scarecrow (2026-10-03).
         .min_by_key(|r| (r.start_time_ms.abs(), -totals.get(&r.target_id).copied().unwrap_or(0), r.target_id))
-        .ok_or(DeriveError::NothingDerived)?;
+        .ok_or(DeriveError::NothingDerived);
+    // Still on the pinned clock: the rows' attribution, for the hits.
+    let attribution = match &record {
+        Ok(r) if collect_hits => Some(calc.target_attribution(r.target_id)),
+        _ => None,
+    };
+    processor.set_override_timestamp(None);
+    crate::clock::set_override(None);
+    let mut record = record?;
     let hidden = if hide {
         hide_unplaced_summons(&mut record, &named, &spawned)
     } else {
@@ -546,6 +576,11 @@ fn derive_fight_with(
         damage: on_target,
     };
 
+    let hits = attribution.map(|uid_of| {
+        let raw = std::mem::take(&mut *seen.lock().unwrap());
+        FightHits::sorted(raw, &record, &uid_of, |code| calc.row_skill_code(code))
+    });
+
     Ok((
         DerivedFight {
             parser_version: parser_version(),
@@ -556,12 +591,168 @@ fn derive_fight_with(
             checks,
         },
         hidden,
+        hits,
     ))
+}
+
+/// A hit as `DataStorage::set_on_hit` gives it: the packet's own ids.
+#[derive(Debug, Clone)]
+struct RawHit {
+    time: i64,
+    actor: i32,
+    target: i32,
+    skill: i32,
+    dot: bool,
+    damage: i32,
+    multi: i32,
+    flags: u16,
+}
+
+/// A hit's specials as the bits of `FightHits::f`.
+pub const HIT_FLAGS: [(SpecialDamage, u16); 10] = [
+    (SpecialDamage::Critical, 1),
+    (SpecialDamage::Back, 2),
+    (SpecialDamage::Frontal, 4),
+    (SpecialDamage::Double, 8),
+    (SpecialDamage::Perfect, 16),
+    (SpecialDamage::Parry, 32),
+    (SpecialDamage::ShieldBlock, 64),
+    (SpecialDamage::IronWall, 128),
+    (SpecialDamage::Regeneration, 256),
+    (SpecialDamage::PerfectBlock, 512),
+];
+
+impl RawHit {
+    fn of(p: &ParsedDamagePacket) -> Self {
+        let flags = HIT_FLAGS.iter().filter(|(s, _)| p.specials().contains(s)).fold(0, |f, (_, bit)| f | bit);
+        RawHit {
+            time: p.timestamp(),
+            actor: p.actor_id(),
+            target: p.target_id(),
+            skill: p.skill_code(),
+            dot: p.is_dot(),
+            damage: p.total_damage(),
+            multi: p.multi_hit_count(),
+            flags,
+        }
+    }
+}
+
+/// Every hit a fight's record counts, for tools that want more than its
+/// per-skill totals. Columns, one entry per hit in time order, so a 2,000-hit
+/// fight is tens of KB rather than hundreds:
+///
+/// - `t`: ms from the fight's start, as the record's `hitTimestamps`
+/// - `s`: the hit's row, an index into `rows` (`[actorId, code, isDot]`,
+///   the keys of the record's own `details.skills`)
+/// - `d`: its damage, its multi-hit damage included, as the rows' `dmg` sums
+/// - `m`: its multi-hit count
+/// - `f`: its specials, the bits of `HIT_FLAGS` (crit 1, back 2, frontal 4,
+///   double 8, perfect 16, parry 32, shield block 64, iron wall 128,
+///   regeneration 256, perfect block 512)
+///
+/// Misses and resists are not hits here, as they are not in a row's `time`.
+/// `matches` says whether the hits add up to every row exactly, count and
+/// damage; a file that does not is still the parser's answer, and says so.
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+pub struct FightHits {
+    pub rows: Vec<(i32, i32, bool)>,
+    pub t: Vec<i64>,
+    pub s: Vec<u32>,
+    pub d: Vec<i32>,
+    pub m: Vec<i32>,
+    pub f: Vec<u16>,
+    pub matches: bool,
+}
+
+impl FightHits {
+    fn sorted(
+        mut raw: Vec<RawHit>,
+        record: &FightRecord,
+        uid_of: &HashMap<i32, i32>,
+        row_code: impl Fn(i32) -> i32,
+    ) -> Self {
+        let start = record.details.start_time;
+        let mut rows: Vec<(i32, i32, bool)> =
+            record.details.skills.iter().map(|r| (r.actor_id, r.code, r.is_dot)).collect();
+        rows.sort_unstable();
+        rows.dedup();
+        let index: HashMap<(i32, i32, bool), u32> =
+            rows.iter().enumerate().map(|(i, k)| (*k, i as u32)).collect();
+        raw.retain(|h| h.target == record.target_id);
+        // Stable: hits in the same ms keep the order they were applied in.
+        raw.sort_by_key(|h| h.time);
+        let mut out = FightHits { rows, ..Default::default() };
+        let mut sums: HashMap<u32, (i32, i64)> = HashMap::new();
+        for h in raw {
+            // An attacker the rows leave out (no owner found, or hidden as an
+            // unplaced summon) is left out here too.
+            let Some(&uid) = uid_of.get(&h.actor) else { continue };
+            let Some(&row) = index.get(&(uid, row_code(h.skill), h.dot)) else { continue };
+            let sum = sums.entry(row).or_default();
+            sum.0 += 1;
+            sum.1 += h.damage as i64;
+            out.t.push(h.time - start);
+            out.s.push(row);
+            out.d.push(h.damage);
+            out.m.push(h.multi);
+            out.f.push(h.flags);
+        }
+        out.matches = record.details.skills.iter().all(|r| {
+            let row = index[&(r.actor_id, r.code, r.is_dot)];
+            let (n, dmg) = sums.get(&row).copied().unwrap_or_default();
+            n == r.time && dmg.min(i32::MAX as i64) == r.dmg as i64
+        });
+        out
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hits_are_filed_on_the_records_rows_and_checked_against_them() {
+        let record: FightRecord = serde_json::from_value(serde_json::json!({
+            "id": "auto_1_2", "bossName": "B", "targetId": 9, "startTimeMs": 0, "durationMs": 1000,
+            "totalDamage": 350, "jobs": [],
+            "details": {"targetId": 9, "maxHp": 0, "totalTargetDamage": 350, "battleTime": 1000,
+                        "startTime": 1000, "pingHistory": [], "healSkills": [], "skills": [
+                {"actorId": 7, "code": 11010000, "name": "", "time": 2, "dmg": 300, "multiHitCount": 0,
+                 "multiHitDamage": 0, "crit": 1, "parry": 0, "back": 0, "perfect": 0, "double": 0,
+                 "isDot": false, "regen": 0, "job": "", "hitTimestamps": [], "specs": []},
+                {"actorId": 7, "code": 11010000, "name": "", "time": 1, "dmg": 50, "multiHitCount": 0,
+                 "multiHitDamage": 0, "crit": 0, "parry": 0, "back": 0, "perfect": 0, "double": 0,
+                 "isDot": true, "regen": 0, "job": "", "hitTimestamps": [], "specs": []}]},
+            "actors": []
+        }))
+        .unwrap();
+        let hit = |time, actor, target, skill, dot, damage, flags| RawHit {
+            time, actor, target, skill, dot, damage, multi: 0, flags,
+        };
+        let raw = vec![
+            // A summon (70) filed on its owner (7), a variant code on its base.
+            hit(1500, 70, 9, 11010001, false, 200, 1),
+            hit(1200, 7, 9, 11010000, false, 100, 0),
+            hit(1300, 7, 9, 11010000, true, 50, 0),
+            // Another target, and an attacker the rows leave out.
+            hit(1250, 7, 8, 11010000, false, 999, 0),
+            hit(1260, 66, 9, 11010000, false, 999, 0),
+        ];
+        let uid_of = HashMap::from([(7, 7), (70, 7)]);
+        let fold = |code: i32| code - code % 10000;
+        let hits = FightHits::sorted(raw.clone(), &record, &uid_of, fold);
+        assert_eq!(hits.rows, vec![(7, 11010000, false), (7, 11010000, true)]);
+        assert_eq!(hits.t, vec![200, 300, 500], "from the fight's start, in time order");
+        assert_eq!(hits.s, vec![0, 1, 0]);
+        assert_eq!(hits.d, vec![100, 50, 200]);
+        assert_eq!(hits.f, vec![0, 0, 1]);
+        assert!(hits.matches);
+        // A hit the rows never counted: the file says it does not add up.
+        let mut more = raw;
+        more.push(hit(1600, 7, 9, 11010000, true, 5, 0));
+        assert!(!FightHits::sorted(more, &record, &uid_of, fold).matches);
+    }
 
     #[test]
     fn slice_structure_counts_lifted_records_and_bundles() {

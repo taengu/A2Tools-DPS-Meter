@@ -1,6 +1,7 @@
 //! The log service: turn an uploaded Evidence Slice into the fight it records.
 //!
-//! One route, `POST /derive`, reachable only through a service binding from the
+//! Two routes, `POST /derive` and `POST /hits` (the same fight's every hit, for
+//! the site's data API), reachable only through a service binding from the
 //! a2tools.app Worker (this Worker has no public route; see wrangler.toml). The
 //! site handles accounts, storage and access; this does the one thing the site
 //! cannot: run the meter's own parser, compiled to wasm32, over the slice, so a
@@ -11,7 +12,7 @@
 //! anyone with the slice and the published source.
 
 use a2tools_dps_meter_lib::capture::evidence_slice;
-use a2tools_dps_meter_lib::rederive::{derive_decoded_with, Decoded, DeriveError, Tables};
+use a2tools_dps_meter_lib::rederive::{derive_decoded_with, derive_hits_with, Decoded, DeriveError, Tables};
 use flate2::read::GzDecoder;
 use futures_util::{Stream, StreamExt};
 use ruzstd::decoding::StreamingDecoder;
@@ -77,7 +78,12 @@ fn looks_like_slice(body: &[u8]) -> bool {
 
 #[event(fetch)]
 async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
-    if req.method() != Method::Post || req.path() != "/derive" {
+    let hits = match req.path().as_str() {
+        "/derive" => false,
+        "/hits" => true,
+        _ => return Response::error("not found", 404),
+    };
+    if req.method() != Method::Post {
         return Response::error("not found", 404);
     }
     // Defence in depth: the binding is the real boundary, but a Worker that
@@ -124,6 +130,20 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .and_then(|h| base64_decode(&h))
         .and_then(|raw| serde_json::from_slice(&raw).ok())
         .unwrap_or_default();
+
+    // The fight's every hit (`FightHits`), from the same replay as its
+    // record: asked for when a tool wants a log's hits, never at upload.
+    if hits {
+        return match derive_hits_with(&decoded, &TABLES) {
+            Ok((fight, hits)) => Response::from_json(&serde_json::json!({
+                "parserVersion": fight.parser_version,
+                "targetId": fight.record.target_id,
+                "hits": hits,
+            })),
+            Err(DeriveError::NotASlice) => error("not_a_slice", "Not an Evidence Slice this build reads.", 422),
+            Err(DeriveError::NothingDerived) => error("no_fight", "The slice contains no boss fight.", 422),
+        };
+    }
 
     match derive_decoded_with(&decoded, &TABLES) {
         Ok(fight) => {

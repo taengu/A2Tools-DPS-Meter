@@ -1499,14 +1499,34 @@ impl DpsCalculator {
     }
 
     pub fn get_target_details(&self, target_id: i32, actor_ids: Option<&[i32]>) -> TargetDetailsResponse {
-        self.target_details(target_id, actor_ids, false)
+        self.target_details(target_id, actor_ids, false).0
     }
 
     pub fn get_hover_details(&self, target_id: i32, actor_ids: Option<&[i32]>) -> TargetDetailsResponse {
-        self.target_details(target_id, actor_ids, true)
+        self.target_details(target_id, actor_ids, true).0
     }
 
-    fn target_details(&self, target_id: i32, actor_ids: Option<&[i32]>, summary_only: bool) -> TargetDetailsResponse {
+    /// Whose row each attacker of `target_id` lands on in its details: the
+    /// raw actor id a damage packet carries (a summon's own id, a stale id,
+    /// one of two ids for one name) to the `actor_id` of the skill rows built
+    /// from it. For a per-hit record that has to agree with the rows
+    /// (`rederive::derive_hits`), worked out where the rows are, not again.
+    pub fn target_attribution(&self, target_id: i32) -> HashMap<i32, i32> {
+        self.target_details(target_id, None, false).1
+    }
+
+    /// The code a skill's row is filed under: a variant (the last four
+    /// digits) folds into its base skill when the two share a name.
+    pub fn row_skill_code(&self, raw_skill: i32) -> i32 {
+        let base = raw_skill - (raw_skill % 10000);
+        let base_name = self.skill_lookup.get_skill_name(base);
+        if !base_name.is_empty() {
+            let raw_name = self.skill_lookup.get_skill_name(raw_skill);
+            if raw_name.is_empty() || raw_name == base_name { base } else { raw_skill }
+        } else { raw_skill }
+    }
+
+    fn target_details(&self, target_id: i32, actor_ids: Option<&[i32]>, summary_only: bool) -> (TargetDetailsResponse, HashMap<i32, i32>) {
         let target = if summary_only {
             self.data_storage.get_target_snapshot_light(target_id)
         } else {
@@ -1514,7 +1534,7 @@ impl DpsCalculator {
         };
         let target_data = match target.as_ref() {
             Some(td) => td,
-            None => return TargetDetailsResponse {
+            None => return (TargetDetailsResponse {
                 target_id,
                 max_hp: 0,
                 total_target_damage: 0,
@@ -1524,7 +1544,7 @@ impl DpsCalculator {
                 ping_history: Vec::new(),
                 heal_skills: Vec::new(),
                 deaths: None,
-            },
+            }, HashMap::new()),
         };
 
         let summon_data = self.data_storage.get_summon_data();
@@ -1683,6 +1703,7 @@ impl DpsCalculator {
         // Build skill entries from aggregates (no packet iteration!)
         let mut skill_map: HashMap<(i32, i32), DetailSkillEntry> = HashMap::new();
         let fight_start = target_data.first_damage_time;
+        let mut uid_of: HashMap<i32, i32> = HashMap::new();
 
         for (&actor_id, actor_data) in &target_data.actors {
             let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
@@ -1695,17 +1716,11 @@ impl DpsCalculator {
             let remapped = *orphan_to_owner.get(&raw_uid).unwrap_or(&raw_uid);
             let nickname = resolve_nickname(remapped, &nickname_data, &summon_data);
             let uid = *canonical.get(&nickname).unwrap_or(&remapped);
+            uid_of.insert(actor_id, uid);
 
             for (&(raw_skill, is_dot), skill_data) in &actor_data.skills {
                 // Normalize skill code
-                let skill_code = {
-                    let base = raw_skill - (raw_skill % 10000);
-                    let base_name = self.skill_lookup.get_skill_name(base);
-                    if !base_name.is_empty() {
-                        let raw_name = self.skill_lookup.get_skill_name(raw_skill);
-                        if raw_name.is_empty() || raw_name == base_name { base } else { raw_skill }
-                    } else { raw_skill }
-                };
+                let skill_code = self.row_skill_code(raw_skill);
 
                 let dot_offset = if is_dot { 1_000_000_000 } else { 0 };
                 let key = (uid, skill_code + dot_offset);
@@ -1787,7 +1802,7 @@ impl DpsCalculator {
         }
 
         if summary_only {
-            return TargetDetailsResponse {
+            return (TargetDetailsResponse {
                 target_id,
                 max_hp: 0,
                 total_target_damage: target_data.total_damage as i32,
@@ -1797,7 +1812,7 @@ impl DpsCalculator {
                 ping_history: Vec::new(),
                 heal_skills: Vec::new(),
                 deaths: None,
-            };
+            }, uid_of);
         }
 
         // Healing done this segment, per healer/skill. Keyed by the canonical actor
@@ -1901,7 +1916,7 @@ impl DpsCalculator {
             })
             .collect();
 
-        TargetDetailsResponse {
+        (TargetDetailsResponse {
             target_id,
             max_hp: self.data_storage.get_mob_hp_data().get(&target_id).copied().unwrap_or(0),
             total_target_damage: target_data.total_damage as i32,
@@ -1911,7 +1926,7 @@ impl DpsCalculator {
             ping_history,
             heal_skills: heal_map.into_values().collect(),
             deaths: Some(deaths),
-        }
+        }, uid_of)
     }
 }
 
