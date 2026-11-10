@@ -509,6 +509,9 @@ fn push_boss_event(inner: &mut Inner, event: BossEvent) {
     }
 }
 
+/// See `DataStorage::set_on_hit`.
+type HitHook = Arc<dyn Fn(&ParsedDamagePacket) + Send + Sync>;
+
 pub struct DataStorage {
     inner: RwLock<Inner>,
     damage_generation: AtomicI64,
@@ -522,6 +525,8 @@ pub struct DataStorage {
     /// Run just before combat data is cleared by a zone change or the end of a
     /// party, with no lock of ours held, so the fights can still be saved.
     before_reset: RwLock<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Sees every hit that counts as damage, see `set_on_hit`.
+    on_hit: RwLock<Option<HitHook>>,
     /// Buffs, debuffs and stats as the server reports them (see
     /// `capture::abnormal`). Recorded only, nothing reads it into a fight
     /// yet. Its own lock: it is fed every packet, and nothing here needs it
@@ -927,6 +932,7 @@ impl DataStorage {
             last_zone_reset_ms: AtomicI64::new(NEVER_MS),
             combat_reset_requested: AtomicBool::new(false),
             before_reset: RwLock::new(None),
+            on_hit: RwLock::new(None),
             abnormals: Mutex::new(AbnormalLog { timeline: abnormal::Timeline::default(), pruned_ms: NEVER_MS }),
             stagger: Mutex::new(StaggerLog::default()),
             death_recaps: Mutex::new(DeathRecaps::default()),
@@ -1150,6 +1156,21 @@ impl DataStorage {
     /// (issue #19).
     pub fn set_before_reset(&self, hook: impl Fn() + Send + Sync + 'static) {
         *self.before_reset.write() = Some(Arc::new(hook));
+    }
+
+    /// Called with every hit that counts as damage on a target, right after it
+    /// is applied, for a program built on this crate that keeps its own record
+    /// of hits. The aggregates keep only each hit's time; this is where a
+    /// hit's own damage and flags can still be seen. Runs under the storage
+    /// lock: copy what is needed and return, never call back in here.
+    pub fn set_on_hit(&self, hook: impl Fn(&ParsedDamagePacket) + Send + Sync + 'static) {
+        *self.on_hit.write() = Some(Arc::new(hook));
+    }
+
+    fn notify_hit(&self, pdp: &ParsedDamagePacket) {
+        if let Some(hook) = self.on_hit.read().as_ref() {
+            hook(pdp);
+        }
     }
 
     fn run_before_reset(&self) {
@@ -2080,9 +2101,11 @@ impl DataStorage {
             // A direct hit: the DoT ticks since the last one count after all.
             for tick in inner.held_dot_ticks.remove(&key).unwrap_or_default() {
                 apply_damage(&mut inner, &tick);
+                self.notify_hit(&tick);
             }
         }
         apply_damage(&mut inner, &pdp);
+        self.notify_hit(&pdp);
 
         self.damage_generation.fetch_add(1, Ordering::Relaxed);
         self.last_damage_ms.store(now_ms(), Ordering::Relaxed);
@@ -4025,6 +4048,36 @@ mod tests {
         assert!(s.note_zone_change());
         assert_eq!(seen.load(Ordering::Relaxed), 700, "the hook saw the fight before it was cleared");
         assert!(s.get_combat_snapshot_light().is_empty());
+    }
+
+    #[test]
+    fn the_hit_hook_sees_each_counted_hit_with_its_own_damage() {
+        let s = DataStorage::new();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        {
+            let seen = seen.clone();
+            s.set_on_hit(move |p| seen.lock().push((p.timestamp(), p.total_damage(), p.is_dot())));
+        }
+        s.append_damage(hit(2259, 50_000, 1_000, 700, false));
+        s.append_damage(hit(2259, 50_000, 1_400, 300, false));
+        assert_eq!(*seen.lock(), vec![(1_000, 700, false), (1_400, 300, false)]);
+    }
+
+    #[test]
+    fn the_hit_hook_sees_held_dot_ticks_when_they_count() {
+        let s = DataStorage::new();
+        s.inner.write().training_dummy_ids.insert(50_000);
+        s.set_local_player_id(Some(2259));
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        {
+            let seen = seen.clone();
+            s.set_on_hit(move |p| seen.lock().push((p.timestamp(), p.is_dot())));
+        }
+        s.append_damage(hit(2259, 50_000, 1_000, 700, false));
+        s.append_damage(hit(2259, 50_000, 1_500, 50, true)); // held until the next direct hit
+        assert_eq!(seen.lock().len(), 1, "a held tick is not counted yet");
+        s.append_damage(hit(2259, 50_000, 2_000, 700, false));
+        assert_eq!(*seen.lock(), vec![(1_000, false), (1_500, true), (2_000, false)]);
     }
 
     #[test]
