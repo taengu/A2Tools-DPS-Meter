@@ -405,6 +405,62 @@ pub struct StatEvent {
     pub values: Vec<(u16, i32)>,
 }
 
+/// Your stat sheet: the last value of each stat (`EStat` id), as the
+/// records so far left it. Cooldown reduction is `CoolTimeDecrease` (215)
+/// less `CoolTimeIncrease` (385, negative when it shortens them), in
+/// hundredths of a percent: 300 and -130 for a sheet that shows -4.3%
+/// (2026-11-10).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct StatSheet {
+    pub entity: Option<i32>,
+    pub values: BTreeMap<u16, i32>,
+}
+
+impl StatSheet {
+    /// A whole sheet (`49 36`) replaces it; changes (`4a 36`) update it, and
+    /// start it anew when they are about another character (a switch).
+    pub fn apply(&mut self, e: &StatEvent) {
+        if e.whole_sheet {
+            self.values = e.values.iter().copied().collect();
+            return;
+        }
+        if let Some(id) = e.entity
+            && self.entity != Some(id)
+        {
+            if self.entity.is_some() {
+                self.values.clear();
+            }
+            self.entity = Some(id);
+        }
+        self.values.extend(e.values.iter().copied());
+    }
+}
+
+/// Your stats in a fight, for deriving from later (cooldowns, damage):
+/// the sheet when it started and each change during it, `ms` from its
+/// start.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FightStats {
+    pub entity: Option<i32>,
+    pub at_start: BTreeMap<u16, i32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changes: Vec<StatChange>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatChange {
+    pub ms: i64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub whole_sheet: bool,
+    pub values: Vec<(u16, i32)>,
+}
+
+/// Stat records pinned for slices at most (a few hours of buffs coming and
+/// going is far fewer); past it the oldest changes go.
+const STAT_PACKETS_CAP: usize = 4_096;
+
 /// Open instances at most: past it, every one not on you closes, as on a
 /// map load. Endless ones close only so, and a crafted stream that never
 /// loads a map could open them without end (audit L8); a real fight holds a
@@ -417,6 +473,17 @@ pub struct Timeline {
     live: HashMap<(i32, i32), Instance>,
     pub instances: Vec<Instance>,
     pub stats: Vec<StatEvent>,
+    /// The sheet as of the oldest record in `stats`: those `prune` dropped,
+    /// folded in, so a fight's sheet at its start is known however long ago
+    /// the login was.
+    stat_base: StatSheet,
+    /// Stat records read so far: the plugins' `stats` event follows it.
+    pub stat_seq: u64,
+    /// The stat records themselves, as framed packets with their capture
+    /// time: the last whole sheet and every change since. The login sheet
+    /// comes hours before most fights, past the packets held for a slice;
+    /// these go into it instead, so a log's stats can be derived later.
+    pub stat_packets: Vec<(i64, Vec<u8>)>,
     map_loads: usize,
     /// The entity of the last `4a 36`: you.
     own: Option<i32>,
@@ -562,7 +629,16 @@ impl Timeline {
                     self.own = entity;
                 }
                 if !values.is_empty() {
+                    if entity.is_none() {
+                        self.stat_packets.clear();
+                    } else if self.stat_packets.len() >= STAT_PACKETS_CAP {
+                        // The sheet stays; the oldest change after it goes.
+                        let first_change = usize::from(self.stats_sheet_pinned());
+                        self.stat_packets.remove(first_change);
+                    }
+                    self.stat_packets.push((ms, packet.to_vec()));
                     self.stats.push(StatEvent { ms, entity, whole_sheet: entity.is_none(), values });
+                    self.stat_seq += 1;
                 }
             }
             None => {}
@@ -661,7 +737,43 @@ impl Timeline {
         }
         let mut k = kept.iter();
         self.instances.retain(|_| *k.next().unwrap_or(&true));
+        for s in self.stats.iter().filter(|s| s.ms < before_ms) {
+            self.stat_base.apply(s);
+        }
         self.stats.retain(|s| s.ms >= before_ms);
+    }
+
+    /// Whether the first pinned stat record is a whole sheet (`49 36`).
+    fn stats_sheet_pinned(&self) -> bool {
+        self.stat_packets.first().is_some_and(|(_, p)| {
+            let len = read_varint(p, 0);
+            len.length > 0 && p.get(len.length as usize..len.length as usize + 2) == Some(&ALL_STATS[..])
+        })
+    }
+
+    /// Your stat sheet as it was at `ms`.
+    pub fn stat_sheet_at(&self, ms: i64) -> StatSheet {
+        let mut sheet = self.stat_base.clone();
+        for s in self.stats.iter().take_while(|s| s.ms <= ms) {
+            sheet.apply(s);
+        }
+        sheet
+    }
+
+    /// Your stats from `start_ms` to `end_ms`: the sheet at the start and
+    /// the records in between. None when no stat record was read yet.
+    pub fn fight_stats(&self, start_ms: i64, end_ms: i64) -> Option<FightStats> {
+        let sheet = self.stat_sheet_at(start_ms - 1);
+        let changes: Vec<StatChange> = self
+            .stats
+            .iter()
+            .filter(|s| s.ms >= start_ms && s.ms <= end_ms)
+            .map(|s| StatChange { ms: s.ms - start_ms, whole_sheet: s.whole_sheet, values: s.values.clone() })
+            .collect();
+        if sheet.values.is_empty() && changes.is_empty() {
+            return None;
+        }
+        Some(FightStats { entity: sheet.entity.or(self.own), at_start: sheet.values, changes })
     }
 
     /// Forget everything but the stack limits: a capture from another
@@ -886,6 +998,39 @@ mod tests {
             parse(&hex(STATS_OFF)),
             Some(Record::Stats { entity: Some(6759), values: vec![(65, 900), (76, 0), (379, 2100), (380, 0)] })
         );
+    }
+
+    /// A login's stat records (2026-11-10): the stat page showed -4.3%
+    /// cooldown, and CoolTimeDecrease 300 less CoolTimeIncrease -130 is it.
+    const LOGIN_SHEET: &str = "91034a36f245400700060000000800060000000900050000000a00060000000b00060000000d00060000000e00060000000f00050000001000060000001100060000001300d40000001c00cc0200001f00050100002100d60000003400040600003a00030000003d002d00000046005802000071000a0000007d000f00000080001c02000085005e01000092008a0200009300c2010000c100ff390000c400d6060000c500000a0000c700350d0000cd00fe010000d7002c010000d80064000000da00ec0d00001a01300200003301211300003d01b90200008101ceffffff8201ceffffffa90136010000aa017c060000ab013c000000ac0122010000ad013c000000b00122010000ba0130020000bb01fa000000bc0130020000bd013c000000be013c000000bf013c000000c0013c000000c10132000000f00104010000f401fe010000f50154010000f60122010000f701e0010000f801e0010000fa01d6010000fb01b8010000fc0154010000fd0154010000fe01be000000ff01be000000390205000000ff39000000000000";
+    const LOGIN_CHANGES: &str = "d1014a36f2452007002900000008002200000009000d0000000a000f0000000b00290000000e00220000000f000b00000010001100000011001a0000002c00d60600008000350200008500720100009f00fc0d0000c40024090000c500560e0000cd00c6020000da00950e00001a018e03000081017effffff820192ffffffaa016a090000ab0154010000ac013a020000ad0154010000b001ea010000ba018e030000bb019a010000bc018a020000bd01aa000000bf019a010000c00154010000c101820000000000000000000000";
+
+    #[test]
+    fn the_sheet_adds_up_to_the_stat_page() {
+        let mut t = Timeline::default();
+        t.note(1_000, &hex(LOGIN_SHEET));
+        t.note(1_000, &hex(LOGIN_CHANGES));
+        let sheet = t.stat_sheet_at(i64::MAX);
+        assert_eq!(sheet.entity, Some(8946));
+        assert_eq!(sheet.values.get(&215), Some(&300), "CoolTimeDecrease");
+        assert_eq!(sheet.values.get(&385), Some(&-130), "CoolTimeIncrease, the later record's");
+        assert_eq!(t.stat_packets.len(), 2);
+        assert_eq!(t.stat_seq, 2);
+        assert_eq!(t.fight_stats(500, 900), None, "before any record");
+
+        // Kept for a fight long after, the login folded into the base.
+        t.prune(5_000);
+        let fight = t.fight_stats(10_000, 20_000).expect("the login sheet");
+        assert_eq!(fight.at_start.get(&385), Some(&-130));
+        assert!(fight.changes.is_empty());
+    }
+
+    #[test]
+    fn another_character_starts_a_new_sheet() {
+        let mut sheet = StatSheet::default();
+        sheet.apply(&StatEvent { ms: 0, entity: Some(1), whole_sheet: false, values: vec![(215, 300), (128, 430)] });
+        sheet.apply(&StatEvent { ms: 1, entity: Some(2), whole_sheet: false, values: vec![(215, 100)] });
+        assert_eq!(sheet.values.into_iter().collect::<Vec<_>>(), vec![(215, 100)]);
     }
 
     #[test]

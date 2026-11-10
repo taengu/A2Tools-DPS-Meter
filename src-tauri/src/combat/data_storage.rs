@@ -966,6 +966,31 @@ impl DataStorage {
         log.timeline.stats.iter().filter(|s| s.ms >= start_ms && s.ms <= end_ms).cloned().collect()
     }
 
+    /// Your stats in a fight from `start_ms` to `end_ms` (the sheet at its
+    /// start, the changes in it), for its record.
+    pub fn fight_stats(&self, start_ms: i64, end_ms: i64) -> Option<abnormal::FightStats> {
+        self.abnormals.lock().timeline.fight_stats(start_ms, end_ms)
+    }
+
+    /// The stat records to put in a slice: the last whole sheet and the
+    /// changes since, as framed packets with their capture times.
+    pub fn stat_packets(&self) -> Vec<(i64, Vec<u8>)> {
+        self.abnormals.lock().timeline.stat_packets.clone()
+    }
+
+    /// Your stat sheet as it is now.
+    pub fn own_stat_sheet(&self) -> abnormal::StatSheet {
+        self.abnormals.lock().timeline.stat_sheet_at(i64::MAX)
+    }
+
+    /// Your stat sheet as it is now, when stat records were read since
+    /// `seq`: the next `seq` with it.
+    pub fn own_stats_since(&self, seq: u64) -> Option<(u64, abnormal::StatSheet)> {
+        let log = self.abnormals.lock();
+        let now = log.timeline.stat_seq;
+        (now != seq).then(|| (now, log.timeline.stat_sheet_at(i64::MAX)))
+    }
+
     /// Instances held by the buff timeline, ended and still on.
     pub fn abnormal_count(&self) -> usize {
         self.abnormals.lock().timeline.len()

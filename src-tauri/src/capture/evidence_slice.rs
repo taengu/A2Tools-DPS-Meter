@@ -265,7 +265,21 @@ pub const ALLOWED_OPCODES: &[(&[u8; 2], &str)] = &[
     (&[0x2A, 0x38], "buff/debuff added"),
     (&[0x2B, 0x38], "buff/debuff changed"),
     (&[0x2C, 0x38], "buff/debuff removed"),
+    // Your own character's stats (meter 2.0.96 on): stat ids and values, for
+    // deriving cooldowns and the like from a log later (capture/abnormal.rs).
+    // The server sends them about you only. The empty one it sends each
+    // second is left out (`is_allowed`).
+    (&[0x4A, 0x36], "own stats changed"),
+    (&[0x49, 0x36], "own stats, the whole sheet"),
 ];
+
+/// A stat record (`4a 36` changes or the `49 36` whole sheet).
+fn stat_record(packet: &[u8]) -> Option<[u8; 2]> {
+    let len = super::stream_processor::read_varint(packet, 0);
+    let at = usize::try_from(len.length).ok().filter(|&n| n > 0)?;
+    let op: [u8; 2] = packet.get(at..at + 2)?.try_into().ok()?;
+    matches!(op, [0x4A, 0x36] | [0x49, 0x36]).then_some(op)
+}
 
 /// A map load's or a party roster's opcode (`21 36`, `02 97`), for the
 /// slice's whereabouts; None for any other packet.
@@ -1026,6 +1040,14 @@ fn is_allowed(packet: &[u8], keep: Keep) -> bool {
     if keep == Keep::State && (EVENT_OPCODES.contains(&op) || PRELUDE_SKIPPED.contains(&op)) {
         return false;
     }
+    // Your stats' empty change list, sent every second: nothing in it.
+    if op == [0x4A, 0x36] {
+        let entity = super::stream_processor::read_varint(packet, o + 2);
+        let count_at = o + 2 + usize::try_from(entity.length).unwrap_or(0);
+        if entity.length <= 0 || packet.get(count_at).is_none_or(|&n| n == 0) {
+            return false;
+        }
+    }
     ALLOWED_OPCODES.iter().any(|(allowed, _)| **allowed == op)
 }
 
@@ -1201,6 +1223,9 @@ pub fn build(
     // open world (some 90 a day the meter had filed under a dungeon,
     // 2026-10-30). Kept only when the window holds no newer one.
     let mut whereabouts: Vec<(i64, Vec<u8>)> = Vec::new();
+    // Your stat records from before the prelude: the last whole sheet and the
+    // changes since, so the log knows your stats at the pull.
+    let mut stat_history: Vec<(i64, Vec<u8>)> = Vec::new();
 
     for cap in packets {
         let (acc, tunnel) = streams
@@ -1226,6 +1251,13 @@ pub fn build(
 
         if cap.captured_at_ms < from - PRELUDE_MS {
             for packet in kept {
+                if let Some(op) = stat_record(&packet) {
+                    if op == [0x49, 0x36] {
+                        stat_history.clear();
+                    }
+                    stat_history.push((cap.captured_at_ms, packet));
+                    continue;
+                }
                 if let Some(op) = whereabouts_opcode(&packet) {
                     whereabouts.retain(|(_, p)| whereabouts_opcode(p) != Some(op));
                     whereabouts.push((cap.captured_at_ms, packet));
@@ -1248,7 +1280,9 @@ pub fn build(
     }
     // First, so the window's own map load or roster, if any, still wins.
     whereabouts.retain(|(_, w)| !records.iter().any(|(_, p)| whereabouts_opcode(p) == whereabouts_opcode(w)));
-    for (at, packet) in whereabouts.into_iter().rev() {
+    let mut before: Vec<(i64, Vec<u8>)> = whereabouts.into_iter().chain(stat_history).collect();
+    before.sort_by_key(|(at, _)| *at);
+    for (at, packet) in before.into_iter().rev() {
         let dt = (at - fight_start_ms).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
         records.insert(0, (dt, packet));
     }

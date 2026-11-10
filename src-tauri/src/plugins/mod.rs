@@ -522,6 +522,11 @@ fn character(app: &tauri::AppHandle) -> Option<Value> {
         // the shop opens again. From the same snapshot as the owner.
         let shop = (theirs && !list.shop_limits.is_empty()).then(|| serde_json::json!(list.shop_limits));
         let crafts = (theirs && !list.crafts.is_empty()).then(|| serde_json::json!(list.crafts));
+        // The cooldown reduction on the stat page (percent), from the stat
+        // records about this character; none until they came.
+        let sheet = s.data_storage.own_stat_sheet();
+        let cdr = (sheet.entity.is_some() && sheet.entity.map(i64::from) == s.data_storage.local_player_id() && !sheet.values.is_empty())
+            .then(|| cooldown_reduction(&sheet));
         serde_json::json!({
             "name": p.name,
             "serverId": p.server_id,
@@ -544,6 +549,7 @@ fn character(app: &tauri::AppHandle) -> Option<Value> {
             // is as the game last sent it: it counts down only while in use,
             // and the game sends the change. Theirs the same way.
             "contentTimes": Some(list.times).filter(|t| theirs && !t.is_empty()),
+            "cooldownReduction": cdr,
         })
     })
 }
@@ -681,6 +687,7 @@ impl PluginHost {
                 let mut roll_seq = 0u64;
                 let mut market_seq = 0u64;
                 let mut kda_seq = 0u64;
+                let mut stats_seq = 0u64;
                 loop {
                     // Woken by each queued event; the timeout lets settling
                     // events go once their wait is over.
@@ -769,6 +776,16 @@ impl PluginHost {
                             for e in events {
                                 let data = serde_json::to_value(e).unwrap_or_default();
                                 host.queue_permitted("events:kda", "kda", e.at, data);
+                            }
+                        }
+                    }
+                    // Your stat sheet, when it changes: kept, so a window
+                    // opened later has it.
+                    if let Some(state) = app.try_state::<AppState>() {
+                        if let Some((next, sheet)) = state.data_storage.own_stats_since(stats_seq) {
+                            stats_seq = next;
+                            if !sheet.values.is_empty() {
+                                host.queue_permitted("events:stats", "stats", crate::clock::now_ms(), stats_event(&sheet));
                             }
                         }
                     }
@@ -1305,7 +1322,24 @@ struct PromptTexts {
     perm_loot_rolls: String,
     perm_black_market: String,
     perm_kda: String,
+    perm_stats: String,
     perm_screenshot: String,
+}
+
+/// The `stats` event: your stat sheet by `EStat` id, and the cooldown
+/// reduction it adds up to, in percent (`CoolTimeDecrease` less
+/// `CoolTimeIncrease`, hundredths of a percent each: 4.3 for 300 and -130).
+fn stats_event(sheet: &crate::capture::abnormal::StatSheet) -> Value {
+    serde_json::json!({
+        "entity": sheet.entity,
+        "stats": sheet.values,
+        "cooldownReduction": cooldown_reduction(sheet),
+    })
+}
+
+fn cooldown_reduction(sheet: &crate::capture::abnormal::StatSheet) -> f64 {
+    let stat = |id: u16| f64::from(sheet.values.get(&id).copied().unwrap_or(0));
+    (stat(215) - stat(385)) / 100.0
 }
 
 /// One text of the meter's interface in its language (English failing that),
@@ -1361,6 +1395,7 @@ fn prompt_texts(data_dir: Option<&Path>, lang: &str) -> PromptTexts {
         perm_loot_rolls: perm("permLootRolls", "See Dice Roll loot: the item, who rolled what, and who won it"),
         perm_black_market: perm("permBlackMarket", "See the Black Cloud Merchants' stock when you open their shop: the items and their prices"),
         perm_kda: perm("permKda", "Count your kills, assists and deaths against players (no names)"),
+        perm_stats: perm("permStats", "See your character's stats, such as cooldown reduction"),
         perm_screenshot: perm("permScreenshot", "Take screenshots of its own window, to the clipboard and your screenshot folder"),
     }
 }
@@ -1379,6 +1414,7 @@ fn describe_permission(t: &PromptTexts, permission: &str) -> String {
         "events:loot-rolls" => t.perm_loot_rolls.clone(),
         "events:black-market" => t.perm_black_market.clone(),
         "events:kda" => t.perm_kda.clone(),
+        "events:stats" => t.perm_stats.clone(),
         "screenshot" => t.perm_screenshot.clone(),
         p => match p.strip_prefix("decoder:") {
             Some(name) => t.perm_decoder.replace("{name}", name),

@@ -70,6 +70,12 @@ pub struct FightRecord {
     /// can read short of its real HP. `None` before 2.0.87.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_hp_from_spawn: Option<bool>,
+    /// The recording player's stats: the sheet when the fight started and
+    /// each change in it (`capture::abnormal::FightStats`), so cooldowns and
+    /// the like can be derived from a log later. `None` before 2.0.96, and
+    /// when the meter started after the login sheet with no change since.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_stats: Option<crate::capture::abnormal::FightStats>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

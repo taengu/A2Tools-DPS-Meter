@@ -1301,6 +1301,7 @@ impl DpsCalculator {
                 local_actor_id: self.data_storage.local_player_id().and_then(|id| i32::try_from(id).ok()),
                 killed: Some(self.data_storage.get_dead_entities().contains(&target_id)),
                 max_hp_from_spawn: Some(self.data_storage.spawn_max_hp(target_id).is_some()),
+                player_stats: self.data_storage.fight_stats(target_data.first_damage_time, target_data.last_damage_time),
             };
 
             if is_ended {

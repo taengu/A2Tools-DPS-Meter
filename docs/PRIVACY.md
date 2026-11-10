@@ -179,10 +179,16 @@ upload is an *Evidence Slice*: rebuilt from an allowlist of the packet types the
 parser reads, with names replaced by opaque tokens. An allowlist, not a
 blocklist: we cannot prove we stripped every chat message from a format we only
 partly understand, but we can prove what we kept. The list is `ALLOWED_OPCODES`
-in `src-tauri/src/capture/evidence_slice.rs`, sixteen entries, each named.
+in `src-tauri/src/capture/evidence_slice.rs`, eighteen entries, each named.
 Three of them (meter 2.0.56 on) are the buff and debuff records behind a log's
 Buffs timeline: which effect an entity gained, changed or lost, the skill and
 entity that applied it, its timings and a position. They hold no names.
+Two (meter 2.0.96 on) are your own character's stats, which the server sends
+about you only: stat ids and values (critical hit, cooldown reduction and the
+like), so a log's cooldowns can be worked out later. The sheet the server
+sends at login, and the changes since, go into each slice even when they came
+before its window, as the map load and roster do. No names, and nothing
+about anyone else.
 
 Two additions to the allowlist, both measured as necessary on real fights and
 both narrower than keeping more packet types:

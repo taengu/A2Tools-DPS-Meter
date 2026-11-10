@@ -33,6 +33,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::capture::evidence_slice::{self, CapturedPacket, NameMap};
+
+/// The stream your pinned stat records go into a slice on: whole packets,
+/// apart from the game's streams so neither cuts into the other. Port 0 is
+/// no real connection's.
+const STAT_STREAM: &str = "Client:0:0";
 use crate::capture::packet_accumulator::PacketAccumulator;
 use crate::capture::stream_processor::StreamProcessor;
 use crate::combat::data_storage::DataStorage;
@@ -485,6 +490,7 @@ mod tests {
             local_actor_id: None,
             killed: None,
             max_hp_from_spawn: None,
+            player_stats: None,
         }
     }
 
@@ -686,6 +692,9 @@ pub struct SliceNames {
     names: NameMap,
     local_id: Option<i64>,
     local_name: Option<String>,
+    /// Your stat records (`DataStorage::stat_packets`): the login sheet is
+    /// usually older than the packets held in memory.
+    stat_packets: Vec<(i64, Vec<u8>)>,
 }
 
 impl SliceNames {
@@ -694,6 +703,7 @@ impl SliceNames {
             names: names_from(storage),
             local_id: storage.local_player_id(),
             local_name: storage.local_character_name(),
+            stat_packets: storage.stat_packets(),
         }
     }
 }
@@ -709,11 +719,21 @@ pub fn save_slice(
     record: &FightRecord,
     names: &SliceNames,
 ) -> Result<usize, String> {
-    let packets = ring::snapshot();
+    let held = ring::snapshot();
     let start = record.start_time_ms;
-    if !covers(&packets, start, start + record.duration_ms) {
+    if !covers(&held, start, start + record.duration_ms) {
         return Err("no packets in memory for this fight".into());
     }
+    // Your stat records from before what is held, each a whole packet on a
+    // stream of its own, ahead of it; the ones still held come with it.
+    let oldest = held.first().map_or(i64::MAX, |p| p.captured_at_ms);
+    let mut packets: Vec<CapturedPacket> = names
+        .stat_packets
+        .iter()
+        .filter(|(at, _)| *at < oldest)
+        .map(|(at, bytes)| CapturedPacket { captured_at_ms: *at, stream: STAT_STREAM.into(), bytes: bytes.clone() })
+        .collect();
+    packets.extend(held);
     let mut slice =
         evidence_slice::build(&packets, start, start + record.duration_ms, &names.names, slice_key()?)
             .map_err(|e| e.to_string())?;

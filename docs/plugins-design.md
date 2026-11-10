@@ -91,6 +91,7 @@ A small `a2` object the plugin loads (`plugin://sdk/a2.js`), wrapping postMessag
 | Call | Permission | What it does |
 |---|---|---|
 | `a2.on("character", fn)` | `events:character` | Your character: class, level, server, combat power, gear score, Odyle energy and content counts (entries left of Nightmare, Shugo Festival, Invasion, Daily Dungeon, Ascension Trial; Daily Duty taken and done today), the shop's purchase limits and the crafts made (once the shop or crafting window has opened), Kinah gained today and the week's Abyss Points, the Abyss passages' usage time left (with when it was seen), and when any of it changes |
+| `a2.on("stats", fn)` | `events:stats` | Your character's stats at login and on each change: `{ entity, stats: { [EStat id]: value }, cooldownReduction }` (percent); yours only |
 | `a2.on("kda", fn)` | `events:kda` | You killed a player (`kill`), helped kill one (`assist`: you hit them in the 15 s before) or a player killed you (`death`); the time and the kind only, no names |
 | `a2.on("zone", fn)` | `events:zone` | Zone/dungeon entered (dungeon id, difficulty) |
 | `a2.on("fight", fn)` | `events:fight` | Boss fight started/ended: boss code, duration, your damage |

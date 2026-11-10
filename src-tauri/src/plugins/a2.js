@@ -32,7 +32,9 @@
 //                                              (Wednesday) has passed, and contentTimes ({ "<entry
 //                                              id>": [time, seen at ms] }: 10000001-10000003 the Abyss
 //                                              passages' usage time left (ms), gone once used; the time
-//                                              as the game last sent it)
+//                                              as the game last sent it). Meter 2.0.96 on also
+//                                              cooldownReduction: the stat page's cooldown reduction in
+//                                              percent (4.3 for -4.3%), null until the game sent your stats
 //   a2.on("bossMap", ({ map, bosses }) => ...) a map the player just opened, its field bosses as
 //                                              a2.bossTimers gives them (permission
 //                                              "feed:boss-timers", meter 2.0.65 on)
@@ -71,6 +73,12 @@
 //                                              "points" with `amount`: Abyss Points just gained, and
 //                                              "zone" with `abyss` true/false: the Abyss entered or
 //                                              left (the first map load of a meter started there too).
+//   a2.on("stats", (s) => ...)                 your character's stats, at login and each time one changes
+//                                              (permission "events:stats", meter 2.0.96 on): s = { entity,
+//                                              stats: { [EStat id]: value }, cooldownReduction (percent: 4.3
+//                                              for a sheet showing -4.3%) }. Percent stats are in hundredths
+//                                              (CoolTimeDecrease 215, CoolTimeIncrease 385 negative when it
+//                                              shortens cooldowns). The latest is kept for a window opened later
 //   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
 //                                              (meter 2.0.65 on)
 //   a2.on("ping", ({ ms }) => ...)             the ping to the game server in ms (null while not known),

@@ -144,6 +144,9 @@
       if (permission === "events:kda") {
         return t("settings.plugins.permKda", "Count your kills, assists and deaths against players (no names)");
       }
+      if (permission === "events:stats") {
+        return t("settings.plugins.permStats", "See your character's stats, such as cooldown reduction");
+      }
       if (permission.startsWith("decoder:")) {
         return t("settings.plugins.permDecoder", "Read selected game fields (may include other players): {name}", { name: permission.slice(8) });
       }
