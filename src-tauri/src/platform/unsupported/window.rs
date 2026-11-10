@@ -107,6 +107,12 @@ pub fn places_own_windows() -> bool {
     true
 }
 
+/// Where a window is, when the window cannot say: never here, its own
+/// position is right.
+pub fn known_position(_window: &tauri::WebviewWindow) -> Option<(i32, i32)> {
+    None
+}
+
 /// The edge the overlay keeps: the meter moves it itself here
 /// (`meter_anchor::resize`), KWin only on KDE Wayland.
 pub fn set_main_anchor(_anchor: crate::platform::meter_anchor::Anchor) {}

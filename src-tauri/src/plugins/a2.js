@@ -255,7 +255,8 @@
       lock: (locked) => call("widgets.lock", [!!locked]),
       locked: () => call("widgets.locked", []),
       // Meter 2.0.72 on: where a widget is, and moving it (physical screen
-      // pixels), for a plugin that lays its widgets out itself.
+      // pixels), for a plugin that lays its widgets out itself. On KDE
+      // Wayland, where is right from meter 2.0.89 (before, its x and y were not).
       where: (name) => call("widgets.where", [String(name)]),
       place: (name, at) => call("widgets.place", [String(name), { x: Number(at?.x), y: Number(at?.y) }]),
     }),

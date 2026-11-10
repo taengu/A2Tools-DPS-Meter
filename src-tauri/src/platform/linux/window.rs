@@ -509,6 +509,14 @@ pub fn places_own_windows() -> bool {
     super::focus::places_own_windows()
 }
 
+/// Where a window is, in physical screen pixels, when the window cannot say:
+/// on KDE Wayland no app learns where its windows are, but KWin's script tells
+/// the meter where the player left each one (`focus::place_of`). None
+/// elsewhere: there the window's own position is right.
+pub fn known_position(window: &tauri::WebviewWindow) -> Option<(i32, i32)> {
+    if super::focus::kwin_places_windows() { super::focus::place_of(window) } else { None }
+}
+
 /// The edge the overlay keeps as it fits its rows (Settings → Meter stays
 /// fixed at), for the KWin script, which keeps it on native Wayland.
 pub fn set_main_anchor(anchor: crate::platform::meter_anchor::Anchor) {
