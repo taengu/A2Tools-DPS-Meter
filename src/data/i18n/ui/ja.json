@@ -110,6 +110,8 @@
       "resistTooltip": "抵抗",
       "regen": "回復",
       "regenTooltip": "ライフスティール回復",
+      "stagger": "スタン",
+      "staggerTooltip": "スタン",
       "multiHit": "多段%",
       "multiHitTooltip": "多段ヒット %",
       "multiHitDamage": "多段ダ",
@@ -155,7 +157,9 @@
       "blockedTakenTip": "受けた攻撃のうち、盾でブロックした割合。括弧内は完璧ブロック",
       "parriedTaken": "パリィ（完璧）",
       "parriedTakenTip": "受けた攻撃のうち、パリィした割合。括弧内は完璧パリィ",
-      "parryRateTip": "自分の攻撃のうち、対象にパリィされた割合"
+      "parryRateTip": "自分の攻撃のうち、対象にパリィされた割合",
+      "stagger": "スタン",
+      "staggerTip": "ボスのスタンゲージに与えた量、括弧内は全体に占める割合"
     },
     "titleFor": "対象",
     "titleVs": "対",

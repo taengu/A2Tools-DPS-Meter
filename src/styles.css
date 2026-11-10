@@ -4684,6 +4684,7 @@ body.noDeaths .list .item .deathCount { display: none !important; }
 .detailsPanel.hide-col-miss .detailsSkills .cell.miss,
 .detailsPanel.hide-col-resist .detailsSkills .cell.resist,
 .detailsPanel.hide-col-regen .detailsSkills .cell.regen,
+.detailsPanel.hide-col-stagger .detailsSkills .cell.stagger,
 .detailsPanel.hide-col-mindmg .detailsSkills .cell.mindmg,
 .detailsPanel.hide-col-avgdmg .detailsSkills .cell.avgdmg,
 .detailsPanel.hide-col-maxdmg .detailsSkills .cell.maxdmg {

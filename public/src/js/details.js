@@ -343,6 +343,12 @@ const createDetailsUI = ({
       getValue: (d) => pctText(d?.totalParryPct),
     },
     { key: "details.stats.regen", fallback: "Regen", getValue: (d) => formatDamageCompact(d?.totalRegen) },
+    {
+      key: "details.stats.stagger",
+      fallback: "Stagger",
+      tip: ["details.stats.staggerTip", "Stagger dealt to the bosses' gauges, and in brackets the share of all the stagger dealt"],
+      getValue: (d) => staggerStat(d),
+    },
   ];
 
   // Stats shown when the DMG/HEAL toggle is on HEAL. Fewer, healing-relevant rows;
@@ -1067,6 +1073,9 @@ const createDetailsUI = ({
     const regenEl = document.createElement("div");
     regenEl.className = "cell center regen";
 
+    const staggerEl = document.createElement("div");
+    staggerEl.className = "cell center stagger";
+
     const minDmgEl = document.createElement("div");
     minDmgEl.className = "cell center mindmg";
 
@@ -1090,6 +1099,7 @@ const createDetailsUI = ({
     rowEl.appendChild(frontalEl);
     hitResultEls.forEach((el) => rowEl.appendChild(el));
     rowEl.appendChild(regenEl);
+    rowEl.appendChild(staggerEl);
     rowEl.appendChild(minDmgEl);
     rowEl.appendChild(avgDmgEl);
     rowEl.appendChild(maxDmgEl);
@@ -1115,6 +1125,7 @@ const createDetailsUI = ({
       doubleEl,
       hitResultEls,
       regenEl,
+      staggerEl,
       minDmgEl,
       avgDmgEl,
       maxDmgEl,
@@ -1172,6 +1183,8 @@ const createDetailsUI = ({
         return Number(skill?.resist) || 0;
       case "regen":
         return Number(skill?.regen) || 0;
+      case "stagger":
+        return Number(skill?.stagger) || 0;
       case "mindmg":
         return Number(skill?.minDmg) || 0;
       case "avgdmg":
@@ -1239,13 +1252,14 @@ const createDetailsUI = ({
     miss: "minmax(4.2ch, 0.65fr)",
     resist: "minmax(4.2ch, 0.6fr)",
     regen: "minmax(6ch, 0.8fr)",
+    stagger: "minmax(5ch, 0.75fr)",
     mindmg: "minmax(6ch, 0.8fr)",
     avgdmg: "minmax(6ch, 0.8fr)",
     maxdmg: "minmax(6ch, 0.8fr)",
   };
   const HEAL_COLUMNS = new Set(["name", "hit", "dmg", "dmgpct"]);
   const GRID_COL_ORDER = ["name", "hit", "dmg", "dmgpct", "mhit", "mdmg", "crit", "parry", "perfect", "double", "back", "frontal",
-    ...HIT_RESULTS.map(([col]) => col), "regen", "mindmg", "avgdmg", "maxdmg"];
+    ...HIT_RESULTS.map(([col]) => col), "regen", "stagger", "mindmg", "avgdmg", "maxdmg"];
 
   // The header scrolls sideways with the rows when the table is wider than
   // its column (a large Details font beside the sidebar).
@@ -1390,6 +1404,26 @@ const createDetailsUI = ({
         specs: (existing.specs || [false,false,false,false,false]).map((v, i) => v || !!(skill.specs && skill.specs[i])),
       });
     });
+    // Each row's stagger: its player's with that skill, or (a row of
+    // several players) theirs together; "-" while the fight's isn't known.
+    // A skill's DoT row has it only when the skill has no row of hits.
+    const stagger = detailsMode === "heal" ? null : staggerBySkill();
+    const staggerIds = Array.isArray(selectedAttackerIds) && selectedAttackerIds.length
+      ? new Set(selectedAttackerIds.map(Number))
+      : null;
+    for (const [key, skill] of groupedSkills) {
+      const name = String(skill.name ?? "");
+      if (!stagger || (key.endsWith("::dot") && groupedSkills.has(`${name}::hit`))) continue;
+      const byActor = stagger.get(name);
+      let value = 0;
+      if (byActor) {
+        const actorId = Number(skill.actorId);
+        if (skill.actorId != null && Number.isFinite(actorId)) value = byActor.get(actorId) || 0;
+        else for (const [actor, v] of byActor) if (!staggerIds || staggerIds.has(actor)) value += v;
+      }
+      skill.stagger = value;
+    }
+    const staggerShown = !!stagger;
     const displaySkills = foldDotRows([...groupedSkills.values()]);
 
     displaySkills.sort(compareSkillSort);
@@ -1562,6 +1596,7 @@ const createDetailsUI = ({
             { cls: "cell center frontal", text: `${dotFrontal}%` },
             ...HIT_RESULTS.map(([col, field, kind]) => ({ cls: `cell center ${col}`, text: hitResultText(dot, field, kind, dotHits) })),
             { cls: "cell center regen", text: `${formatDamageCompact(dotRegen)}` },
+            { cls: "cell center stagger", text: "" },
             { cls: "cell center mindmg", text: `${formatDamageCompact(dotMin)}` },
             { cls: "cell center avgdmg", text: `${formatDamageCompact(dotAvg)}` },
             { cls: "cell center maxdmg", text: `${formatDamageCompact(dotMax)}` },
@@ -1649,6 +1684,7 @@ const createDetailsUI = ({
         view.hitResultEls[i].textContent = hitResultText(skill, field, kind, hits);
       });
       view.regenEl.textContent = `${formatDamageCompact(regen)}`;
+      view.staggerEl.textContent = staggerShown ? formatCount(Number(skill.stagger) || 0) : "-";
       view.multiHitEl.textContent = `${multiHitRate}%`;
       view.multiHitDamageEl.textContent = `${formatDamageCompact(multiHitDamage)}`;
       view.minDmgEl.textContent = `${formatDamageCompact(minDmg)}`;
@@ -2770,6 +2806,68 @@ const createDetailsUI = ({
     return Number(id) || null;
   };
 
+  // The fight's stagger windows, for the Stagger stat and column: a History
+  // fight's from its record, a live fight's with its buffs. null while a
+  // live fight's are on their way, or for a record from before them.
+  const fightStaggerWindows = () => {
+    if (historyRecord) return Array.isArray(historyRecord.stagger) ? historyRecord.stagger : null;
+    const targetId = buffTargetId();
+    const shown = targetId && liveBuffs && Number(liveBuffs.targetId) === targetId ? liveBuffs : null;
+    return shown && Array.isArray(shown.stagger) ? shown.stagger : null;
+  };
+  const staggerHits = (windows) => windows.flatMap((w) => (Array.isArray(w?.hits) ? w.hits : []));
+
+  // Stagger dealt: the selected players' with their share of the fight's,
+  // or the whole party's.
+  const staggerStat = (d) => {
+    const windows = fightStaggerWindows();
+    if (!windows) return "-";
+    const ids = d !== lastUnfilteredDetails && Array.isArray(selectedAttackerIds) && selectedAttackerIds.length
+      ? new Set(selectedAttackerIds.map(Number))
+      : null;
+    let all = 0, theirs = 0;
+    for (const h of staggerHits(windows)) {
+      const value = Number(h.value) || 0;
+      all += value;
+      if (!ids || ids.has(Number(h.actor))) theirs += value;
+    }
+    if (!ids) return formatCount(all);
+    return all > 0 ? `${formatCount(theirs)} (${pctText((theirs / all) * 100)})` : formatCount(theirs);
+  };
+
+  // A hit's skill code names nothing in the table, its family does (as in
+  // the Stagger section): the name the skill rows go by.
+  const staggerSkillName = (code) => {
+    const c = Number(code) || 0;
+    if (!c) return "";
+    const family = [c, c - (c % 10000), c - (c % 1000), c - (c % 100)];
+    const known = family.find((k) => i18n?.getSkillName?.(k, ""));
+    return known ? i18n.getSkillName(known, "") : "";
+  };
+
+  // Stagger by skill name, then by player: what each skill row shows.
+  const staggerBySkill = () => {
+    const windows = fightStaggerWindows();
+    if (!windows) return null;
+    const names = new Map();
+    const bySkill = new Map();
+    for (const h of staggerHits(windows)) {
+      const code = Number(h.skill) || 0;
+      if (!names.has(code)) names.set(code, staggerSkillName(code));
+      const name = names.get(code);
+      if (!name) continue;
+      let byActor = bySkill.get(name);
+      if (!byActor) bySkill.set(name, (byActor = new Map()));
+      const actor = Number(h.actor) || 0;
+      byActor.set(actor, (byActor.get(actor) || 0) + (Number(h.value) || 0));
+    }
+    return bySkill;
+  };
+  const staggerSignature = () => {
+    const windows = fightStaggerWindows();
+    return windows ? `${windows.length}:${staggerHits(windows).length}` : "";
+  };
+
   // Whose buffs "All" shows, rather than a "select a player" note that left
   // the section looking empty: you, live; in a saved fight or an uploaded log
   // its recorder, the one actor whose name is not masked; else whoever did
@@ -2855,8 +2953,15 @@ const createDetailsUI = ({
     window.dpsData.getFightBuffs(targetId)
       .then((result) => {
         if (seq !== openSeq || historyRecord) return;
+        const before = staggerSignature();
         liveBuffs = result || { targetId, durationMs: 0, buffs: [], stagger: [] };
         showBuffs();
+        // The Stagger stat and column come with the buffs: drawn again when
+        // they changed.
+        if (lastDetails && staggerSignature() !== before) {
+          renderStats(lastDetails, { compact: activeCompactMode });
+          renderSkills(lastDetails, { compact: activeCompactMode });
+        }
       })
       .catch(() => {})
       .finally(() => { liveBuffsPending = false; });

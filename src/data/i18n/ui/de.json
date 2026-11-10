@@ -110,6 +110,8 @@
       "resistTooltip": "Widerstanden",
       "regen": "Reg",
       "regenTooltip": "Lebensraub-Regeneration",
+      "stagger": "Stg",
+      "staggerTooltip": "Stagger",
       "multiHit": "MT%",
       "multiHitTooltip": "Mehrfachtreffer %",
       "multiHitDamage": "MTS",
@@ -155,7 +157,9 @@
       "blockedTakenTip": "Von den erlittenen Treffern: mit dem Schild geblockt, in Klammern perfekt geblockt",
       "parriedTaken": "Pariert (Perfekt)",
       "parriedTakenTip": "Von den erlittenen Treffern: pariert, in Klammern perfekt pariert",
-      "parryRateTip": "Von deinen Treffern: der Anteil, den das Ziel pariert hat"
+      "parryRateTip": "Von deinen Treffern: der Anteil, den das Ziel pariert hat",
+      "stagger": "Stagger",
+      "staggerTip": "Stagger auf die Leisten der Bosse, in Klammern der Anteil am gesamten Stagger"
     },
     "titleFor": "für",
     "titleVs": "gegen",

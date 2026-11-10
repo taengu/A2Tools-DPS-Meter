@@ -110,6 +110,8 @@
       "resistTooltip": "Résistés",
       "regen": "Rég",
       "regenTooltip": "Régénération par vol de vie",
+      "stagger": "Étd",
+      "staggerTooltip": "Étourdissement",
       "multiHit": "MC%",
       "multiHitTooltip": "Coups multiples %",
       "multiHitDamage": "DCM",
@@ -155,7 +157,9 @@
       "blockedTakenTip": "Des coups subis : bloqués au bouclier, et entre parenthèses bloqués parfaitement",
       "parriedTaken": "Paré (Parfait)",
       "parriedTakenTip": "Des coups subis : parés, et entre parenthèses parés parfaitement",
-      "parryRateTip": "De vos coups : la part que la cible a parée"
+      "parryRateTip": "De vos coups : la part que la cible a parée",
+      "stagger": "Étourdissement",
+      "staggerTip": "Étourdissement infligé aux jauges des boss, et entre parenthèses la part de tout l'étourdissement"
     },
     "titleFor": "pour",
     "titleVs": "contre",

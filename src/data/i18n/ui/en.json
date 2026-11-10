@@ -115,6 +115,8 @@
       "resistTooltip": "Resists",
       "regen": "Reg",
       "regenTooltip": "Life-steal Regen",
+      "stagger": "Stg",
+      "staggerTooltip": "Stagger",
       "multiHit": "MH%",
       "multiHitTooltip": "Multi-hit %",
       "multiHitDamage": "MHD",
@@ -160,7 +162,9 @@
       "blockedTakenTip": "Of the hits taken: blocked with a shield, and in brackets perfectly blocked",
       "parriedTaken": "Parried (Perfect)",
       "parriedTakenTip": "Of the hits taken: parried, and in brackets perfectly parried",
-      "parryRateTip": "Of your hits: the share the target parried"
+      "parryRateTip": "Of your hits: the share the target parried",
+      "stagger": "Stagger",
+      "staggerTip": "Stagger dealt to the bosses' gauges, and in brackets the share of all the stagger dealt"
     },
     "titleFor": "for",
     "titleVs": "vs",

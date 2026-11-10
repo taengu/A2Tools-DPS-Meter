@@ -110,6 +110,8 @@
       "resistTooltip": "Resistidos",
       "regen": "Reg",
       "regenTooltip": "Regeneração por roubo de vida",
+      "stagger": "Atd",
+      "staggerTooltip": "Atordoamento",
       "multiHit": "GM%",
       "multiHitTooltip": "Golpes múltiplos %",
       "multiHitDamage": "DGM",
@@ -155,7 +157,9 @@
       "blockedTakenTip": "Dos golpes recebidos: bloqueados com escudo e, entre parênteses, bloqueados perfeitamente",
       "parriedTaken": "Aparado (Perfeito)",
       "parriedTakenTip": "Dos golpes recebidos: aparados e, entre parênteses, aparados perfeitamente",
-      "parryRateTip": "Dos seus golpes: a parte que o alvo aparou"
+      "parryRateTip": "Dos seus golpes: a parte que o alvo aparou",
+      "stagger": "Atordoamento",
+      "staggerTip": "Atordoamento causado às barras dos chefes e, entre parênteses, a parte de todo o atordoamento"
     },
     "titleFor": "de",
     "titleVs": "contra",

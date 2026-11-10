@@ -110,6 +110,8 @@
       "resistTooltip": "抵抗",
       "regen": "回复",
       "regenTooltip": "吸血回复量",
+      "stagger": "破防",
+      "staggerTooltip": "破防",
       "multiHit": "MH%",
       "multiHitTooltip": "多段打击 %",
       "multiHitDamage": "MHD",
@@ -155,7 +157,9 @@
       "blockedTakenTip": "受到的攻击中用盾牌挡下的比例，括号内为完美盾挡",
       "parriedTaken": "格挡（完美）",
       "parriedTakenTip": "受到的攻击中格挡的比例，括号内为完美格挡",
-      "parryRateTip": "你的攻击中被目标格挡的比例"
+      "parryRateTip": "你的攻击中被目标格挡的比例",
+      "stagger": "破防",
+      "staggerTip": "对首领破防条造成的破防值，括号内为占全部破防的比例"
     },
     "titleFor": "针对",
     "titleVs": "vs",

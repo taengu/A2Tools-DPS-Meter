@@ -110,6 +110,8 @@
       "resistTooltip": "저항",
       "regen": "회복",
       "regenTooltip": "흡혈 회복량",
+      "stagger": "무력",
+      "staggerTooltip": "무력화",
       "multiHit": "MH%",
       "multiHitTooltip": "다중타 %",
       "multiHitDamage": "MHD",
@@ -155,7 +157,9 @@
       "blockedTakenTip": "받은 공격 중 방패로 막은 비율, 괄호 안은 완벽 막기",
       "parriedTaken": "패리 (완벽)",
       "parriedTakenTip": "받은 공격 중 패리한 비율, 괄호 안은 완벽 패리",
-      "parryRateTip": "내 공격 중 대상이 패리한 비율"
+      "parryRateTip": "내 공격 중 대상이 패리한 비율",
+      "stagger": "무력화",
+      "staggerTip": "보스 무력화 게이지에 준 수치, 괄호 안은 전체 중 비율"
     },
     "titleFor": "대상",
     "titleVs": "vs",

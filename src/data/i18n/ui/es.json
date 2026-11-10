@@ -110,6 +110,8 @@
       "resistTooltip": "Resistidos",
       "regen": "Reg",
       "regenTooltip": "Regeneración por robo de vida",
+      "stagger": "Atd",
+      "staggerTooltip": "Aturdimiento",
       "multiHit": "GM%",
       "multiHitTooltip": "Golpes múltiples %",
       "multiHitDamage": "DGM",
@@ -155,7 +157,9 @@
       "blockedTakenTip": "De los golpes recibidos: bloqueados con escudo y, entre paréntesis, bloqueados a la perfección",
       "parriedTaken": "Desviado (Perfecto)",
       "parriedTakenTip": "De los golpes recibidos: desviados y, entre paréntesis, desviados a la perfección",
-      "parryRateTip": "De tus golpes: la parte que el objetivo desvió"
+      "parryRateTip": "De tus golpes: la parte que el objetivo desvió",
+      "stagger": "Aturdimiento",
+      "staggerTip": "Aturdimiento infligido a las barras de los jefes, y entre paréntesis la parte de todo el aturdimiento"
     },
     "titleFor": "de",
     "titleVs": "contra",
