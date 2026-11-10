@@ -575,7 +575,7 @@
       "toggle": "Mostrar/ocultar janela",
       "pressKeys": "Pressione as teclas...",
       "tooManyKeys": "No máximo 3 teclas",
-      "plugins": "Trazer de volta as janelas de plugins",
+      "plugins": "Mostrar/ocultar janelas de plugins",
       "notSet": "Não definido",
       "restoreDefaults": "Restaurar padrões",
       "hint": "Clique num atalho e pressione de 1 a 3 teclas. Esc cancela.",

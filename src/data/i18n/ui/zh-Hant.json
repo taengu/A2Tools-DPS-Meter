@@ -575,7 +575,7 @@
       "toggle": "顯示/隱藏視窗",
       "pressKeys": "請按下按鍵...",
       "tooManyKeys": "最多 3 個鍵",
-      "plugins": "找回外掛視窗",
+      "plugins": "顯示/隱藏外掛視窗",
       "notSet": "未設定",
       "restoreDefaults": "恢復預設",
       "hint": "點擊一個快捷鍵，然後按下 1 到 3 個鍵。按 Esc 取消。",

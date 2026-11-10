@@ -212,7 +212,7 @@ pub async fn plugin_widget_open(
         }
         if super::game_hides(&app, &id) {
             super::hold_for_game(&widget);
-        } else if !crate::platform::window::reveal_in_place(&widget) {
+        } else if !super::hold_for_hotkey(&widget) && !crate::platform::window::reveal_in_place(&widget) {
             crate::platform::window::show_on_top_without_focus(&widget);
         }
         apply_lock(&widget, is_locked(&app, &id));
@@ -290,6 +290,8 @@ pub async fn plugin_widget_open(
     // AION2 closed and the plugin set to hide then: shown when it opens.
     if super::game_hides(&app, &id) {
         super::hold_for_game(&widget);
+    } else {
+        super::hold_for_hotkey(&widget);
     }
     Ok(())
 }

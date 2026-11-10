@@ -583,7 +583,7 @@
       "toggle": "Show/Hide window",
       "pressKeys": "Press keys...",
       "tooManyKeys": "Up to 3 keys",
-      "plugins": "Bring back plugin windows",
+      "plugins": "Show/Hide plugin windows",
       "notSet": "Not set",
       "restoreDefaults": "Restore defaults",
       "hint": "Click a keybind, then press 1 to 3 keys. Esc cancels.",

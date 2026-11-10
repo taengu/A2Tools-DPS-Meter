@@ -575,7 +575,7 @@
       "toggle": "Afficher/masquer la fenêtre",
       "pressKeys": "Appuyez sur des touches...",
       "tooManyKeys": "3 touches au maximum",
-      "plugins": "Ramener les fenêtres des plugins",
+      "plugins": "Afficher/masquer les fenêtres des plugins",
       "notSet": "Non défini",
       "restoreDefaults": "Rétablir par défaut",
       "hint": "Cliquez sur un raccourci, puis appuyez sur 1 à 3 touches. Échap annule.",

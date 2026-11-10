@@ -575,7 +575,7 @@
       "toggle": "Fenster ein-/ausblenden",
       "pressKeys": "Tasten drücken...",
       "tooManyKeys": "Höchstens 3 Tasten",
-      "plugins": "Plugin-Fenster zurückholen",
+      "plugins": "Plugin-Fenster ein-/ausblenden",
       "notSet": "Nicht belegt",
       "restoreDefaults": "Standard wiederherstellen",
       "hint": "Tastenkürzel anklicken, dann 1 bis 3 Tasten drücken. Esc bricht ab.",

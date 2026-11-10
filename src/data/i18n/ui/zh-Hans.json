@@ -575,7 +575,7 @@
       "toggle": "显示/隐藏窗口",
       "pressKeys": "请按下按键...",
       "tooManyKeys": "最多 3 个键",
-      "plugins": "找回插件窗口",
+      "plugins": "显示/隐藏插件窗口",
       "notSet": "未设置",
       "restoreDefaults": "恢复默认",
       "hint": "点击一个快捷键，然后按下 1 到 3 个键。按 Esc 取消。",
