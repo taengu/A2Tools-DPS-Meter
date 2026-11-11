@@ -199,8 +199,88 @@
     "name": "Consumed Deus Research Base",
     "difficulty": "hard"
   },
+  "600192": {
+    "name": "Fanatical Urugugu Canyon",
+    "difficulty": "normal"
+  },
+  "600193": {
+    "name": "Fanatical Urugugu Canyon",
+    "difficulty": "hard"
+  },
+  "610010": {
+    "name": "Submerged Life Temple"
+  },
+  "610011": {
+    "name": "Submerged Life Temple"
+  },
+  "610012": {
+    "name": "Submerged Life Temple"
+  },
+  "610013": {
+    "name": "Submerged Life Temple"
+  },
+  "610014": {
+    "name": "Submerged Life Temple"
+  },
+  "610015": {
+    "name": "Submerged Life Temple"
+  },
+  "610016": {
+    "name": "Submerged Life Temple"
+  },
+  "610017": {
+    "name": "Submerged Life Temple"
+  },
+  "610020": {
+    "name": "Mirror of Scarlet Desire"
+  },
+  "610021": {
+    "name": "Mirror of Scarlet Desire"
+  },
+  "610022": {
+    "name": "Mirror of Scarlet Desire"
+  },
+  "610023": {
+    "name": "Mirror of Scarlet Desire"
+  },
+  "610030": {
+    "name": "Noiran's Hidden Legacy"
+  },
+  "610032": {
+    "name": "Noiran's Hidden Legacy"
+  },
+  "610033": {
+    "name": "Noiran's Hidden Legacy"
+  },
   "610044": {
     "name": "Dying Dramata's Nest",
     "difficulty": "hard"
+  },
+  "610052": {
+    "name": "Deus Research Base"
+  },
+  "610062": {
+    "name": "Shattered Arkanis"
+  },
+  "610070": {
+    "name": "Abyssal Horn Den"
+  },
+  "610071": {
+    "name": "Abyssal Horn Den"
+  },
+  "610072": {
+    "name": "Abyssal Horn Den"
+  },
+  "610073": {
+    "name": "Abyssal Horn Den"
+  },
+  "610110": {
+    "name": "Eracus Ruins"
+  },
+  "610111": {
+    "name": "Eracus Ruins"
+  },
+  "610112": {
+    "name": "Eracus Ruins"
   }
 }
