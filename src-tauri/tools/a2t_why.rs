@@ -64,6 +64,14 @@ fn main() {
 
         let replay = |upto: usize| {
             let storage = Arc::new(DataStorage::new());
+            // Every hit (time, target, damage), for the fight's timeline.
+            let hits: Arc<std::sync::Mutex<Vec<(i64, i32, i64)>>> = Arc::default();
+            {
+                let hits = hits.clone();
+                storage.set_on_hit(move |h| {
+                    hits.lock().unwrap().push((h.timestamp(), h.target_id(), h.total_damage() as i64))
+                });
+            }
             let mut p = StreamProcessor::new(storage.clone(), skills.clone(), npcs.clone());
             if let Some(ids) = &dots {
                 p.set_dot_skill_ids(ids.clone());
@@ -91,7 +99,8 @@ fn main() {
                     reset_at = Some(n);
                 }
             }
-            (storage, reset_at, spawned)
+            let hits = std::mem::take(&mut *hits.lock().unwrap());
+            (storage, reset_at, spawned, hits)
         };
         let targets_of = |storage: &DataStorage| {
             let mobs = storage.get_mob_data();
@@ -120,7 +129,7 @@ fn main() {
             out.truncate(8);
             out
         };
-        let (full, reset_at, spawned) = replay(records.len());
+        let (full, reset_at, spawned, hits) = replay(records.len());
         // What the top anonymous target did itself: the skills it hit anyone
         // with, which name the boss when its spawn is missing.
         let snap = full.get_combat_snapshot();
@@ -148,6 +157,31 @@ fn main() {
             .collect();
         fight_spawns.sort();
         fight_spawns.dedup();
+        // The top target's timeline: damage per 5 s from its first hit, the
+        // pauses of 3 s or more with no damage on it, and its stagger windows
+        // (gauge max, start and end from the first hit, broken or not).
+        let mut buckets: Vec<i64> = Vec::new();
+        let mut gaps: Vec<(i64, i64)> = Vec::new();
+        let mut stagger: Vec<serde_json::Value> = Vec::new();
+        if let (Some(id), Some((a, b))) = (top, window) {
+            let mut times: Vec<(i64, i64)> = hits.iter().filter(|h| h.1 == id).map(|h| (h.0, h.2)).collect();
+            times.sort();
+            buckets = vec![0; ((b - a) / 5000 + 1) as usize];
+            let mut last = a;
+            for (t, d) in &times {
+                if let Some(slot) = buckets.get_mut(((t - a).max(0) / 5000) as usize) {
+                    *slot += d;
+                }
+                if t - last >= 3000 {
+                    gaps.push((last - a, t - last));
+                }
+                last = *t;
+            }
+            for w in full.fight_stagger(a, b).into_iter().filter(|w| w.entity == id) {
+                stagger.push(serde_json::json!({"max": w.max, "start": w.start, "end": w.end,
+                                                "result": format!("{:?}", w.result)}));
+            }
+        }
         let mut seen: Vec<i32> = full.get_mob_data().values().copied().collect();
         seen.sort();
         seen.dedup();
@@ -165,6 +199,9 @@ fn main() {
                 "top_id": top,
                 "npcs_seen": seen,
                 "fight_spawns": fight_spawns,
+                "buckets": buckets,
+                "gaps": gaps,
+                "stagger": stagger,
                 "boss_victims": boss_victims,
                 "boss_skills": boss_skills,
                 "targets": targets_of(&full),

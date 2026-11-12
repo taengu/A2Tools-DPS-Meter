@@ -261,7 +261,9 @@ struct BossSign {
 /// fight; codes in at least 30% of one boss's fights and in none of another's)
 /// and checked five-fold, each fight scored by signs learned without it
 /// (2026-11-12): Normal 140 of 160 named right, Hard 75 of 123, none wrong;
-/// the rest name no boss and stay refused.
+/// the rest name no boss and stay refused. Fanatical Urugugu Canyon's bosses
+/// lose their spawn the same way: its tiers 72 of 100, 74 of 100 and 75 of 92,
+/// none wrong.
 const BOSS_SIGNS: &[BossSign] = &[
     // Isolation Specialist Rahu
     BossSign {
@@ -306,6 +308,43 @@ const BOSS_SIGNS: &[BossSign] = &[
             2920770, 2920771, 2920772, 2920793, 2920805, 2920806, 2920810, 2921505,
         ],
     },
+    // Fanatical Urugugu Canyon, its three tiers (the Mau Totem spawns no adds of its own: never named)
+    // Watchdog Kwapo (600091)
+    BossSign {
+        dungeon: 600091,
+        boss: 2310908,
+        adds: &[
+            2920580, 2920581, 2920582, 2920583, 2920728, 2920730, 2920842, 2921150,
+        ],
+    },
+    // Necromancer Duanka (600091)
+    BossSign { dungeon: 600091, boss: 2310909, adds: &[2920589, 2920590, 2920591, 2920598, 2920726, 2920777] },
+    // Ferocious Horn Nuakum (600091)
+    BossSign { dungeon: 600091, boss: 2310910, adds: &[2920603, 2920604] },
+    // Watchdog Kwapo (600092)
+    BossSign { dungeon: 600092, boss: 2300908, adds: &[2920580, 2920581, 2920582, 2920583, 2920607, 2920728, 2921150] },
+    // Necromancer Duanka (600092)
+    BossSign { dungeon: 600092, boss: 2300909, adds: &[2920589, 2920590, 2920591, 2920592, 2920598, 2920726, 2920777] },
+    // Ferocious Horn Nuakum (600092)
+    BossSign { dungeon: 600092, boss: 2300910, adds: &[2920400, 2920601, 2920603, 2920604, 2920605] },
+    // Watchdog Kwapo (600093)
+    BossSign {
+        dungeon: 600093,
+        boss: 2320908,
+        adds: &[
+            2920580, 2920581, 2920582, 2920583, 2920607, 2920728, 2920842, 2921150,
+        ],
+    },
+    // Necromancer Duanka (600093)
+    BossSign {
+        dungeon: 600093,
+        boss: 2320909,
+        adds: &[
+            2920589, 2920590, 2920591, 2920592, 2920593, 2920598, 2920631, 2920726, 2920777,
+        ],
+    },
+    // Ferocious Horn Nuakum (600093)
+    BossSign { dungeon: 600093, boss: 2320910, adds: &[2920400, 2920601, 2920602, 2920603, 2920604] },
 ];
 /// Codes of a boss's sign that must be seen, and the least fight length.
 const SIGN_MIN_ADDS: usize = 2;
