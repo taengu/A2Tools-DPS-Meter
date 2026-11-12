@@ -16,7 +16,7 @@ use a2tools_dps_meter_lib::capture::evidence_slice;
 use a2tools_dps_meter_lib::capture::stream_processor::StreamProcessor;
 use a2tools_dps_meter_lib::combat::data_storage::DataStorage;
 use a2tools_dps_meter_lib::i18n::lookup::{NpcLookup, SkillLookup};
-use a2tools_dps_meter_lib::rederive::{derive_decoded_with, Tables};
+use a2tools_dps_meter_lib::rederive::{derive_decoded_claiming, Claim, Tables};
 
 const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/data/");
 
@@ -57,8 +57,13 @@ fn main() {
             continue;
         };
         let records = &decoded.0;
-        let derive = match derive_decoded_with(&decoded, &tables) {
-            Ok(f) => serde_json::json!({"ok": true, "mob": f.record.mob_code, "by_adds": f.checks.boss_named_by_adds}),
+        // A2_CLAIM "mob:dungeon": the claim a meter's sweep would send.
+        let claim = std::env::var("A2_CLAIM").ok().and_then(|v| {
+            let (m, d) = v.split_once(':')?;
+            Some(Claim { mob: m.parse().ok()?, dungeon: d.parse().ok()? })
+        });
+        let derive = match derive_decoded_claiming(&decoded, &tables, claim) {
+            Ok(f) => serde_json::json!({"ok": true, "mob": f.record.mob_code, "by_adds": f.checks.boss_named_by_adds, "by_client": f.checks.boss_named_by_client}),
             Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
         };
 

@@ -242,6 +242,11 @@ pub struct SliceChecks {
     /// so every other fight's checks are unchanged.
     #[serde(default, skip_serializing_if = "is_false")]
     pub boss_named_by_adds: bool,
+    /// The slice had no spawn for the boss, which was named by the boss the
+    /// uploader's meter saw (`Claim`, `claimed_boss`), as nothing in the
+    /// slice contradicted it. Written only when true.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub boss_named_by_client: bool,
     /// The dungeon's clear (`00 61` state 3, sent as its final boss dies)
     /// came this many ms after the fight's last hit (negative: before), when
     /// one came within `CLEAR_WINDOW_MS` of it. `killed` is then true even
@@ -1117,8 +1122,24 @@ pub fn derive_decoded(
 
 /// `derive_decoded` with the tables already parsed.
 pub fn derive_decoded_with(decoded: &Decoded, tables: &Tables) -> Result<DerivedFight, DeriveError> {
+    derive_decoded_claiming(decoded, tables, None)
+}
+
+/// The boss and dungeon the uploader's meter saw for a fight, sent with it
+/// when it is sent again because the slice alone named none (the meter's
+/// sweep of refused fights). Used only when nothing else names the boss, and
+/// only if the slice does not contradict it (`claimed_boss`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Claim {
+    pub mob: i32,
+    pub dungeon: i32,
+}
+
+/// `derive_decoded_with`, with the meter's `claim` for when nothing else
+/// names the boss.
+pub fn derive_decoded_claiming(decoded: &Decoded, tables: &Tables, claim: Option<Claim>) -> Result<DerivedFight, DeriveError> {
     derive_fight_with(decoded, tables, true, false, false)
-        .or_else(|e| when_nothing_derived(decoded, tables, e, false))
+        .or_else(|e| when_nothing_derived(decoded, tables, e, false, claim))
         .map(|(fight, _, _)| fight)
 }
 
@@ -1126,8 +1147,18 @@ pub fn derive_decoded_with(decoded: &Decoded, tables: &Tables) -> Result<Derived
 /// same replay with `DataStorage::set_on_hit` watching, so the hits are the
 /// ones the record was summed from, filed on the record's own rows.
 pub fn derive_hits_with(decoded: &Decoded, tables: &Tables) -> Result<(DerivedFight, FightHits), DeriveError> {
+    derive_hits_claiming(decoded, tables, None)
+}
+
+/// `derive_hits_with`, with the meter's `claim` (`derive_decoded_claiming`):
+/// a log stored on one is derived again with it.
+pub fn derive_hits_claiming(
+    decoded: &Decoded,
+    tables: &Tables,
+    claim: Option<Claim>,
+) -> Result<(DerivedFight, FightHits), DeriveError> {
     derive_fight_with(decoded, tables, true, false, true)
-        .or_else(|e| when_nothing_derived(decoded, tables, e, true))
+        .or_else(|e| when_nothing_derived(decoded, tables, e, true, claim))
         .map(|(fight, _, hits)| (fight, hits.unwrap_or_default()))
 }
 
@@ -1144,12 +1175,14 @@ pub fn derive_hits_with(decoded: &Decoded, tables: &Tables) -> Result<(DerivedFi
 ///    tried only without one, or when the zone changed in the slice (the
 ///    derive stops short of that, and the zone after may not be the fight's).
 /// 2. The boss named by the adds spawned during the fight (`boss_from_adds`).
-/// 3. Else whether the fight was too short (`short_boss_fight`).
+/// 3. The boss the uploader's meter saw, when it sent one (`claimed_boss`).
+/// 4. Else whether the fight was too short (`short_boss_fight`).
 fn when_nothing_derived(
     decoded: &Decoded,
     tables: &Tables,
     error: DeriveError,
     collect_hits: bool,
+    claim: Option<Claim>,
 ) -> Result<(DerivedFight, i64, Option<FightHits>), DeriveError> {
     if !matches!(error, DeriveError::NothingDerived) {
         return Err(error);
@@ -1161,11 +1194,87 @@ fn when_nothing_derived(
             other => return other,
         }
     }
-    match boss_from_adds(decoded, tables, &all) {
-        Some(assume) => derive_fight_assuming(decoded, tables, true, true, collect_hits, Some(assume)),
-        None if short_boss_fight(&all, tables) => Err(DeriveError::ShortFight),
-        None => Err(error),
+    if let Some((entity, code)) = boss_from_adds(decoded, tables, &all) {
+        return derive_fight_assuming(decoded, tables, true, true, collect_hits, Some((entity, code, Named::Adds)));
     }
+    if let Some((entity, code)) = claim.and_then(|c| claimed_boss(decoded, tables, &all, c)) {
+        return derive_fight_assuming(decoded, tables, true, true, collect_hits, Some((entity, code, Named::Client)));
+    }
+    if short_boss_fight(&all, tables) {
+        return Err(DeriveError::ShortFight);
+    }
+    Err(error)
+}
+
+/// What named a boss whose spawn the slice lacks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Named {
+    Adds,
+    Client,
+}
+
+/// The most damaged target, (entity, first hit, last hit), when it has no
+/// spawn (no NPC code) and was fought for at least `min_ms`.
+fn anonymous_top(all: &DataStorage, min_ms: i64) -> Option<(i32, i64, i64)> {
+    let combat = all.get_combat_snapshot_light();
+    let top = combat
+        .values()
+        .filter(|t| t.total_damage > 0)
+        .max_by_key(|t| (t.total_damage, std::cmp::Reverse(t.target_id)))?;
+    let (target, first, last) = (top.target_id, top.first_damage_time, top.last_damage_time);
+    (all.mob_code(target).is_none() && last - first >= min_ms).then_some((target, first, last))
+}
+
+/// The NPC codes that spawned between `first` and `last` (one replay, to
+/// the last hit).
+fn fight_spawns(decoded: &Decoded, tables: &Tables, first: i64, last: i64) -> Option<std::collections::HashSet<i32>> {
+    let records = &decoded.0;
+    let start = records.iter().position(|(dt, _)| *dt as i64 >= first)?;
+    let end = records.iter().skip(start).position(|(dt, _)| *dt as i64 > last).map_or(records.len(), |n| start + n);
+    let (to_end, before, _) = replay_until(decoded, tables, end, Some(start));
+    Some(
+        to_end
+            .get_mob_data()
+            .into_iter()
+            .filter(|(id, _)| !before.contains(id))
+            .map(|(_, code)| code)
+            .collect(),
+    )
+}
+
+/// (entity, boss code) for the uploader's meter's `claim`, when nothing in
+/// the slice says otherwise: a boss of the claimed dungeon (as the NPC table
+/// has it, when it says), the slice's own dungeon that one or none, the most
+/// damaged target without a spawn and fought for at least BOSS_FIGHT_MIN_MS
+/// (SIGN_MIN_FIGHT_MS in a slice with no dungeon), and none of another boss's adds (`BOSS_SIGNS`) spawned during the fight.
+/// The site keeps such a log off the boards unless its kill shows: a death
+/// or clear in the slice, and damage of at least the boss's known health, so
+/// a claim alone ranks nothing.
+fn claimed_boss(decoded: &Decoded, tables: &Tables, all: &DataStorage, claim: Claim) -> Option<(i32, i32)> {
+    let npcs = &tables.npcs;
+    if claim.dungeon <= 0 || !npcs.is_boss(claim.mob) || npcs.is_training_dummy(claim.mob) {
+        return None;
+    }
+    if npcs.dungeon_of(claim.mob).is_some_and(|d| d != claim.dungeon) {
+        return None;
+    }
+    let own = all.current_dungeon_id();
+    if own > 0 && own != claim.dungeon {
+        return None;
+    }
+    // A slice with no dungeon of its own says least: then the fight must be
+    // as long as the add rule asks (SIGN_MIN_FIGHT_MS), not just a boss
+    // fight's least.
+    let (target, first, last) = anonymous_top(all, if own > 0 { BOSS_FIGHT_MIN_MS } else { SIGN_MIN_FIGHT_MS })?;
+    let others: Vec<&BossSign> =
+        BOSS_SIGNS.iter().filter(|s| s.dungeon == claim.dungeon && s.boss != claim.mob).collect();
+    if !others.is_empty() {
+        let spawned = fight_spawns(decoded, tables, first, last)?;
+        if others.iter().any(|s| s.adds.iter().any(|c| spawned.contains(c))) {
+            return None;
+        }
+    }
+    Some((target, claim.mob))
 }
 
 /// The storage after the slice's first `upto` records; with `mark`, the NPC
@@ -1239,32 +1348,13 @@ fn short_boss_fight(all: &DataStorage, tables: &Tables) -> bool {
 /// the whole slice replayed; the spawns during the fight take one more
 /// replay, to its last hit.
 pub fn boss_from_adds(decoded: &Decoded, tables: &Tables, all: &DataStorage) -> Option<(i32, i32)> {
-    let records = &decoded.0;
     let signs: Vec<&BossSign> = BOSS_SIGNS.iter().filter(|s| s.dungeon == all.current_dungeon_id()).collect();
     if signs.is_empty() {
         return None;
     }
-    let (target, first, last) = {
-        let combat = all.get_combat_snapshot_light();
-        let top = combat
-            .values()
-            .filter(|t| t.total_damage > 0)
-            .max_by_key(|t| (t.total_damage, std::cmp::Reverse(t.target_id)))?;
-        (top.target_id, top.first_damage_time, top.last_damage_time)
-    };
-    if all.mob_code(target).is_some() || last - first < SIGN_MIN_FIGHT_MS {
-        return None;
-    }
+    let (target, first, last) = anonymous_top(all, SIGN_MIN_FIGHT_MS)?;
     // The NPCs that spawned between the first hit and the last.
-    let start = records.iter().position(|(dt, _)| *dt as i64 >= first)?;
-    let end = records.iter().skip(start).position(|(dt, _)| *dt as i64 > last).map_or(records.len(), |n| start + n);
-    let (to_end, before, _) = replay_until(decoded, tables, end, Some(start));
-    let spawned: std::collections::HashSet<i32> = to_end
-        .get_mob_data()
-        .into_iter()
-        .filter(|(id, _)| !before.contains(id))
-        .map(|(_, code)| code)
-        .collect();
+    let spawned = fight_spawns(decoded, tables, first, last)?;
     let seen = |s: &BossSign| s.adds.iter().filter(|c| spawned.contains(c)).count();
     let mut named = signs.iter().filter(|s| seen(s) >= SIGN_MIN_ADDS);
     let boss = named.next()?;
@@ -1318,15 +1408,16 @@ fn derive_fight_with(
     derive_fight_assuming(decoded, tables, hide, every_fight, collect_hits, None)
 }
 
-/// `derive_fight_with`, with `assume` = (entity, NPC code) taken as that
-/// entity's spawn when the slice has none (`boss_from_adds`).
+/// `derive_fight_with`, with `assume` = (entity, NPC code, what named it)
+/// taken as that entity's spawn when the slice has none (`boss_from_adds`,
+/// `claimed_boss`).
 fn derive_fight_assuming(
     decoded: &Decoded,
     tables: &Tables,
     hide: bool,
     every_fight: bool,
     collect_hits: bool,
-    assume: Option<(i32, i32)>,
+    assume: Option<(i32, i32, Named)>,
 ) -> Result<(DerivedFight, i64, Option<FightHits>), DeriveError> {
     let (records, blind_map) = (&decoded.0, decoded.1.clone());
     let (npcs, skills, dot_ids) = (&tables.npcs, &tables.skills, &tables.dot_ids);
@@ -1371,7 +1462,7 @@ fn derive_fight_assuming(
     if let Some(n) = reset_at {
         (storage, processor, _, seen) = replay(n);
     }
-    if let Some((entity, code)) = assume {
+    if let Some((entity, code, _)) = assume {
         storage.append_mob(entity, code);
     }
     // Keep the clock pinned through the snapshot. It asks for "now" to decide
@@ -1432,7 +1523,8 @@ fn derive_fight_assuming(
         lifted,
         bundles,
         killed: dead.contains(&record.target_id) || cleared_after_ms.is_some(),
-        boss_named_by_adds: assume.is_some(),
+        boss_named_by_adds: assume.is_some_and(|a| a.2 == Named::Adds),
+        boss_named_by_client: assume.is_some_and(|a| a.2 == Named::Client),
         cleared_after_ms,
         max_hp: record.details.max_hp as i64,
         damage: on_target,

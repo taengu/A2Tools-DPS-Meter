@@ -12,7 +12,7 @@
 //! anyone with the slice and the published source.
 
 use a2tools_dps_meter_lib::capture::evidence_slice;
-use a2tools_dps_meter_lib::rederive::{derive_decoded_with, derive_hits_with, Decoded, DeriveError, Tables};
+use a2tools_dps_meter_lib::rederive::{derive_decoded_claiming, derive_hits_claiming, Claim, Decoded, DeriveError, Tables};
 use flate2::read::GzDecoder;
 use futures_util::{Stream, StreamExt};
 use ruzstd::decoding::StreamingDecoder;
@@ -131,10 +131,21 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .and_then(|raw| serde_json::from_slice(&raw).ok())
         .unwrap_or_default();
 
+    // The boss and dungeon the uploader's meter saw ("mob:dungeon"), sent with
+    // a fight sent again because its slice alone named none: used only when
+    // nothing else names the boss (rederive::claimed_boss).
+    let claim = req
+        .headers()
+        .get("x-a2-claim")?
+        .and_then(|h| {
+            let (mob, dungeon) = h.trim().split_once(':')?;
+            Some(Claim { mob: mob.parse().ok()?, dungeon: dungeon.parse().ok()? })
+        });
+
     // The fight's every hit (`FightHits`), from the same replay as its
     // record: asked for when a tool wants a log's hits, never at upload.
     if hits {
-        return match derive_hits_with(&decoded, &TABLES) {
+        return match derive_hits_claiming(&decoded, &TABLES, claim) {
             Ok((fight, hits)) => Response::from_json(&serde_json::json!({
                 "parserVersion": fight.parser_version,
                 "targetId": fight.record.target_id,
@@ -146,7 +157,7 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         };
     }
 
-    match derive_decoded_with(&decoded, &TABLES) {
+    match derive_decoded_claiming(&decoded, &TABLES, claim) {
         Ok(fight) => {
             let leaked = evidence_slice::leaked_names(&decoded.0, &names);
             let mut json = serde_json::to_value(&fight)?;
