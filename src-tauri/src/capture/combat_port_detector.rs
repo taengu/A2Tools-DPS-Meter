@@ -29,10 +29,12 @@ static ANNOUNCED_AT_MS: AtomicI64 = AtomicI64::new(0);
 /// How long an announcement waits for its connection.
 const ANNOUNCED_FOR_MS: i64 = 60_000;
 
-/// The game is moving to the server on `port`: the Shugo Festival is on a
-/// server of its own (193.202.112.81:13328 on 2026-11-12, from 54141). Its
-/// connection carries no combat, so the signature rate that follows a move
-/// never came, and the meter read nothing of the festival.
+/// The game is moving to another server, `port` being the u16 its move
+/// record names: the Shugo Festival is on a server of its own (193.202.112.81
+/// on 2026-11-12). The meter read nothing of a first festival, and all of a
+/// second one with the capture filters opened for the announcement, though
+/// the festival's connection was on the game's port (54141) both times and
+/// never on the one named (13328).
 pub fn announce_port(port: u16) {
     ANNOUNCED_AT_MS.store(now_ms(), Ordering::Relaxed);
     ANNOUNCED_PORT.store(port as u32, Ordering::Relaxed);
@@ -240,7 +242,7 @@ impl CombatPortDetector {
         if inner.locked_port.is_none() {
             inner.locked_port = Some(port);
             inner.locked_device = device.clone();
-            info!("Combat port locked: {}", port);
+            info!("Combat port locked: {} on {}", port, device.as_deref().unwrap_or("an unnamed device"));
             inner.candidates.clear();
         }
     }

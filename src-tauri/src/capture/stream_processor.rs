@@ -2413,9 +2413,11 @@ pub fn spawn_stagger_gauge(packet: &[u8]) -> Option<(u32, u32)> {
 /// <len> 16 36 <u16> <n u8> <IP, n ASCII bytes> <port u16> <8 bytes>
 /// ```
 ///
-/// Sent once as you entered the Shugo Festival (2026-11-12, Global):
-/// `16 36 ef10 0e "193.202.112.81" 1034 304c45effdbb1850`, port 13328, the
-/// game's connection to 54141 closing right after.
+/// Sent as you enter and leave the Shugo Festival (2026-11-12, Global):
+/// `16 36 ef10 0e "193.202.112.81" 1034 304c45effdbb1850`, the game's
+/// connection closing right after. The u16 after the address was 13328 each
+/// time, yet the new connection was on port 54141 as before: what it is, is
+/// not known.
 #[cfg(any(feature = "desktop", test))]
 fn server_move(packet: &[u8]) -> Option<(String, u16)> {
     let len = read_varint(packet, 0);
