@@ -4,7 +4,7 @@ Meters other than the A2Tools DPS Meter can upload boss fights to
 [a2tools.app](https://a2tools.app). Their logs are stored, get a link to share, and show
 on the uploader's account like any other. To be counted on the leaderboards and in the class
 statistics, a meter version has to pass the conformance check below. Ask in
-**#aion2-dpsmeter** on the [Discord](https://discord.gg/Aion2Global) to get started.
+**#a2tools-app** on the [Discord](https://discord.gg/Aion2Global) to get started.
 
 ## Identify your meter
 

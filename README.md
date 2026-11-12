@@ -132,7 +132,7 @@ A: Reinstall Npcap and ensure "WinPcap API-compatible Mode" is checked during in
 
 ### Building your own meter?
 
-Your meter can upload its logs to [a2tools.app](https://a2tools.app/logs) as well. The site stores them, gives each one a link to share, and puts them on the leaderboard and in its stats. To connect yours, join the [Discord](https://discord.gg/Aion2Global) and post in **#aion2-dpsmeter**.
+Your meter can upload its logs to [a2tools.app](https://a2tools.app/logs) as well. The site stores them, gives each one a link to share, and puts them on the leaderboard and in its stats. To connect yours, join the [Discord](https://discord.gg/Aion2Global) and post in **#a2tools-app**.
 
 ## Support
 
