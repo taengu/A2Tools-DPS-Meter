@@ -311,6 +311,9 @@ impl StreamProcessor {
         self.parse_kinah_and_abyss_points_packet(packet);
         self.parse_stagger_gauge_packet(packet);
         self.parse_self_stats_packet(packet);
+        if let Some(id) = login_record_entity(packet) {
+            self.data_storage.note_login_record(id);
+        }
         self.parse_death_packet(packet);
         self.parse_zone_change_packet(packet);
         self.parse_map_load_packet(packet);
@@ -2397,6 +2400,58 @@ pub fn spawn_stagger_gauge(packet: &[u8]) -> Option<(u32, u32)> {
 /// wrong entity (issue #10). A varint cannot start right after a byte with its
 /// high bit set, since that byte would continue into it, so the candidate not
 /// preceded by one wins; the shortest valid one is only the fallback.
+/// The entity a login record names as you.
+///
+/// `53 20` (`20 36` before the November 2026 patches; Global has it) is sent
+/// once as you enter the world, just before the map load:
+///
+/// ```text
+/// <len> 53 20 <dbid i64> <server start i64> <result u16>
+///       <option data: varint length, bytes>
+///       <skill customizing: varint count, { u32 u32 u8 }*>
+///       <char key varint> <customizing data: varint length, bytes>
+///       <entity varint> ...
+/// ```
+///
+/// The one seen (2026-11-12, Global, 1,730 bytes) ended 4 bytes after the
+/// entity, which the self record 8 s later named as you. A result other than
+/// 0, or a layout that does not end within 8 bytes of the record, names no one.
+fn login_record_entity(packet: &[u8]) -> Option<i32> {
+    let len = read_varint(packet, 0);
+    if len.length <= 0 {
+        return None;
+    }
+    let mut at = len.length as usize;
+    if packet.get(at..at + 2)? != [0x53, 0x20] {
+        return None;
+    }
+    at += 2 + 16;
+    if packet.get(at..at + 2)? != [0, 0] {
+        return None;
+    }
+    at += 2;
+    let next = |at: &mut usize| {
+        let v = read_varint(packet, *at);
+        (v.length > 0 && v.value >= 0).then(|| {
+            *at += v.length as usize;
+            v.value as usize
+        })
+    };
+    let options = next(&mut at)?;
+    at += options;
+    let skills = next(&mut at)?;
+    at = at.checked_add(skills.checked_mul(9)?)?;
+    next(&mut at)?; // char key
+    let customizing = next(&mut at)?;
+    at += customizing;
+    if at > packet.len() {
+        return None;
+    }
+    let id = read_varint(packet, at);
+    let end = at + id.length.max(0) as usize;
+    (id.length > 0 && end <= packet.len() && packet.len() - end <= 8).then_some(id.value)
+}
+
 pub fn varint_ending_at(
     data: &[u8],
     end: usize,
@@ -5159,6 +5214,47 @@ mod tests {
         let s = skill_of(&storage, 33001, 52233, 16330007);
         assert_eq!((s.total_damage, s.hit_count, s.miss_count, s.resist_count), (0, 0, 1, 0));
         assert_eq!(storage.get_combat_snapshot()[&33001].total_damage, 500);
+    }
+
+    /// A login record shaped like the one of 2026-11-12 (Global): 1,347 bytes
+    /// of option data, no skill customizing, char key 4385, 350 bytes of
+    /// customizing data, then entity 15532 (`ac 79`) and 4 bytes more.
+    fn login_record(result: [u8; 2], skills: u8, tail: usize) -> Vec<u8> {
+        let mut body = vec![0x53, 0x20];
+        body.extend(367043369630931093i64.to_le_bytes());
+        body.extend([0; 8]);
+        body.extend(result);
+        body.extend([0xc3, 0x0a]);
+        body.extend(vec![0x11; 1347]);
+        body.push(skills);
+        body.extend(vec![0x22; 9 * skills as usize]);
+        body.extend([0xa1, 0x22]);
+        body.extend([0xde, 0x02]);
+        body.extend(vec![0x33; 350]);
+        body.extend([0xac, 0x79]);
+        body.extend(vec![0; tail]);
+        let len = body.len() as u32 + 2;
+        let mut packet = vec![(len as u8) | 0x80, (len >> 7) as u8];
+        packet.extend(body);
+        packet
+    }
+
+    #[test]
+    fn a_login_record_names_you() {
+        assert_eq!(login_record_entity(&login_record([0, 0], 0, 4)), Some(15532));
+        assert_eq!(login_record_entity(&login_record([0, 0], 2, 0)), Some(15532), "skill entries are skipped");
+        assert_eq!(login_record_entity(&login_record([1, 0], 0, 4)), None, "a failed login");
+        assert_eq!(login_record_entity(&login_record([0, 0], 0, 40)), None, "not the layout");
+        let mut cut = login_record([0, 0], 0, 4);
+        cut.truncate(400);
+        assert_eq!(login_record_entity(&cut), None);
+
+        let storage = Arc::new(DataStorage::new());
+        let mut p = StreamProcessor::new(storage.clone(), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()));
+        storage.set_local_identity_from_game(4451, Some("Naicha".into()));
+        p.parse_perfect_packet(&login_record([0, 0], 0, 4));
+        assert_eq!(storage.local_player_id(), Some(15532));
+        assert_eq!(storage.local_character_name(), None, "the self record names this one");
     }
 
     /// Map loads from a live capture (2026-10-04): into Fire Temple, a

@@ -1447,17 +1447,34 @@ impl DataStorage {
             entity_id,
             inner.local_player_id
         );
-        inner.loot_identity.stats_streak = None;
-        inner.local_player_id = Some(entity_id as i64);
-        inner.loot_identity.local_from_scope = true;
-        inner.loot_identity.local_from_stats = true;
-        inner.loot_identity.applied = false;
-        if inner.local_identity_from_game {
-            // What the game said is about an entity no longer you; the UI's
-            // name may come back, but only as a name, not on this id.
-            inner.local_identity_from_game = false;
-            inner.local_character_name = None;
+        bind_unnamed_self(&mut inner, entity_id);
+        true
+    }
+
+    /// The server's login record (`53 20`) named `entity_id` as you.
+    ///
+    /// It is sent once as you enter the world (login, character switch,
+    /// server transfer), just before the map load: on 2026-11-12 (Global)
+    /// 0.17 s ahead of the `4A 36` records that would have moved you and 8 s
+    /// ahead of the self record. It names no one but you, so one is enough.
+    /// Like the `4A 36` records it carries no name, and the name the game
+    /// last stated may be another character's; the self record that follows
+    /// names this one.
+    /// Returns whether the local identity changed.
+    pub fn note_login_record(&self, entity_id: i32) -> bool {
+        if !(100..=9_999_999).contains(&entity_id) {
+            return false;
         }
+        let mut inner = self.inner.write();
+        if inner.local_player_id == Some(entity_id as i64) {
+            return false;
+        }
+        tracing::info!(
+            "login record: local player -> entity {} (was {:?})",
+            entity_id,
+            inner.local_player_id
+        );
+        bind_unnamed_self(&mut inner, entity_id);
         true
     }
 
@@ -3633,6 +3650,23 @@ fn shop_limits_of(inner: &Inner, now: i64) -> std::collections::BTreeMap<u32, (u
 
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 const WEEK_MS: i64 = 7 * DAY_MS;
+/// You are `entity_id`, by the game's word but without a name: the `4A 36`
+/// records or the login record (`DataStorage::note_self_stats`,
+/// `note_login_record`).
+fn bind_unnamed_self(inner: &mut Inner, entity_id: i32) {
+    inner.loot_identity.stats_streak = None;
+    inner.local_player_id = Some(entity_id as i64);
+    inner.loot_identity.local_from_scope = true;
+    inner.loot_identity.local_from_stats = true;
+    inner.loot_identity.applied = false;
+    if inner.local_identity_from_game {
+        // What the game said is about an entity no longer you; the UI's
+        // name may come back, but only as a name, not on this id.
+        inner.local_identity_from_game = false;
+        inner.local_character_name = None;
+    }
+}
+
 /// How long the Abyss Points the game sent wait for a self record before
 /// they count as the current character's.
 const ABYSS_POINTS_HOLD_MS: i64 = 3_000;
