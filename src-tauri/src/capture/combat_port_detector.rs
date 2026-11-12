@@ -21,6 +21,34 @@ const LOOPBACK_GRACE_MS: i64 = 2500;
 // here while discovery runs. A recently active port keeps its place.
 const MAX_CANDIDATE_PORTS: usize = 16;
 
+/// The port of the server the game said it is moving to (`16 36`, see
+/// `StreamProcessor`), and when (unix ms); 0: none. One meter, one game:
+/// global, as the stream processor that reads it has no detector.
+static ANNOUNCED_PORT: AtomicU32 = AtomicU32::new(0);
+static ANNOUNCED_AT_MS: AtomicI64 = AtomicI64::new(0);
+/// How long an announcement waits for its connection.
+const ANNOUNCED_FOR_MS: i64 = 60_000;
+
+/// The game is moving to the server on `port`: the Shugo Festival is on a
+/// server of its own (193.202.112.81:13328 on 2026-11-12, from 54141). Its
+/// connection carries no combat, so the signature rate that follows a move
+/// never came, and the meter read nothing of the festival.
+pub fn announce_port(port: u16) {
+    ANNOUNCED_AT_MS.store(now_ms(), Ordering::Relaxed);
+    ANNOUNCED_PORT.store(port as u32, Ordering::Relaxed);
+}
+
+/// The port announced in the last `ANNOUNCED_FOR_MS`, if any.
+pub fn announced_port(now: i64) -> Option<u16> {
+    let port = ANNOUNCED_PORT.load(Ordering::Relaxed) as u16;
+    (port != 0 && now - ANNOUNCED_AT_MS.load(Ordering::Relaxed) <= ANNOUNCED_FOR_MS).then_some(port)
+}
+
+/// The announced connection was taken.
+pub fn clear_announced() {
+    ANNOUNCED_PORT.store(0, Ordering::Relaxed);
+}
+
 /// Global combat port detector — identifies which network device and port
 /// carry AION 2 game traffic by looking for the combat signature bytes.
 pub struct CombatPortDetector {

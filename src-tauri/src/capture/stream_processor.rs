@@ -312,6 +312,12 @@ impl StreamProcessor {
         self.parse_kinah_and_abyss_points_packet(packet);
         self.parse_stagger_gauge_packet(packet);
         self.parse_self_stats_packet(packet);
+        // The desktop meter's capture follows it; a replay has nothing to follow.
+        #[cfg(feature = "desktop")]
+        if let Some((ip, port)) = server_move(packet) {
+            tracing::info!("server move: the game goes to {ip}:{port}");
+            crate::capture::combat_port_detector::announce_port(port);
+        }
         if let Some(id) = login_record_entity(packet) {
             self.data_storage.note_login_record(id);
         }
@@ -2401,6 +2407,32 @@ pub fn spawn_stagger_gauge(packet: &[u8]) -> Option<(u32, u32)> {
 /// wrong entity (issue #10). A varint cannot start right after a byte with its
 /// high bit set, since that byte would continue into it, so the candidate not
 /// preceded by one wins; the shortest valid one is only the fallback.
+/// The server the game moves you to, and its port.
+///
+/// ```text
+/// <len> 16 36 <u16> <n u8> <IP, n ASCII bytes> <port u16> <8 bytes>
+/// ```
+///
+/// Sent once as you entered the Shugo Festival (2026-11-12, Global):
+/// `16 36 ef10 0e "193.202.112.81" 1034 304c45effdbb1850`, port 13328, the
+/// game's connection to 54141 closing right after.
+#[cfg(any(feature = "desktop", test))]
+fn server_move(packet: &[u8]) -> Option<(String, u16)> {
+    let len = read_varint(packet, 0);
+    let at = usize::try_from(len.length).ok().filter(|&n| n > 0)?;
+    if packet.get(at..at + 2)? != [0x16, 0x36] {
+        return None;
+    }
+    let n = *packet.get(at + 4)? as usize;
+    let ip = packet.get(at + 5..at + 5 + n)?;
+    if !(7..=15).contains(&n) || !ip.iter().all(|b| b.is_ascii_digit() || *b == b'.') || ip.iter().filter(|b| **b == b'.').count() != 3 {
+        return None;
+    }
+    let p = packet.get(at + 5 + n..at + 7 + n)?;
+    let port = u16::from_le_bytes([p[0], p[1]]);
+    (port != 0).then(|| (String::from_utf8_lossy(ip).into_owned(), port))
+}
+
 /// The entity a login record names as you.
 ///
 /// `53 20` (`20 36` before the November 2026 patches; Global has it) is sent
@@ -5238,6 +5270,15 @@ mod tests {
         let mut packet = vec![(len as u8) | 0x80, (len >> 7) as u8];
         packet.extend(body);
         packet
+    }
+
+    /// The move to the Shugo Festival's server (2026-11-12, Global).
+    #[test]
+    fn a_server_move_names_the_new_server() {
+        let packet = hex("1d1636ef100e3139332e3230322e3131322e38311034304c45effdbb1850");
+        assert_eq!(server_move(&packet), Some(("193.202.112.81".into(), 13328)));
+        assert_eq!(server_move(&hex("1d1636ef100e3139332e3230322e3131322e3831")), None, "cut short");
+        assert_eq!(server_move(&hex("0d1636ef1003616263100000")), None, "not an address");
     }
 
     #[test]

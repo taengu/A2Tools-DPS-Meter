@@ -392,6 +392,18 @@ impl CaptureDispatcher {
                     waiting.clear();
                 }
                 if cap.src_port != port && cap.dst_port != port {
+                    // The server the game announced it is moving to (`16 36`):
+                    // followed at its first packet, with or without combat.
+                    if crate::capture::combat_port_detector::announced_port(now) == Some(cap.src_port) {
+                        info!("Following the game to the server it announced: port {}", cap.src_port);
+                        crate::capture::combat_port_detector::clear_announced();
+                        self.port_detector.move_port(cap.src_port);
+                        assemblers.clear();
+                        sig_hits.clear();
+                        waiting.clear();
+                        replay.push_front(cap);
+                        continue;
+                    }
                     let quiet = self.port_detector.port_quiet_ms(now).is_some_and(|q| q >= PORT_MOVE_QUIET_MS);
                     if !quiet {
                         continue;
