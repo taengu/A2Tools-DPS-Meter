@@ -601,6 +601,19 @@ pub struct SliceMeta {
     /// retry cannot fix, or the retries ran out. The History button still works.
     #[serde(default)]
     pub gave_up: bool,
+    /// The service's code for its last refusal of this fight (`no_fight`:
+    /// "The slice contains no boss fight."). Kept from 2.0.98 on; cleared by
+    /// an upload that goes through.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refused: Option<String>,
+    /// The fight was sent again once with the boss this meter saw
+    /// (`claim_sweep`), whatever the answer: it is never sent so again.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub claim_swept: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// The real uploader name of each fight this PC uploaded, for a guest's
@@ -948,18 +961,20 @@ pub struct UploadFailure {
     pub retryable: bool,
     /// The keyring did not hand over the token. Retried for as long as it takes.
     pub keyring_locked: bool,
+    /// The service's error code, when it refused the fight (`no_fight`, ...).
+    pub code: Option<String>,
 }
 
 #[cfg(feature = "online")]
 impl UploadFailure {
     fn retry(message: impl Into<String>) -> Self {
-        Self { message: message.into(), retryable: true, keyring_locked: false }
+        Self { message: message.into(), retryable: true, keyring_locked: false, code: None }
     }
     fn fatal(message: impl Into<String>) -> Self {
-        Self { message: message.into(), retryable: false, keyring_locked: false }
+        Self { message: message.into(), retryable: false, keyring_locked: false, code: None }
     }
     fn locked(message: impl Into<String>) -> Self {
-        Self { message: message.into(), retryable: true, keyring_locked: true }
+        Self { message: message.into(), retryable: true, keyring_locked: true, code: None }
     }
 }
 
@@ -978,6 +993,27 @@ pub async fn upload_detailed(
     app_data_dir: &Path,
     record: &FightRecord,
     settings: &crate::config::settings::Settings,
+) -> Result<UploadResult, UploadFailure> {
+    upload_claiming(client, app_data_dir, record, settings, None).await
+}
+
+/// The boss this meter saw in a fight, sent with it when its slice names
+/// none (`claim_sweep`): the service takes it only when nothing in the slice
+/// names a boss and nothing contradicts it (log service `derive_decoded_claiming`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Claim {
+    pub mob: i32,
+    pub dungeon: i32,
+}
+
+#[cfg(feature = "online")]
+/// `upload_detailed`, with the boss this meter saw when `claim` is given.
+pub async fn upload_claiming(
+    client: &reqwest::Client,
+    app_data_dir: &Path,
+    record: &FightRecord,
+    settings: &crate::config::settings::Settings,
+    claim: Option<Claim>,
 ) -> Result<UploadResult, UploadFailure> {
     if !is_instanced(record) {
         return Err(UploadFailure::fatal("Only dungeon fights are shared as logs."));
@@ -1000,6 +1036,7 @@ pub async fn upload_detailed(
                 message: e.message,
                 retryable: e.retryable,
                 keyring_locked: false,
+                code: None,
             })?
         }
         crate::account::secret::Stored::Missing => {
@@ -1036,7 +1073,7 @@ pub async fn upload_detailed(
             (a.actor_id.to_string(), name)
         })
         .collect();
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "slice": base64(&compressed),
         "names": names,
         "uploaderActorId": meta.uploader_actor_id,
@@ -1048,6 +1085,9 @@ pub async fn upload_detailed(
         "uiLanguage": ui_language(settings),
         "utcOffsetMinutes": chrono::Local::now().offset().local_minus_utc() / 60,
     });
+    if let Some(claim) = claim {
+        body["claim"] = claim_json(claim);
+    }
 
     let response = client
         .post(format!("{}/api/logs", crate::account::base_url()))
@@ -1069,6 +1109,7 @@ pub async fn upload_detailed(
         update_meta(app_data_dir, &record.id, |meta| {
             meta.url = Some(result.url.clone());
             meta.visibility = Some(result.visibility.clone());
+            meta.refused = None;
         });
         return Ok(result);
     }
@@ -1105,7 +1146,63 @@ pub async fn upload_detailed(
     // A server that is down, busy or rate limiting may take it later; one that
     // refused the fight, or the sign-in, will refuse it again.
     let retryable = code == 408 || code == 429 || status.is_server_error();
-    Err(UploadFailure { message, retryable, keyring_locked: false })
+    // Why the service refused the fight, kept: the claim sweep looks for
+    // `no_fight` (one with no boss in its slice).
+    let refusal = reply.get("error").and_then(|e| e.as_str()).map(str::to_string);
+    if !retryable && code != 401 && code != 403 {
+        if let Some(refusal) = &refusal {
+            update_meta(app_data_dir, &record.id, |meta| meta.refused = Some(refusal.clone()));
+        }
+    }
+    Err(UploadFailure { message, retryable, keyring_locked: false, code: refusal })
+}
+
+/// The service's code for a fight whose slice holds no boss fight.
+pub const NO_FIGHT: &str = "no_fight";
+
+/// `"claim": {"mob", "dungeon"}` in an upload.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+fn claim_json(claim: Claim) -> serde_json::Value {
+    serde_json::json!({ "mob": claim.mob, "dungeon": claim.dungeon })
+}
+
+/// The fights to send again once with the boss this meter saw (2.0.98 on):
+/// refused for no boss fight (`no_fight`), or, refused before the meter kept
+/// why, left by the automatic upload with no log; never sent so yet; their
+/// slice still on disk; a dungeon's (never the open world's) and a boss's
+/// fight, not a training dummy's. `record_of` loads a saved fight, `is_boss`
+/// says whether an NPC is a boss.
+pub fn claim_sweep_candidates(
+    app_data_dir: &Path,
+    record_of: impl Fn(&str) -> Option<FightRecord>,
+    is_boss: impl Fn(i32) -> bool,
+) -> Vec<(String, Claim)> {
+    let Ok(rd) = std::fs::read_dir(slices_dir(app_data_dir)) else { return Vec::new() };
+    let mut ids: Vec<String> = rd
+        .filter_map(|e| e.ok())
+        .filter_map(|e| e.file_name().to_string_lossy().strip_suffix(".json").map(str::to_string))
+        .collect();
+    ids.sort();
+    ids.into_iter()
+        .filter_map(|id| {
+            let meta = read_meta(app_data_dir, &id);
+            let refused = match meta.refused.as_deref() {
+                Some(code) => code == NO_FIGHT,
+                None => meta.gave_up,
+            };
+            if meta.url.is_some() || meta.claim_swept || !refused || !slice_path(app_data_dir, &id).exists() {
+                return None;
+            }
+            let record = record_of(&id)?;
+            (!record.is_train && record.dungeon_id > 0 && record.mob_code > 0 && is_boss(record.mob_code))
+                .then(|| (id, Claim { mob: record.mob_code, dungeon: record.dungeon_id }))
+        })
+        .collect()
+}
+
+/// The claim sweep sent `id` again (whatever the answer): never again.
+pub fn note_claim_swept(app_data_dir: &Path, id: &str) {
+    update_meta(app_data_dir, id, |meta| meta.claim_swept = true);
 }
 
 /// Standard base64. Small enough that a dependency is not worth having.
@@ -1185,6 +1282,46 @@ mod upload_tests {
         write_meta(&dir, "f2", &SliceMeta::default());
         note_auto_upload_failure(&dir, "f2", &UploadFailure::fatal("refused"), t);
         assert!(read_meta(&dir, "f2").gave_up, "a refused fight is not retried");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The claim sweep sends a fight refused for no boss fight once, with its
+    /// boss and dungeon; not one of the open world, a training dummy's, one
+    /// with no slice, one refused for something else, nor one already swept.
+    #[test]
+    fn the_claim_sweep_sends_each_refused_boss_fight_once() {
+        let dir = std::env::temp_dir().join(format!("a2t-claim-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(slices_dir(&dir)).unwrap();
+        let refused = |id: &str, code: Option<&str>, slice: bool| {
+            if slice {
+                std::fs::write(slice_path(&dir, id), b"slice").unwrap();
+            }
+            write_meta(&dir, id, &SliceMeta { gave_up: true, refused: code.map(str::to_string), ..Default::default() });
+        };
+        refused("a-boss", Some(NO_FIGHT), true);
+        refused("b-open-world", Some(NO_FIGHT), true);
+        refused("c-dummy", Some(NO_FIGHT), true);
+        refused("d-no-slice", Some(NO_FIGHT), false);
+        refused("e-short", Some("short_fight"), true);
+        refused("f-old", None, true);
+        refused("g-not-a-boss", Some(NO_FIGHT), true);
+        let record_of = |id: &str| {
+            let mut r = fight(id, 0, 60_000, id == "c-dummy");
+            r.mob_code = if id == "g-not-a-boss" { 2_000_001 } else { 2_301_014 };
+            r.dungeon_id = if id == "b-open-world" { 0 } else { 600_082 };
+            Some(r)
+        };
+        let is_boss = |code: i32| code == 2_301_014;
+        let claim = Claim { mob: 2_301_014, dungeon: 600_082 };
+        let picked = claim_sweep_candidates(&dir, record_of, is_boss);
+        assert_eq!(picked, vec![("a-boss".to_string(), claim), ("f-old".to_string(), claim)],
+            "refused for no boss fight, or before the reason was kept");
+        assert_eq!(claim_json(claim), serde_json::json!({"mob": 2_301_014, "dungeon": 600_082}));
+
+        note_claim_swept(&dir, "a-boss");
+        note_claim_swept(&dir, "f-old");
+        assert!(claim_sweep_candidates(&dir, record_of, is_boss).is_empty(), "once each");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

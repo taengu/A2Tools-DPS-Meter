@@ -739,6 +739,58 @@ impl Drop for InFlight {
     }
 }
 
+#[cfg(feature = "online")]
+/// Send again, once each, the fights the service refused for having no boss
+/// in their slice, with the boss this meter saw (`share::claim_sweep_candidates`):
+/// mostly Ludra's, refused before the meter kept spawns (2.0.98). Under the
+/// automatic upload's rules, one every few seconds. A fight the service
+/// answers is marked whatever the answer; one that could not reach it
+/// (offline, a locked keyring) ends the sweep unmarked, for the next start.
+async fn claim_sweep(app: tauri::AppHandle) {
+    const PACE: Duration = Duration::from_secs(5);
+    let Some(state) = app.try_state::<AppState>() else { return };
+    if !share::auto_uploads(&state.settings) {
+        return;
+    }
+    let dir = state.app_data_dir.clone();
+    let npcs = state.npc_lookup.clone();
+    let candidates = tauri::async_runtime::spawn_blocking(move || {
+        let history = crate::history::fight_history::FightHistoryManager::new(dir.clone());
+        share::claim_sweep_candidates(&dir, |id| history.load_fight(id).ok(), |code| npcs.is_boss(code))
+    })
+    .await
+    .unwrap_or_default();
+    if candidates.is_empty() {
+        return;
+    }
+    tracing::info!("Claim sweep: {} refused fight(s) to send again with their boss", candidates.len());
+    for (id, claim) in candidates {
+        if !share::auto_uploads(&state.settings) {
+            break;
+        }
+        let Some(_in_flight) = InFlight::start(&id) else { continue };
+        let Ok(record) = state.fight_history.load_fight(&id) else { continue };
+        match share::upload_claiming(&state.http, &state.app_data_dir, &record, &state.settings, Some(claim)).await {
+            Ok(result) => {
+                share::note_claim_swept(&state.app_data_dir, &id);
+                tracing::info!("Claim sweep: {id} ({} in {}) -> {}", claim.mob, claim.dungeon, result.url);
+                let _ = app.emit("fight-uploaded", serde_json::json!({
+                    "fightId": id, "url": result.url, "visibility": result.visibility,
+                }));
+            }
+            Err(failure) if failure.keyring_locked || (failure.retryable && failure.code.is_none()) => {
+                tracing::info!("Claim sweep stopped at {id}, for the next start: {}", failure.message);
+                break;
+            }
+            Err(failure) => {
+                share::note_claim_swept(&state.app_data_dir, &id);
+                tracing::info!("Claim sweep: {id} refused again: {}", failure.message);
+            }
+        }
+        tokio::time::sleep(PACE).await;
+    }
+}
+
 /// Which fights have a slice to upload, and which already have a link.
 #[tauri::command]
 async fn share_status(
@@ -4518,6 +4570,17 @@ pub fn run() {
                     }
                 }
             });
+
+            // Fights refused for having no boss, sent once more with the boss
+            // this meter saw, once the start has settled.
+            #[cfg(feature = "online")]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(90)).await;
+                    claim_sweep(handle).await;
+                });
+            }
 
             // One blocking history job at a time; disk/JSON work never runs
             // on Tokio's cooperative workers. The next tick waits for completion.
