@@ -509,6 +509,9 @@ fn push_boss_event(inner: &mut Inner, event: BossEvent) {
     }
 }
 
+/// Spawn records kept for slices at most (`DataStorage::spawn_ledger`).
+const SPAWN_LEDGER_CAP: usize = 4_096;
+
 /// See `DataStorage::set_on_hit`.
 type HitHook = Arc<dyn Fn(&ParsedDamagePacket) + Send + Sync>;
 
@@ -536,6 +539,12 @@ pub struct DataStorage {
     /// lock, as `abnormals`: fed by its own records, read when a fight is
     /// saved.
     stagger: Mutex<StaggerLog>,
+    /// The latest spawn record (`41 36`, framed) of each entity since the last
+    /// map load, with its capture time: for slices. A boss spawns when the
+    /// party enters; one pulled more than the slice's prelude after that
+    /// (Ludra's runs last up to two hours) had no spawn in its slice, so the
+    /// log service found no boss and refused it (~4,000 a week, 2026-11).
+    spawn_ledger: Mutex<HashMap<i32, (i64, Vec<u8>)>>,
     /// Who killed you (see `combat::death_recap`). Its own lock, as
     /// `stagger`.
     death_recaps: Mutex<DeathRecaps>,
@@ -935,6 +944,7 @@ impl DataStorage {
             on_hit: RwLock::new(None),
             abnormals: Mutex::new(AbnormalLog { timeline: abnormal::Timeline::default(), pruned_ms: NEVER_MS }),
             stagger: Mutex::new(StaggerLog::default()),
+            spawn_ledger: Mutex::new(HashMap::new()),
             death_recaps: Mutex::new(DeathRecaps::default()),
             loot_rolls: Mutex::new(Default::default()),
             black_markets: Mutex::new(Default::default()),
@@ -976,6 +986,35 @@ impl DataStorage {
     /// start, the changes in it), for its record.
     pub fn fight_stats(&self, start_ms: i64, end_ms: i64) -> Option<abnormal::FightStats> {
         self.abnormals.lock().timeline.fight_stats(start_ms, end_ms)
+    }
+
+    /// A framed spawn record (`41 36 <entity> ...`), kept as the entity's
+    /// latest for slices (`spawn_ledger`).
+    pub fn note_spawn_packet(&self, packet: &[u8]) {
+        let len = crate::capture::stream_processor::read_varint(packet, 0);
+        let Ok(at) = usize::try_from(len.length) else { return };
+        if at == 0 || packet.get(at..at + 2) != Some(&[0x41, 0x36][..]) {
+            return;
+        }
+        let entity = crate::capture::stream_processor::read_varint(packet, at + 2);
+        if entity.length <= 0 {
+            return;
+        }
+        let mut ledger = self.spawn_ledger.lock();
+        if ledger.len() >= SPAWN_LEDGER_CAP && !ledger.contains_key(&entity.value) {
+            // The oldest goes: a zone holds a few hundred at most.
+            if let Some(&oldest) = ledger.iter().min_by_key(|(_, (ms, _))| *ms).map(|(id, _)| id) {
+                ledger.remove(&oldest);
+            }
+        }
+        ledger.insert(entity.value, (now_ms(), packet.to_vec()));
+    }
+
+    /// The spawn records kept since the last map load, oldest first.
+    pub fn spawn_packets(&self) -> Vec<(i64, Vec<u8>)> {
+        let mut out: Vec<(i64, Vec<u8>)> = self.spawn_ledger.lock().values().cloned().collect();
+        out.sort_by_key(|(ms, _)| *ms);
+        out
     }
 
     /// The stat records to put in a slice: the last whole sheet and the
@@ -2759,6 +2798,8 @@ impl DataStorage {
     /// A zone load named the map it loads (`21 36`). The map, once known, is
     /// what says where the player is; see `dungeon_of_map`.
     pub fn note_map_load(&self, map_id: i32) {
+        // A load hands out new entity ids: the spawns kept are of the old ones.
+        self.spawn_ledger.lock().clear();
         let mut inner = self.inner.write();
         // A load hands out new entity ids: counts of the old ones would name
         // an entity that is gone.

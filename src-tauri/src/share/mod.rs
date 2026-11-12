@@ -34,7 +34,7 @@ use sha2::{Digest, Sha256};
 
 use crate::capture::evidence_slice::{self, CapturedPacket, NameMap};
 
-/// The stream your pinned stat records go into a slice on: whole packets,
+/// The stream your pinned stat records and spawns go into a slice on: whole packets,
 /// apart from the game's streams so neither cuts into the other. Port 0 is
 /// no real connection's.
 const STAT_STREAM: &str = "Client:0:0";
@@ -695,6 +695,9 @@ pub struct SliceNames {
     /// Your stat records (`DataStorage::stat_packets`): the login sheet is
     /// usually older than the packets held in memory.
     stat_packets: Vec<(i64, Vec<u8>)>,
+    /// The spawn records since the last map load (`DataStorage::spawn_packets`):
+    /// a boss spawns when the party enters, often before what is held.
+    spawn_packets: Vec<(i64, Vec<u8>)>,
 }
 
 impl SliceNames {
@@ -704,6 +707,7 @@ impl SliceNames {
             local_id: storage.local_player_id(),
             local_name: storage.local_character_name(),
             stat_packets: storage.stat_packets(),
+            spawn_packets: storage.spawn_packets(),
         }
     }
 }
@@ -724,15 +728,18 @@ pub fn save_slice(
     if !covers(&held, start, start + record.duration_ms) {
         return Err("no packets in memory for this fight".into());
     }
-    // Your stat records from before what is held, each a whole packet on a
-    // stream of its own, ahead of it; the ones still held come with it.
+    // Your stat records and the zone's spawns from before what is held, each
+    // a whole packet on a stream of its own, in time order ahead of it; the
+    // ones still held come with it.
     let oldest = held.first().map_or(i64::MAX, |p| p.captured_at_ms);
     let mut packets: Vec<CapturedPacket> = names
         .stat_packets
         .iter()
+        .chain(&names.spawn_packets)
         .filter(|(at, _)| *at < oldest)
         .map(|(at, bytes)| CapturedPacket { captured_at_ms: *at, stream: STAT_STREAM.into(), bytes: bytes.clone() })
         .collect();
+    packets.sort_by_key(|p| p.captured_at_ms);
     packets.extend(held);
     let mut slice =
         evidence_slice::build(&packets, start, start + record.duration_ms, &names.names, slice_key()?)

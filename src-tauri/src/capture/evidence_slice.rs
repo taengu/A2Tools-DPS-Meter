@@ -273,6 +273,21 @@ pub const ALLOWED_OPCODES: &[(&[u8; 2], &str)] = &[
     (&[0x49, 0x36], "own stats, the whole sheet"),
 ];
 
+/// The entity a framed record names first, when its opcode is one of `ops`:
+/// a spawn's (`41 36`), or a damage or DoT record's target (`04 38`, `05 38`).
+fn first_entity(packet: &[u8], ops: &[[u8; 2]]) -> Option<i32> {
+    let len = super::stream_processor::read_varint(packet, 0);
+    let at = usize::try_from(len.length).ok().filter(|&n| n > 0)?;
+    let op: [u8; 2] = packet.get(at..at + 2)?.try_into().ok()?;
+    if !ops.contains(&op) {
+        return None;
+    }
+    let entity = super::stream_processor::read_varint(packet, at + 2);
+    (entity.length > 0).then_some(entity.value)
+}
+const SPAWN: [[u8; 2]; 1] = [[0x41, 0x36]];
+const HITS: [[u8; 2]; 2] = [[0x04, 0x38], [0x05, 0x38]];
+
 /// A stat record (`4a 36` changes or the `49 36` whole sheet).
 fn stat_record(packet: &[u8]) -> Option<[u8; 2]> {
     let len = super::stream_processor::read_varint(packet, 0);
@@ -1226,6 +1241,10 @@ pub fn build(
     // Your stat records from before the prelude: the last whole sheet and the
     // changes since, so the log knows your stats at the pull.
     let mut stat_history: Vec<(i64, Vec<u8>)> = Vec::new();
+    // Each entity's latest spawn from before the prelude, since the last map
+    // load (`DataStorage::spawn_ledger` feeds the ones older than what is
+    // held): a boss pulled long after the party entered has its spawn there.
+    let mut spawns: HashMap<i32, (i64, Vec<u8>)> = HashMap::new();
 
     for cap in packets {
         let (acc, tunnel) = streams
@@ -1258,7 +1277,14 @@ pub fn build(
                     stat_history.push((cap.captured_at_ms, packet));
                     continue;
                 }
+                if let Some(entity) = first_entity(&packet, &SPAWN) {
+                    spawns.insert(entity, (cap.captured_at_ms, packet));
+                    continue;
+                }
                 if let Some(op) = whereabouts_opcode(&packet) {
+                    if op == [0x21, 0x36] {
+                        spawns.clear();
+                    }
                     whereabouts.retain(|(_, p)| whereabouts_opcode(p) != Some(op));
                     whereabouts.push((cap.captured_at_ms, packet));
                 }
@@ -1280,7 +1306,16 @@ pub fn build(
     }
     // First, so the window's own map load or roster, if any, still wins.
     whereabouts.retain(|(_, w)| !records.iter().any(|(_, p)| whereabouts_opcode(p) == whereabouts_opcode(w)));
-    let mut before: Vec<(i64, Vec<u8>)> = whereabouts.into_iter().chain(stat_history).collect();
+    // The spawn of every entity the fight hits that has none in the slice.
+    let hit: HashSet<i32> = records.iter().filter_map(|(_, p)| first_entity(p, &HITS)).collect();
+    let spawned: HashSet<i32> = records.iter().filter_map(|(_, p)| first_entity(p, &SPAWN)).collect();
+    // One from before a map load the slice holds is of the zone before.
+    let last_load = records.iter().filter(|(_, p)| whereabouts_opcode(p) == Some([0x21, 0x36])).map(|(dt, _)| i64::from(*dt)).max();
+    let spawns = spawns
+        .into_iter()
+        .filter(|(id, (at, _))| hit.contains(id) && !spawned.contains(id) && last_load.is_none_or(|load| at - fight_start_ms >= load))
+        .map(|(_, v)| v);
+    let mut before: Vec<(i64, Vec<u8>)> = whereabouts.into_iter().chain(stat_history).chain(spawns).collect();
     before.sort_by_key(|(at, _)| *at);
     for (at, packet) in before.into_iter().rev() {
         let dt = (at - fight_start_ms).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
@@ -2348,6 +2383,37 @@ mod tests {
         let slice = build(&later, start, start + 10_000, &HashMap::new(), KEY).unwrap();
         let maps = slice.records.iter().filter(|(_, p)| whereabouts_opcode(p) == Some([0x21, 0x36])).count();
         assert_eq!(maps, 1);
+    }
+
+    /// A boss pulled long after the party entered keeps its spawn: Ludra's
+    /// bosses spawn on entry, runs last up to two hours, and slices of pulls
+    /// past the prelude had none, so the log service found no boss (2026-11).
+    /// A spawn of something the fight never hits stays out, and so does one
+    /// from before a later map load (the zone's ids are new).
+    #[test]
+    fn a_boss_pulled_long_after_its_spawn_keeps_it() {
+        let map = [0x21, 0x36, 0x01];
+        let boss = [0x41, 0x36, 0x09, 0x11];
+        let bystander = [0x41, 0x36, 0x0A, 0x22];
+        let hit = [0x04, 0x38, 0x09];
+        for minutes in [40, 90] {
+            let start = (minutes + 1) * 60_000;
+            let packets = vec![cap(1_000, &map), cap(60_000, &boss), cap(61_000, &bystander), cap(start, &hit)];
+            let slice = build(&packets, start, start + 10_000, &HashMap::new(), KEY).unwrap();
+            let spawns: Vec<(i32, Option<i32>)> = slice
+                .records
+                .iter()
+                .filter_map(|(dt, p)| first_entity(p, &SPAWN).map(|e| (*dt, Some(e))))
+                .collect();
+            assert_eq!(spawns, vec![((60_000 - start) as i32, Some(9))], "{minutes} min after the spawn");
+            let at = |op: &[u8]| slice.records.iter().position(|(_, p)| p.ends_with(op)).unwrap();
+            assert!(at(&map) < at(&boss) && at(&boss) < at(&hit), "map load, spawn, then the fight");
+
+            let mut moved = packets.clone();
+            moved.insert(3, cap(start - 2 * 60_000, &map));
+            let slice = build(&moved, start, start + 10_000, &HashMap::new(), KEY).unwrap();
+            assert!(slice.records.iter().all(|(_, p)| first_entity(p, &SPAWN).is_none()), "a spawn of the zone before");
+        }
     }
 
     #[test]
