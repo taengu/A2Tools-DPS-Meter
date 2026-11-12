@@ -1030,6 +1030,11 @@ pub fn rules_revision() -> &'static str {
         eat(SIGN_MIN_ADDS as i64);
         eat(SIGN_MIN_FIGHT_MS);
         eat(BOSS_FIGHT_MIN_MS);
+        // The crowd rule (`crowd_summons`): a refusal for too many players
+        // may derive under a new one.
+        eat(RAID_ROWS as i64);
+        eat(CROWD_SUMMON_SKILLS as i64);
+        eat(CROWD_SUMMON_ROWS as i64);
         for sign in BOSS_SIGNS {
             eat(sign.dungeon as i64);
             eat(sign.boss as i64);
@@ -1064,7 +1069,7 @@ fn hide_unplaced_summons(
     }
     let total: i64 = damage.values().sum();
     let long_fight = record.duration_ms >= 20_000;
-    let summon: std::collections::HashSet<i32> = record.actors.iter()
+    let mut summon: std::collections::HashSet<i32> = record.actors.iter()
         .filter(|a| !named.contains(&a.actor_id))
         .filter(|a| {
             let few_skills = skills.get(&a.actor_id).map_or(0, |s| s.len()) <= 2;
@@ -1073,6 +1078,7 @@ fn hide_unplaced_summons(
         })
         .map(|a| a.actor_id)
         .collect();
+    summon.extend(crowd_summons(record, named, &summon, &damage, &skills, total));
     if summon.is_empty() {
         return 0;
     }
@@ -1096,6 +1102,52 @@ fn hide_unplaced_summons(
     record.jobs = jobs;
     record.job_ids = job_ids;
     removed
+}
+
+/// More rows dealing damage than a raid holds (the site refuses those:
+/// logs_store.MAX_PARTY).
+const RAID_ROWS: usize = 24;
+/// Most skills, and at most 1/20 of the damage, of a row taken for a summon
+/// in a crowd (`crowd_summons`); and how many such rows of one class make one.
+const CROWD_SUMMON_SKILLS: usize = 5;
+const CROWD_SUMMON_ROWS: usize = 3;
+
+/// The summons of a fight with more rows than a raid holds, which the rules
+/// above leave: unnamed rows of a class that come several at once, each with
+/// a few skills and a small share. A Spiritmaster's spirits are new entities
+/// at every summon, with the class and two to five of its spirit skills; a
+/// Sorcerer's Fire Wall and Cold Storm are an entity a cast, with that one
+/// skill. Unplaced, a fight of a few players read as 25 to 150 (4,119 uploads
+/// refused for it, 2026-10-17 to 11-12). Only past a raid's rows, so a fight
+/// that fits one derives as before, and a real crowd stays too many.
+fn crowd_summons(
+    record: &FightRecord,
+    named: &std::collections::HashSet<i32>,
+    already: &std::collections::HashSet<i32>,
+    damage: &HashMap<i32, i64>,
+    skills: &HashMap<i32, std::collections::HashSet<i32>>,
+    total: i64,
+) -> Vec<i32> {
+    let rows = damage.keys().filter(|id| !already.contains(id)).count();
+    if rows <= RAID_ROWS {
+        return Vec::new();
+    }
+    let candidates: Vec<&crate::entity::details_context::DetailsActorSummary> = record.actors.iter()
+        .filter(|a| !already.contains(&a.actor_id) && !named.contains(&a.actor_id) && a.job_id > 0)
+        .filter(|a| {
+            let n = skills.get(&a.actor_id).map_or(0, |s| s.len());
+            let d = damage.get(&a.actor_id).copied().unwrap_or(0);
+            n >= 1 && n <= CROWD_SUMMON_SKILLS && d * 20 < total
+        })
+        .collect();
+    let mut per_class: HashMap<i32, usize> = HashMap::new();
+    for a in &candidates {
+        *per_class.entry(a.job_id).or_default() += 1;
+    }
+    candidates.into_iter()
+        .filter(|a| per_class[&a.job_id] >= CROWD_SUMMON_ROWS)
+        .map(|a| a.actor_id)
+        .collect()
 }
 
 /// Replay a slice through the parser AND the combat aggregation, and return
@@ -1821,6 +1873,61 @@ mod tests {
         record.stagger = Some(Vec::new());
         canonicalise(&mut record);
         assert!(serde_json::to_value(&record).unwrap().get("stagger").is_none(), "fight.json keeps its shape");
+    }
+
+    /// A fight of `players` (named, a rotation each) and `spirits` unnamed
+    /// Spiritmaster rows of two spirit skills, at 1 damage a spirit.
+    fn crowd(players: i32, spirits: i32, duration_ms: i64) -> (FightRecord, std::collections::HashSet<i32>) {
+        let skill = |actor: i32, code: i32, dmg: i32| serde_json::json!({
+            "actorId": actor, "code": code, "name": "", "time": 1, "dmg": dmg, "multiHitCount": 0,
+            "multiHitDamage": 0, "crit": 0, "parry": 0, "back": 0, "perfect": 0, "double": 0, "regen": 0});
+        let mut skills = Vec::new();
+        let mut actors = Vec::new();
+        for p in 1..=players {
+            for c in 0..8 {
+                skills.push(skill(p, 16_010_000 + c * 10_000, 1_000));
+            }
+            actors.push(serde_json::json!({"actorId": p, "nickname": "", "jobId": 16}));
+        }
+        for n in 0..spirits {
+            let id = 1_000 + n;
+            skills.push(skill(id, 16_001_104, 1));
+            skills.push(skill(id, 16_100_004, 1));
+            actors.push(serde_json::json!({"actorId": id, "nickname": "", "jobId": 16}));
+        }
+        let record = serde_json::from_value(serde_json::json!({
+            "id": "auto_1_2", "bossName": "B", "targetId": 1, "startTimeMs": 0, "durationMs": duration_ms,
+            "totalDamage": 1, "jobs": [],
+            "details": {"targetId": 1, "maxHp": 0, "totalTargetDamage": 1, "battleTime": 1000,
+                        "startTime": 0, "skills": skills, "pingHistory": [], "healSkills": []},
+            "actors": actors,
+        }))
+        .unwrap();
+        (record, (1..=players).collect())
+    }
+
+    #[test]
+    fn a_crowd_of_spirits_is_hidden_past_a_raid_and_only_past_one() {
+        let none = std::collections::HashSet::new();
+        // Four Spiritmasters and 30 spirits, in a short fight: the old rule
+        // (20 seconds or more) leaves them; past a raid's rows, they go.
+        let (mut record, named) = crowd(4, 30, 14_000);
+        hide_unplaced_summons(&mut record, &named, &none);
+        assert_eq!(record.actors.len(), 4);
+        // The same spirits unnamed players would be too: a nameless slice of
+        // a four-player fight is read the same way.
+        let (mut record, _) = crowd(4, 30, 14_000);
+        hide_unplaced_summons(&mut record, &none, &none);
+        assert_eq!(record.actors.len(), 4);
+        // Within a raid's rows nothing changes.
+        let (mut record, named) = crowd(4, 20, 14_000);
+        hide_unplaced_summons(&mut record, &named, &none);
+        assert_eq!(record.actors.len(), 24);
+        // A crowd of named players stays a crowd, and is refused.
+        let (mut record, _) = crowd(30, 0, 14_000);
+        let all: std::collections::HashSet<i32> = (1..=30).collect();
+        hide_unplaced_summons(&mut record, &all, &none);
+        assert_eq!(record.actors.len(), 30);
     }
 
     #[test]
