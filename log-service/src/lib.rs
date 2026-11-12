@@ -12,7 +12,9 @@
 //! anyone with the slice and the published source.
 
 use a2tools_dps_meter_lib::capture::evidence_slice;
-use a2tools_dps_meter_lib::rederive::{derive_decoded_claiming, derive_hits_claiming, Claim, Decoded, DeriveError, Tables};
+use a2tools_dps_meter_lib::rederive::{
+    derive_decoded_claiming, derive_hits_claiming, rules_revision, Claim, Decoded, DeriveError, Tables,
+};
 use flate2::read::GzDecoder;
 use futures_util::{Stream, StreamExt};
 use ruzstd::decoding::StreamingDecoder;
@@ -78,9 +80,12 @@ fn looks_like_slice(body: &[u8]) -> bool {
 
 #[event(fetch)]
 async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
+    // None: "/revision", the revision a refusal tried now would be judged by,
+    // for the site's recovery to skip what this one has already refused.
     let hits = match req.path().as_str() {
-        "/derive" => false,
-        "/hits" => true,
+        "/derive" => Some(false),
+        "/hits" => Some(true),
+        "/revision" => None,
         _ => return Response::error("not found", 404),
     };
     if req.method() != Method::Post {
@@ -100,6 +105,9 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
     if !accepted {
         return Response::error("forbidden", 403);
     }
+    let Some(hits) = hits else {
+        return Response::from_json(&serde_json::json!({ "serviceRevision": rules_revision() }));
+    };
 
     // Count actual chunks, including when Content-Length is absent or wrong.
     // A bodyless request still reaches the existing not_a_slice response.
@@ -162,6 +170,7 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
             let leaked = evidence_slice::leaked_names(&decoded.0, &names);
             let mut json = serde_json::to_value(&fight)?;
             json["checks"]["leakedNames"] = serde_json::json!(leaked);
+            json["serviceRevision"] = serde_json::json!(rules_revision());
             Response::from_json(&json)
         }
         Err(DeriveError::NotASlice) => error("not_a_slice", "Not an Evidence Slice this build reads.", 422),
@@ -187,8 +196,10 @@ async fn read_limited_body<S: Stream<Item = Result<Vec<u8>>>>(stream: S, max: us
 }
 
 fn error(code: &str, message: &str, status: u16) -> Result<Response> {
-    Ok(Response::from_json(&serde_json::json!({ "error": code, "message": message }))?
-        .with_status(status))
+    Ok(Response::from_json(&serde_json::json!({
+        "error": code, "message": message, "serviceRevision": rules_revision(),
+    }))?
+    .with_status(status))
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {

@@ -1012,6 +1012,36 @@ pub fn parser_version() -> String {
     format!("{}.{}", crate::entity::fight_record::APP_VERSION, SERVICE_REVISION)
 }
 
+/// What decides whether a refused slice could now derive: the parser
+/// (`parser_version`) and the rules that name a boss whose spawn is missing
+/// (`BOSS_SIGNS` and its thresholds), as "<parser>+<8 hex digits>". A
+/// refused upload tried again under the same revision is refused again, so
+/// the site's recovery skips those (upload_reject.tried_with). Unlike
+/// SERVICE_REVISION, a change here re-derives no stored log.
+pub fn rules_revision() -> &'static str {
+    static REVISION: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+        // FNV-1a over every number the rules use, in table order.
+        let mut h: u32 = 0x811c_9dc5;
+        let mut eat = |n: i64| {
+            for b in n.to_le_bytes() {
+                h = (h ^ b as u32).wrapping_mul(0x0100_0193);
+            }
+        };
+        eat(SIGN_MIN_ADDS as i64);
+        eat(SIGN_MIN_FIGHT_MS);
+        eat(BOSS_FIGHT_MIN_MS);
+        for sign in BOSS_SIGNS {
+            eat(sign.dungeon as i64);
+            eat(sign.boss as i64);
+            for &add in sign.adds {
+                eat(add as i64);
+            }
+        }
+        format!("{}+{:08x}", parser_version(), h)
+    });
+    &REVISION
+}
+
 /// Remove the rows of summons whose owner the parser could not find, and
 /// their damage from the totals. Returns the damage removed.
 ///
@@ -1664,6 +1694,16 @@ impl FightHits {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_rules_revision_is_the_parser_and_a_stable_hash_of_the_signs() {
+        let r = rules_revision();
+        let (parser, hash) = r.split_once('+').expect("parser+hash");
+        assert_eq!(parser, parser_version());
+        assert_eq!(hash.len(), 8);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(r, rules_revision(), "the same on every call");
+    }
 
     #[test]
     fn boss_signs_name_bosses_of_their_instance_and_share_no_add() {
