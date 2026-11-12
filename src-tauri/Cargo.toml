@@ -107,6 +107,11 @@ name = "a2t-inspect"
 path = "tools/a2t_inspect.rs"
 required-features = ["desktop"]
 
+[[bin]]
+name = "a2t-why"
+path = "tools/a2t_why.rs"
+required-features = ["desktop"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [], optional = true }
 

@@ -232,7 +232,84 @@ pub struct SliceChecks {
     /// against `max_hp`: on a kill, at least the max HP (more when the boss
     /// healed or the last hit overshot). Short of it, records are missing.
     pub damage: i64,
+    /// The slice had no spawn for the boss, which was named by the adds that
+    /// spawned during the fight (`boss_from_adds`). Written only when true,
+    /// so every other fight's checks are unchanged.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub boss_named_by_adds: bool,
 }
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// A boss known by the adds its fight spawns: `adds` are NPC codes that spawn
+/// during this boss's fights and no other boss's of the same instance.
+struct BossSign {
+    dungeon: i32,
+    boss: i32,
+    adds: &'static [i32],
+}
+
+/// Abyssal Forge (Ludra). Its bosses spawn as the party enters, and a run
+/// lasts up to an hour (two from 2026-11-11), so a boss pulled more than the
+/// slice's half-hour prelude after entering reached the service with no spawn:
+/// its fight replayed as an anonymous target and was refused as "no boss
+/// fight", ~6,000 uploads by 2026-11-12. The meter's spawn ledger keeps the
+/// spawn from then on; this names the boss in the slices already sent.
+/// Learned from known logs (tools/a2t_why.rs: the NPCs spawned during each
+/// fight; codes in at least 30% of one boss's fights and in none of another's)
+/// and checked five-fold, each fight scored by signs learned without it
+/// (2026-11-12): Normal 140 of 160 named right, Hard 75 of 123, none wrong;
+/// the rest name no boss and stay refused.
+const BOSS_SIGNS: &[BossSign] = &[
+    // Isolation Specialist Rahu
+    BossSign {
+        dungeon: 600082,
+        boss: 2301006,
+        adds: &[
+            2920717, 2920718, 2920719, 2920720, 2920722, 2920723, 2920724, 2920725,
+        ],
+    },
+    // Abyssal Wings Ketu
+    BossSign {
+        dungeon: 600082,
+        boss: 2301007,
+        adds: &[
+            2920668, 2920669, 2920670, 2920671, 2920674, 2920675, 2920775, 2920808,
+        ],
+    },
+    // Central Abyss Fusion Reactor
+    BossSign { dungeon: 600082, boss: 2301008, adds: &[2301001, 2301002, 2301003, 2301004, 2301010, 2301011] },
+    // Eternal Ludra
+    BossSign {
+        dungeon: 600082,
+        boss: 2301014,
+        adds: &[
+            2920745, 2920746, 2920748, 2920750, 2920751, 2920752, 2920753, 2920754, 2920755, 2920757, 2920760,
+            2920763, 2920764, 2920765, 2920769, 2920770, 2920771, 2920772, 2920792, 2920793, 2920805, 2920806,
+            2920810,
+        ],
+    },
+    // Isolation Specialist Rahu (Hard)
+    BossSign { dungeon: 600083, boss: 2300282, adds: &[2920717, 2920720, 2920725] },
+    // Abyssal Wings Ketu (Hard)
+    BossSign { dungeon: 600083, boss: 2300283, adds: &[2920671, 2920674, 2920675, 2920775] },
+    // Central Abyss Fusion Reactor (Hard)
+    BossSign { dungeon: 600083, boss: 2300284, adds: &[2300277, 2300278, 2300279, 2300280, 2300286, 2300287] },
+    // Eternal Ludra (Hard)
+    BossSign {
+        dungeon: 600083,
+        boss: 2300290,
+        adds: &[
+            2920654, 2920745, 2920746, 2920748, 2920750, 2920751, 2920752, 2920753, 2920754, 2920755, 2920757,
+            2920770, 2920771, 2920772, 2920793, 2920805, 2920806, 2920810, 2921505,
+        ],
+    },
+];
+/// Codes of a boss's sign that must be seen, and the least fight length.
+const SIGN_MIN_ADDS: usize = 2;
+const SIGN_MIN_FIGHT_MS: i64 = 20_000;
 
 /// Records, bundles and lifted records at the top level of a slice.
 fn slice_structure(records: &[(i32, Vec<u8>)]) -> (usize, usize, usize) {
@@ -417,6 +494,7 @@ pub fn derive_decoded_with(decoded: &Decoded, tables: &Tables) -> Result<Derived
         Err(DeriveError::NothingDerived) => derive_fight_with(decoded, tables, true, true, false),
         other => other,
     }
+    .or_else(|e| assume_boss_from_adds(decoded, tables, e, false))
     .map(|(fight, _, _)| fight)
 }
 
@@ -428,7 +506,81 @@ pub fn derive_hits_with(decoded: &Decoded, tables: &Tables) -> Result<(DerivedFi
         Err(DeriveError::NothingDerived) => derive_fight_with(decoded, tables, true, true, true),
         other => other,
     }
+    .or_else(|e| assume_boss_from_adds(decoded, tables, e, true))
     .map(|(fight, _, hits)| (fight, hits.unwrap_or_default()))
+}
+
+/// The fight, when nothing derived because the boss's spawn is missing from
+/// the slice and the adds spawned during the fight name exactly one boss of
+/// the instance (`BOSS_SIGNS`); else the error as it was.
+fn assume_boss_from_adds(
+    decoded: &Decoded,
+    tables: &Tables,
+    error: DeriveError,
+    collect_hits: bool,
+) -> Result<(DerivedFight, i64, Option<FightHits>), DeriveError> {
+    if !matches!(error, DeriveError::NothingDerived) {
+        return Err(error);
+    }
+    match boss_from_adds(decoded, tables) {
+        Some(assume) => derive_fight_assuming(decoded, tables, true, true, collect_hits, Some(assume)),
+        None => Err(error),
+    }
+}
+
+/// (entity, boss code) for a slice whose most damaged target has no spawn,
+/// in an instance with `BOSS_SIGNS`, when the NPCs that spawned while it was
+/// being hit hold at least SIGN_MIN_ADDS of one boss's sign and none of any
+/// other boss's. None otherwise: a fight is never filed on a guess.
+pub fn boss_from_adds(decoded: &Decoded, tables: &Tables) -> Option<(i32, i32)> {
+    let records = &decoded.0;
+    let replay = |upto: usize| {
+        let storage = Arc::new(DataStorage::new());
+        let mut processor = StreamProcessor::new(storage.clone(), tables.skills.clone(), tables.npcs.clone());
+        if let Some(ids) = &tables.dot_ids {
+            processor.set_dot_skill_ids(ids.clone());
+        }
+        for (dt_ms, packet) in records.iter().take(upto) {
+            processor.set_override_timestamp(Some(*dt_ms as i64));
+            processor.consume_stream(packet);
+        }
+        processor.set_override_timestamp(None);
+        storage
+    };
+    let all = replay(records.len());
+    let signs: Vec<&BossSign> = BOSS_SIGNS.iter().filter(|s| s.dungeon == all.current_dungeon_id()).collect();
+    if signs.is_empty() {
+        return None;
+    }
+    let (target, first, last) = {
+        let combat = all.get_combat_snapshot_light();
+        let top = combat
+            .values()
+            .filter(|t| t.total_damage > 0)
+            .max_by_key(|t| (t.total_damage, std::cmp::Reverse(t.target_id)))?;
+        (top.target_id, top.first_damage_time, top.last_damage_time)
+    };
+    if all.mob_code(target).is_some() || last - first < SIGN_MIN_FIGHT_MS {
+        return None;
+    }
+    drop(all);
+    // The NPCs that spawned between the first hit and the last.
+    let start = records.iter().position(|(dt, _)| *dt as i64 >= first)?;
+    let end = records.iter().skip(start).position(|(dt, _)| *dt as i64 > last).map_or(records.len(), |n| start + n);
+    let before: std::collections::HashSet<i32> = replay(start).get_mob_data().into_keys().collect();
+    let spawned: std::collections::HashSet<i32> = replay(end)
+        .get_mob_data()
+        .into_iter()
+        .filter(|(id, _)| !before.contains(id))
+        .map(|(_, code)| code)
+        .collect();
+    let seen = |s: &BossSign| s.adds.iter().filter(|c| spawned.contains(c)).count();
+    let mut named = signs.iter().filter(|s| seen(s) >= SIGN_MIN_ADDS);
+    let boss = named.next()?;
+    if named.next().is_some() || signs.iter().any(|s| s.boss != boss.boss && seen(s) > 0) {
+        return None;
+    }
+    Some((target, boss.boss))
 }
 
 /// `derive_fight` without `hide_unplaced_summons`: the fight as the parser
@@ -472,6 +624,19 @@ fn derive_fight_with(
     every_fight: bool,
     collect_hits: bool,
 ) -> Result<(DerivedFight, i64, Option<FightHits>), DeriveError> {
+    derive_fight_assuming(decoded, tables, hide, every_fight, collect_hits, None)
+}
+
+/// `derive_fight_with`, with `assume` = (entity, NPC code) taken as that
+/// entity's spawn when the slice has none (`boss_from_adds`).
+fn derive_fight_assuming(
+    decoded: &Decoded,
+    tables: &Tables,
+    hide: bool,
+    every_fight: bool,
+    collect_hits: bool,
+    assume: Option<(i32, i32)>,
+) -> Result<(DerivedFight, i64, Option<FightHits>), DeriveError> {
     let (records, blind_map) = (&decoded.0, decoded.1.clone());
     let (npcs, skills, dot_ids) = (&tables.npcs, &tables.skills, &tables.dot_ids);
     let replay = |upto: usize| {
@@ -514,6 +679,9 @@ fn derive_fight_with(
     let (mut storage, mut processor, reset_at, mut seen) = replay(records.len());
     if let Some(n) = reset_at {
         (storage, processor, _, seen) = replay(n);
+    }
+    if let Some((entity, code)) = assume {
+        storage.append_mob(entity, code);
     }
     // Keep the clock pinned through the snapshot. It asks for "now" to decide
     // whether a fight has ended; on wasm32 the wall clock panics, and on a
@@ -572,6 +740,7 @@ fn derive_fight_with(
         lifted,
         bundles,
         killed: dead.contains(&record.target_id),
+        boss_named_by_adds: assume.is_some(),
         max_hp: record.details.max_hp as i64,
         damage: on_target,
     };
@@ -710,6 +879,25 @@ impl FightHits {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn boss_signs_name_bosses_of_their_instance_and_share_no_add() {
+        let npcs = NpcLookup::new();
+        npcs.load_from_json(include_str!("../../src/data/i18n/npcs/en.json"));
+        for sign in BOSS_SIGNS {
+            assert!(npcs.is_boss(sign.boss), "{} is not a boss", sign.boss);
+            assert_eq!(npcs.dungeon_of(sign.boss), Some(sign.dungeon), "{} is not of {}", sign.boss, sign.dungeon);
+            assert!(sign.adds.len() >= SIGN_MIN_ADDS, "{} has too few adds to be named", sign.boss);
+            for other in BOSS_SIGNS.iter().filter(|o| o.dungeon == sign.dungeon && o.boss != sign.boss) {
+                assert!(
+                    sign.adds.iter().all(|c| !other.adds.contains(c)),
+                    "{} and {} share an add",
+                    sign.boss,
+                    other.boss
+                );
+            }
+        }
+    }
 
     #[test]
     fn hits_are_filed_on_the_records_rows_and_checked_against_them() {
