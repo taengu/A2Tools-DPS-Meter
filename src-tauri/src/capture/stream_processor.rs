@@ -293,8 +293,9 @@ impl StreamProcessor {
 
         // Buffs, debuffs and stats, recorded alongside (see `capture::abnormal`).
         self.data_storage.note_abnormal_packet(packet);
-        // Spawns, kept for slices of fights long after them.
-        self.data_storage.note_spawn_packet(packet);
+        // Map loads, rosters and spawns, kept for slices of fights long after
+        // them.
+        self.data_storage.note_entry_packet(packet);
 
         let parsed_damage = self.parsing_damage(packet, true, false);
         let parsed_ownership = self.parse_summon_ownership_packet(packet);

@@ -1242,7 +1242,7 @@ pub fn build(
     // changes since, so the log knows your stats at the pull.
     let mut stat_history: Vec<(i64, Vec<u8>)> = Vec::new();
     // Each entity's latest spawn from before the prelude, since the last map
-    // load (`DataStorage::spawn_ledger` feeds the ones older than what is
+    // load (`combat::entry_ledger` feeds the ones older than what is
     // held): a boss pulled long after the party entered has its spawn there.
     let mut spawns: HashMap<i32, (i64, Vec<u8>)> = HashMap::new();
 

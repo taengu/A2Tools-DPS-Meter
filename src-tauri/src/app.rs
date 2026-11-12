@@ -3898,6 +3898,22 @@ pub fn run() {
             let npc_lookup = Arc::new(npc_lookup);
 
             let data_storage = Arc::new(DataStorage::new());
+            // What a run's entry sent, kept across a restart in the middle of
+            // it (see combat::entry_ledger); written when it changes.
+            let entry_ledger_path = crate::combat::entry_ledger::path_in(&app_data_dir);
+            data_storage.restore_entry_ledger(&entry_ledger_path);
+            {
+                let storage = data_storage.clone();
+                std::thread::Builder::new()
+                    .name("entry-ledger".into())
+                    .spawn(move || loop {
+                        std::thread::sleep(Duration::from_secs(10));
+                        if let Some(saved) = storage.entry_ledger_to_save() {
+                            crate::combat::entry_ledger::store(&entry_ledger_path, saved.as_ref());
+                        }
+                    })
+                    .ok();
+            }
             if let Some(ref data_dir) = found_data_dir
                 && let Ok(text) = std::fs::read_to_string(data_dir.join("abnormals.json"))
             {
