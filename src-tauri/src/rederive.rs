@@ -82,6 +82,10 @@ pub enum DeriveError {
     NotASlice,
     /// Parsed, but produced no damage — nothing to publish.
     NothingDerived,
+    /// Parsed, and the boss is known, but it was fought for less than the
+    /// 5 seconds a boss fight needs (`short_boss_fight`): a boss tagged in
+    /// passing, not a fight a log is for.
+    ShortFight,
 }
 
 impl std::fmt::Display for DeriveError {
@@ -89,6 +93,7 @@ impl std::fmt::Display for DeriveError {
         match self {
             DeriveError::NotASlice => write!(f, "not an evidence slice"),
             DeriveError::NothingDerived => write!(f, "no damage derived from the slice"),
+            DeriveError::ShortFight => write!(f, "the boss was fought for less than 5 seconds"),
         }
     }
 }
@@ -563,8 +568,47 @@ fn assume_boss_from_adds(
     }
     match boss_from_adds(decoded, tables) {
         Some(assume) => derive_fight_assuming(decoded, tables, true, true, collect_hits, Some(assume)),
+        None if short_boss_fight(decoded, tables) => Err(DeriveError::ShortFight),
         None => Err(error),
     }
+}
+
+/// The least fight a boss fight is (`DpsCalculator::snapshot_boss_fights`).
+const BOSS_FIGHT_MIN_MS: i64 = 5_000;
+
+/// Whether nothing derived because the boss fight was too short, and for no
+/// other reason: a boss the NPC table names took damage, for less than
+/// BOSS_FIGHT_MIN_MS, and no target without a spawn was fought for longer.
+/// A slice whose main target is anonymous (a boss whose spawn is missing)
+/// is never called short: what it holds is not known.
+fn short_boss_fight(decoded: &Decoded, tables: &Tables) -> bool {
+    let storage = Arc::new(DataStorage::new());
+    let mut processor = StreamProcessor::new(storage.clone(), tables.skills.clone(), tables.npcs.clone());
+    if let Some(ids) = &tables.dot_ids {
+        processor.set_dot_skill_ids(ids.clone());
+    }
+    for (dt_ms, packet) in decoded.0.iter() {
+        processor.set_override_timestamp(Some(*dt_ms as i64));
+        processor.consume_stream(packet);
+    }
+    processor.set_override_timestamp(None);
+    let combat = storage.get_combat_snapshot_light();
+    let span = |t: &crate::combat::data_storage::TargetCombatData| t.last_damage_time - t.first_damage_time;
+    let mut boss_hit = false;
+    for t in combat.values().filter(|t| t.total_damage > 0) {
+        match storage.mob_code(t.target_id) {
+            Some(code) if tables.npcs.is_boss(code) => {
+                if span(t) >= BOSS_FIGHT_MIN_MS {
+                    return false;
+                }
+                boss_hit = true;
+            }
+            Some(_) => {}
+            None if span(t) >= BOSS_FIGHT_MIN_MS => return false,
+            None => {}
+        }
+    }
+    boss_hit
 }
 
 /// (entity, boss code) for a slice whose most damaged target has no spawn,

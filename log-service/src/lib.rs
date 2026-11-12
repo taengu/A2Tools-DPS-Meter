@@ -142,6 +142,7 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
             })),
             Err(DeriveError::NotASlice) => error("not_a_slice", "Not an Evidence Slice this build reads.", 422),
             Err(DeriveError::NothingDerived) => error("no_fight", "The slice contains no boss fight.", 422),
+            Err(DeriveError::ShortFight) => error("short_fight", SHORT_FIGHT, 422),
         };
     }
 
@@ -154,8 +155,12 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
         }
         Err(DeriveError::NotASlice) => error("not_a_slice", "Not an Evidence Slice this build reads.", 422),
         Err(DeriveError::NothingDerived) => error("no_fight", "The slice contains no boss fight.", 422),
+        Err(DeriveError::ShortFight) => error("short_fight", SHORT_FIGHT, 422),
     }
 }
+
+/// `DeriveError::ShortFight`'s answer.
+const SHORT_FIGHT: &str = "The boss was fought for less than 5 seconds, too short for a log.";
 
 async fn read_limited_body<S: Stream<Item = Result<Vec<u8>>>>(stream: S, max: usize) -> Result<Option<Vec<u8>>> {
     futures_util::pin_mut!(stream);
