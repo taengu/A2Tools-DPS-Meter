@@ -49,6 +49,21 @@ pub fn clear_announced() {
     ANNOUNCED_PORT.store(0, Ordering::Relaxed);
 }
 
+/// The port the game left for an announced server (0: none). Leaving the
+/// festival, nothing may announce the way back, and the main server's
+/// connection need not carry combat at once: once the festival's port goes
+/// quiet, a connection on this one is the way back.
+static RETURN_PORT: AtomicU32 = AtomicU32::new(0);
+
+pub fn set_return_port(port: Option<u16>) {
+    RETURN_PORT.store(port.map_or(0, u32::from), Ordering::Relaxed);
+}
+
+pub fn return_port() -> Option<u16> {
+    let port = RETURN_PORT.load(Ordering::Relaxed) as u16;
+    (port != 0).then_some(port)
+}
+
 /// Global combat port detector — identifies which network device and port
 /// carry AION 2 game traffic by looking for the combat signature bytes.
 pub struct CombatPortDetector {
