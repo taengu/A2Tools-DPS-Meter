@@ -324,6 +324,9 @@ impl StreamProcessor {
         self.parse_death_packet(packet);
         self.parse_zone_change_packet(packet);
         self.parse_map_load_packet(packet);
+        if let Some(run) = dungeon_state(packet) {
+            self.data_storage.note_dungeon_state(run);
+        }
         // The field bosses on a map the player opened (boss timers).
         if let Some(map) = crate::capture::boss_map::parse(packet, crate::clock::now_ms()) {
             self.data_storage.note_boss_map(map);
@@ -2433,6 +2436,36 @@ fn server_move(packet: &[u8]) -> Option<(String, u16)> {
     let p = packet.get(at + 5 + n..at + 7 + n)?;
     let port = u16::from_le_bytes([p[0], p[1]]);
     (port != 0).then(|| (String::from_utf8_lossy(ip).into_owned(), port))
+}
+
+/// The game's word on a dungeon run (or another timed content):
+///
+/// ```text
+/// <len> 00 61 <content id u32> <state u8> <time u64 ms> <deadline u64 ms>
+/// ```
+///
+/// From captures (2026-10-02 to -11-12, Global): state 1 entered (time =
+/// entry, no deadline); 2 running (time = the run's start, deadline = start +
+/// its limit: 60 min in 600002, 600011 and 600071, 15 in 400002; repeated
+/// mid-run unchanged); 3 cleared (time = the clear, deadline = the exit
+/// window's end, 10 min on); 4 the exit countdown, after field contents'
+/// state 3. Entering again starts with state 1. Same layout in 2.0.11 TW's
+/// Shugo Festival (500043: 1, 2, 3).
+fn dungeon_state(packet: &[u8]) -> Option<crate::combat::data_storage::DungeonRun> {
+    let len = read_varint(packet, 0);
+    let at = usize::try_from(len.length).ok().filter(|&n| n > 0)?;
+    if packet.get(at..at + 2)? != [0x00, 0x61] {
+        return None;
+    }
+    let b = packet.get(at + 2..at + 23)?;
+    let content = u32::from_le_bytes(b[0..4].try_into().ok()?);
+    let state = b[4];
+    let time = i64::from_le_bytes(b[5..13].try_into().ok()?);
+    let deadline = i64::from_le_bytes(b[13..21].try_into().ok()?);
+    // Unix ms of these years, or 0 for no deadline.
+    let plausible = |ms: i64| (1_735_689_600_000..1_861_920_000_000).contains(&ms);
+    (content > 0 && (1..=9).contains(&state) && plausible(time) && (deadline == 0 || plausible(deadline)))
+        .then_some(crate::combat::data_storage::DungeonRun { content, state, time, deadline })
 }
 
 /// The entity a login record names as you.
@@ -5272,6 +5305,22 @@ mod tests {
         let mut packet = vec![(len as u8) | 0x80, (len >> 7) as u8];
         packet.extend(body);
         packet
+    }
+
+    /// Dungeon states of a 600071 run (2026-10-09) and the Shugo Festival's
+    /// (2026-11-12): entered, running with its 60-minute limit, cleared.
+    #[test]
+    fn dungeon_states_read_as_the_game_sends_them() {
+        let run = |s: &str| dungeon_state(&hex(s)).map(|r| (r.content, r.state, r.time, r.deadline));
+        assert_eq!(run("1700610728090001e1afea21a10100000000000000000000"), Some((600_071, 1, 1_791_570_391_009, 0)));
+        let (_, state, start, deadline) = run("1700610728090002d105eb21a101000051f42122a1010000").unwrap();
+        assert_eq!((state, deadline - start), (2, 60 * 60 * 1000), "a 60-minute run");
+        let (_, state, cleared, _) = run("1700610728090003a0e3f121a1010000600bfb21a1010000").unwrap();
+        assert_eq!((state, cleared - start), (3, 449_999), "cleared in 7.5 minutes");
+        assert_eq!(run("170061c32a02000246c2f41ea10100000000000000000000"), Some((142_019, 2, 1_791_520_719_430, 0)));
+        assert_eq!(run("1700614ba10700037acd12d0a1010000a26d13d0a1010000").map(|r| (r.0, r.1)), Some((500_043, 3)));
+        assert_eq!(run("1700614ba1070003"), None, "cut short");
+        assert_eq!(run("170062c32a02000246c2f41ea10100000000000000000000"), None, "another opcode");
     }
 
     /// The move to the Shugo Festival's server (2026-11-12, Global).

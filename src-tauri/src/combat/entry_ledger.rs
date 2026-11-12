@@ -1,7 +1,8 @@
 //! What the game sends only as you enter an instance, kept for slices.
 //!
-//! The map load (`21 36`) and party roster (`02 97`) say which dungeon a run
-//! is, and each monster's spawn (`41 36`) says what it is. All of them come
+//! The map load (`21 36`), party roster (`02 97`) and dungeon state (`00 61`:
+//! the run's start, deadline and clear) say which dungeon a run is and where
+//! it stands, and each monster's spawn (`41 36`) says what it is. All of them come
 //! as the party enters. A boss pulled more than the slice's prelude after
 //! that (Ludra's runs last up to two hours) had none of them in its slice,
 //! and the log service refused it or filed it under the open world. So the
@@ -57,6 +58,9 @@ pub struct Saved {
     pub roster_dungeon: i32,
     pub map_load: (i64, String),
     pub roster: Option<(i64, String)>,
+    /// None in a ledger saved before it was kept.
+    #[serde(default)]
+    pub run: Option<(i64, String)>,
     pub spawns: Vec<(i64, String)>,
 }
 
@@ -64,6 +68,7 @@ pub struct Saved {
 enum Kind {
     MapLoad(i32),
     Roster,
+    Run,
     Spawn(i32),
 }
 
@@ -77,6 +82,7 @@ fn kind(packet: &[u8]) -> Option<Kind> {
             Some(Kind::MapLoad(i32::from_le_bytes([b[0], b[1], b[2], b[3]])))
         }
         [0x02, 0x97] => Some(Kind::Roster),
+        [0x00, 0x61] => Some(Kind::Run),
         [0x41, 0x36] => {
             let entity = read_varint(packet, at + 2);
             (entity.length > 0).then_some(Kind::Spawn(entity.value))
@@ -90,6 +96,7 @@ fn kind(packet: &[u8]) -> Option<Kind> {
 struct Zone {
     map_load: Option<Stamped>,
     roster: Option<Stamped>,
+    run: Option<Stamped>,
     spawns: HashMap<i32, Stamped>,
 }
 
@@ -107,7 +114,7 @@ impl Zone {
 
     fn packets(&self) -> Vec<Stamped> {
         let mut out: Vec<Stamped> =
-            self.map_load.iter().chain(&self.roster).chain(self.spawns.values()).cloned().collect();
+            self.map_load.iter().chain(&self.roster).chain(&self.run).chain(self.spawns.values()).cloned().collect();
         out.sort_by_key(|(t, _)| *t);
         out
     }
@@ -169,6 +176,9 @@ impl EntryLedger {
                 self.restored = None;
             }
             Some(Kind::Roster) => self.current.roster = Some((at, packet.to_vec())),
+            // The run's state comes after the load into it, and its latest
+            // has the start and deadline (or the clear).
+            Some(Kind::Run) => self.current.run = Some((at, packet.to_vec())),
             Some(Kind::Spawn(entity)) => {
                 let spawns = &mut self.current.spawns;
                 if spawns.len() >= SPAWN_CAP && !spawns.contains_key(&entity) {
@@ -221,6 +231,9 @@ impl EntryLedger {
         if zone.roster.is_none() {
             zone.roster = saved.roster.as_ref().and_then(unhex);
         }
+        if zone.run.is_none() {
+            zone.run = saved.run.as_ref().and_then(unhex);
+        }
         for (t, packet) in saved.spawns.iter().filter_map(unhex) {
             if let Some(Kind::Spawn(entity)) = kind(&packet) {
                 zone.spawns.entry(entity).or_insert((t, packet));
@@ -255,6 +268,7 @@ impl EntryLedger {
                     roster_dungeon,
                     map_load: hex(load),
                     roster: zone.roster.as_ref().map(hex),
+                    run: zone.run.as_ref().map(hex),
                     spawns: spawns.into_iter().map(hex).collect(),
                 })
             }
@@ -331,6 +345,16 @@ mod tests {
         framed(&body)
     }
 
+    /// Ludra running, its hour from entry (`00 61` state 2).
+    fn run_state() -> Vec<u8> {
+        let mut body = vec![0x00, 0x61];
+        body.extend((LUDRA as u32).to_le_bytes());
+        body.push(2);
+        body.extend((T0 + 5_000).to_le_bytes());
+        body.extend((T0 + 5_000 + 60 * MINUTE).to_le_bytes());
+        framed(&body)
+    }
+
     fn boss_spawn() -> Vec<u8> {
         framed(&[0x41, 0x36, 0x09, 0x11])
     }
@@ -357,6 +381,7 @@ mod tests {
     fn entered(path: &Path) {
         let s = DataStorage::new();
         at(T0, || s.note_entry_packet(&map_load(LUDRA)));
+        at(T0 + 5_000, || s.note_entry_packet(&run_state()));
         at(T0 + MINUTE, || s.note_entry_packet(&boss_spawn()));
         s.set_local_identity_from_game(4451, Some("Me".into()));
         let saved = s.entry_ledger_to_save().expect("changed").expect("an instance's");
@@ -400,6 +425,7 @@ mod tests {
         let slice = at_value(pull, || slice_of_pull(&s, pull));
         assert!(holds(&slice, &boss_spawn()), "the boss's spawn");
         assert!(holds(&slice, &map_load(LUDRA)), "the map load");
+        assert!(holds(&slice, &run_state()), "the run's state, with its start and deadline");
         assert_eq!(s.current_dungeon_id(), LUDRA, "the meter knows where it is too");
         let _ = std::fs::remove_file(&path);
     }

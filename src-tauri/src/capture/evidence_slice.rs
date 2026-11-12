@@ -260,6 +260,10 @@ pub const ALLOWED_OPCODES: &[(&[u8; 2], &str)] = &[
     (&[0x45, 0x36], "player spawn"),
     (&[0x33, 0x36], "self identity"),
     (&[0x02, 0x97], "party roster"),
+    // The game's dungeon run (meter 2.0.98 on): the content id, its state,
+    // the run's start and deadline or its clear (stream_processor
+    // `dungeon_state`). Ids and times only.
+    (&[0x00, 0x61], "dungeon state"),
     // Buffs and debuffs, for the log's Buffs timeline: entity ids, abnormal
     // and skill ids, timings and a position, no names (capture/abnormal.rs).
     (&[0x2A, 0x38], "buff/debuff added"),
@@ -296,13 +300,13 @@ fn stat_record(packet: &[u8]) -> Option<[u8; 2]> {
     matches!(op, [0x4A, 0x36] | [0x49, 0x36]).then_some(op)
 }
 
-/// A map load's or a party roster's opcode (`21 36`, `02 97`), for the
-/// slice's whereabouts; None for any other packet.
+/// A map load's, a party roster's or a dungeon state's opcode (`21 36`,
+/// `02 97`, `00 61`), for the slice's whereabouts; None for any other packet.
 fn whereabouts_opcode(packet: &[u8]) -> Option<[u8; 2]> {
     let len = super::stream_processor::read_varint(packet, 0);
     let at = usize::try_from(len.length).ok().filter(|&n| n > 0)?;
     let op: [u8; 2] = packet.get(at..at + 2)?.try_into().ok()?;
-    matches!(op, [0x21, 0x36] | [0x02, 0x97]).then_some(op)
+    matches!(op, [0x21, 0x36] | [0x02, 0x97] | [0x00, 0x61]).then_some(op)
 }
 
 /// One captured buffer, as the packet logger recorded it.

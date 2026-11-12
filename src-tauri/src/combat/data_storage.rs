@@ -140,6 +140,17 @@ fn dungeon_of_map(roster_dungeon: i32, map: Option<i32>) -> i32 {
     }
 }
 
+/// A dungeon run as the game states it (`00 61`): its content id, state (1
+/// entered, 2 running, 3 cleared, 4 leaving), the state's time and the
+/// deadline (0: none), unix ms.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DungeonRun {
+    pub content: u32,
+    pub state: u8,
+    pub time: i64,
+    pub deadline: i64,
+}
+
 // ───── Aggregate data structures ─────
 
 /// Healing done, aggregated per (healer actor, skill, is_hot). Healing is keyed by
@@ -645,6 +656,8 @@ struct Inner {
     roster_dungeon_id: i32,
     /// The map the last zone load (`21 36`) named; None until one is seen.
     current_map_id: Option<i32>,
+    /// The game's last word on the dungeon run (`00 61`).
+    dungeon_run: Option<DungeonRun>,
     /// Power-scalar values observed per actor in its damage records. A summon
     /// inherits its owner's, so this links the two when no spawn packet (and
     /// therefore no `parent_key`) ever arrives — the case for a Cleric's Divine
@@ -877,6 +890,7 @@ impl DataStorage {
                 current_dungeon_id: 0,
                 roster_dungeon_id: 0,
                 current_map_id: None,
+                dungeon_run: None,
                 actor_power_scalars: HashMap::new(),
                 hostile_target_ids: HashSet::new(),
                 dead_entity_ids: HashSet::new(),
@@ -2827,6 +2841,34 @@ impl DataStorage {
         }
         tracing::info!("Party left — clearing party rows");
         self.end_party();
+    }
+
+    /// The game's word on a dungeon run (`00 61`, see
+    /// `stream_processor::dungeon_state`). Kept as the run now; a dungeon's
+    /// id (600000-699999) is also where the player is when no map load has
+    /// said (a meter started inside the run).
+    pub fn note_dungeon_state(&self, run: DungeonRun) {
+        let mut inner = self.inner.write();
+        if inner.dungeon_run != Some(run) {
+            tracing::info!(
+                "Dungeon state: {} state {} at {} (deadline {})",
+                run.content,
+                run.state,
+                run.time,
+                run.deadline
+            );
+        }
+        inner.dungeon_run = Some(run);
+        let id = run.content as i32;
+        if inner.current_map_id.is_none() && (600_000..700_000).contains(&id) && inner.current_dungeon_id != id {
+            tracing::info!("Dungeon {id} from its run state (no map load seen)");
+            inner.current_dungeon_id = id;
+        }
+    }
+
+    /// The last dungeon run state the game sent, if any.
+    pub fn dungeon_run(&self) -> Option<DungeonRun> {
+        self.inner.read().dungeon_run
     }
 
     /// A zone load named the map it loads (`21 36`). The map, once known, is
