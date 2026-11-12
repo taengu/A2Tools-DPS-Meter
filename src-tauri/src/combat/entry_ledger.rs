@@ -425,7 +425,12 @@ mod tests {
         let slice = at_value(pull, || slice_of_pull(&s, pull));
         assert!(holds(&slice, &boss_spawn()), "the boss's spawn");
         assert!(holds(&slice, &map_load(LUDRA)), "the map load");
-        assert!(holds(&slice, &run_state()), "the run's state, with its start and deadline");
+        // Its times relative to the pull, as the slice's own: the run began
+        // 90 minutes before it, with an hour's limit.
+        let run = slice.records.iter().find(|(_, p)| p[1..3] == [0x00, 0x61]).map(|(_, p)| p).expect("the run's state");
+        let time = i64::from_le_bytes(run[8..16].try_into().unwrap());
+        let deadline = i64::from_le_bytes(run[16..24].try_into().unwrap());
+        assert_eq!((time, deadline - time), (T0 + 5_000 - pull, 60 * MINUTE));
         assert_eq!(s.current_dungeon_id(), LUDRA, "the meter knows where it is too");
         let _ = std::fs::remove_file(&path);
     }

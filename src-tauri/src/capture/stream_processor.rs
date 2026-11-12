@@ -2460,11 +2460,11 @@ fn dungeon_state(packet: &[u8]) -> Option<crate::combat::data_storage::DungeonRu
     let b = packet.get(at + 2..at + 23)?;
     let content = u32::from_le_bytes(b[0..4].try_into().ok()?);
     let state = b[4];
+    // Unix ms as the game sends them; in a slice, ms from the fight's start
+    // (evidence_slice `run_times_relative`).
     let time = i64::from_le_bytes(b[5..13].try_into().ok()?);
     let deadline = i64::from_le_bytes(b[13..21].try_into().ok()?);
-    // Unix ms of these years, or 0 for no deadline.
-    let plausible = |ms: i64| (1_735_689_600_000..1_861_920_000_000).contains(&ms);
-    (content > 0 && (1..=9).contains(&state) && plausible(time) && (deadline == 0 || plausible(deadline)))
+    (content > 0 && (1..=9).contains(&state) && time != 0)
         .then_some(crate::combat::data_storage::DungeonRun { content, state, time, deadline })
 }
 

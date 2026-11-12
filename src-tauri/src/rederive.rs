@@ -242,6 +242,35 @@ pub struct SliceChecks {
     /// so every other fight's checks are unchanged.
     #[serde(default, skip_serializing_if = "is_false")]
     pub boss_named_by_adds: bool,
+    /// The dungeon's clear (`00 61` state 3, sent as its final boss dies)
+    /// came this many ms after the fight's last hit (negative: before), when
+    /// one came within `CLEAR_WINDOW_MS` of it. `killed` is then true even
+    /// with no death record for the target, which a slice can lack. Written
+    /// only when present, so slices without one are unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cleared_after_ms: Option<i64>,
+}
+
+/// How far from the fight's last hit a dungeon's clear may come and still be
+/// this fight's: the clear follows the final boss's death within seconds (the
+/// Shugo Festival's 3 s), and a fight's last hit is its killing blow.
+const CLEAR_WINDOW_MS: std::ops::RangeInclusive<i64> = -3_000..=15_000;
+
+/// When the dungeon's clear came, relative to `last_hit_ms` (both on the
+/// slice's clock), if one came within `CLEAR_WINDOW_MS` of it: the arrival of
+/// a `00 61` record whose state is 3.
+fn clear_near(records: &[(i32, Vec<u8>)], last_hit_ms: i64) -> Option<i64> {
+    records
+        .iter()
+        .filter(|(_, p)| {
+            let len = crate::capture::stream_processor::read_varint(p, 0);
+            usize::try_from(len.length).ok().filter(|&n| n > 0).is_some_and(|at| {
+                p.get(at..at + 2) == Some(&[0x00, 0x61][..]) && p.get(at + 6) == Some(&3)
+            })
+        })
+        .map(|(dt, _)| i64::from(*dt) - last_hit_ms)
+        .filter(|after| CLEAR_WINDOW_MS.contains(after))
+        .min_by_key(|after| after.abs())
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1088,36 +1117,35 @@ pub fn derive_decoded(
 
 /// `derive_decoded` with the tables already parsed.
 pub fn derive_decoded_with(decoded: &Decoded, tables: &Tables) -> Result<DerivedFight, DeriveError> {
-    match derive_fight_with(decoded, tables, true, false, false) {
-        // Slices from early meters (2.0.30 to 2.0.37) have no self record and
-        // no dungeon, so `is_our_fight` (2026-10-05, #19) takes the uploader's
-        // own boss for a stranger's and nothing is derived: 56 logs a re-derive
-        // could not update (2026-10-11). A slice is an upload its owner chose
-        // to send, so when "ours only" finds nothing, every fight counts. A
-        // slice that derives as it is never comes here, so none changes.
-        Err(DeriveError::NothingDerived) => derive_fight_with(decoded, tables, true, true, false),
-        other => other,
-    }
-    .or_else(|e| assume_boss_from_adds(decoded, tables, e, false))
-    .map(|(fight, _, _)| fight)
+    derive_fight_with(decoded, tables, true, false, false)
+        .or_else(|e| when_nothing_derived(decoded, tables, e, false))
+        .map(|(fight, _, _)| fight)
 }
 
 /// `derive_decoded_with`, and every hit its record counts (`FightHits`): the
 /// same replay with `DataStorage::set_on_hit` watching, so the hits are the
 /// ones the record was summed from, filed on the record's own rows.
 pub fn derive_hits_with(decoded: &Decoded, tables: &Tables) -> Result<(DerivedFight, FightHits), DeriveError> {
-    match derive_fight_with(decoded, tables, true, false, true) {
-        Err(DeriveError::NothingDerived) => derive_fight_with(decoded, tables, true, true, true),
-        other => other,
-    }
-    .or_else(|e| assume_boss_from_adds(decoded, tables, e, true))
-    .map(|(fight, _, hits)| (fight, hits.unwrap_or_default()))
+    derive_fight_with(decoded, tables, true, false, true)
+        .or_else(|e| when_nothing_derived(decoded, tables, e, true))
+        .map(|(fight, _, hits)| (fight, hits.unwrap_or_default()))
 }
 
-/// The fight, when nothing derived because the boss's spawn is missing from
-/// the slice and the adds spawned during the fight name exactly one boss of
-/// the instance (`BOSS_SIGNS`); else the error as it was.
-fn assume_boss_from_adds(
+/// What is tried when the first derive finds nothing, on one replay of the
+/// whole slice shared by every check: each replay is most of a derive's time,
+/// and the recovery of refused uploads waited 13 seconds a slice on six of
+/// them (2026-11-13).
+///
+/// 1. Every fight counted, not only the uploader's own. Slices from early
+///    meters (2.0.30 to 2.0.37) have no self record and no dungeon, so
+///    `is_our_fight` (2026-10-05, #19) takes the uploader's own boss for a
+///    stranger's: 56 logs a re-derive could not update (2026-10-11). In an
+///    instance every fight is already ours (`fight_is_ours`), so this is
+///    tried only without one, or when the zone changed in the slice (the
+///    derive stops short of that, and the zone after may not be the fight's).
+/// 2. The boss named by the adds spawned during the fight (`boss_from_adds`).
+/// 3. Else whether the fight was too short (`short_boss_fight`).
+fn when_nothing_derived(
     decoded: &Decoded,
     tables: &Tables,
     error: DeriveError,
@@ -1126,11 +1154,53 @@ fn assume_boss_from_adds(
     if !matches!(error, DeriveError::NothingDerived) {
         return Err(error);
     }
-    match boss_from_adds(decoded, tables) {
+    let (all, _, zone_changed) = replay_until(decoded, tables, decoded.0.len(), None);
+    if all.current_dungeon_id() <= 0 || zone_changed {
+        match derive_fight_with(decoded, tables, true, true, collect_hits) {
+            Err(DeriveError::NothingDerived) => {}
+            other => return other,
+        }
+    }
+    match boss_from_adds(decoded, tables, &all) {
         Some(assume) => derive_fight_assuming(decoded, tables, true, true, collect_hits, Some(assume)),
-        None if short_boss_fight(decoded, tables) => Err(DeriveError::ShortFight),
+        None if short_boss_fight(&all, tables) => Err(DeriveError::ShortFight),
         None => Err(error),
     }
+}
+
+/// The storage after the slice's first `upto` records; with `mark`, the NPC
+/// entities known just before record `mark` too; and whether the zone changed
+/// (a zone reset or the party ending) after the fight began, as the derive's
+/// own replay watches for.
+fn replay_until(
+    decoded: &Decoded,
+    tables: &Tables,
+    upto: usize,
+    mark: Option<usize>,
+) -> (Arc<DataStorage>, std::collections::HashSet<i32>, bool) {
+    let storage = Arc::new(DataStorage::new());
+    let mut processor = StreamProcessor::new(storage.clone(), tables.skills.clone(), tables.npcs.clone());
+    if let Some(ids) = &tables.dot_ids {
+        processor.set_dot_skill_ids(ids.clone());
+    }
+    let mut known = std::collections::HashSet::new();
+    let mut zone_changed = false;
+    for (n, (dt_ms, packet)) in decoded.0.iter().enumerate().take(upto) {
+        if mark == Some(n) {
+            known = storage.get_mob_data().into_keys().collect();
+        }
+        processor.set_override_timestamp(Some(*dt_ms as i64));
+        let before = (storage.last_zone_reset_ms(), storage.party_ended_at_ms());
+        processor.consume_stream(packet);
+        if *dt_ms > 0 && (storage.last_zone_reset_ms(), storage.party_ended_at_ms()) != before {
+            zone_changed = true;
+        }
+    }
+    if mark == Some(upto) {
+        known = storage.get_mob_data().into_keys().collect();
+    }
+    processor.set_override_timestamp(None);
+    (storage, known, zone_changed)
 }
 
 /// The least fight a boss fight is (`DpsCalculator::snapshot_boss_fights`).
@@ -1140,23 +1210,14 @@ const BOSS_FIGHT_MIN_MS: i64 = 5_000;
 /// other reason: a boss the NPC table names took damage, for less than
 /// BOSS_FIGHT_MIN_MS, and no target without a spawn was fought for longer.
 /// A slice whose main target is anonymous (a boss whose spawn is missing)
-/// is never called short: what it holds is not known.
-fn short_boss_fight(decoded: &Decoded, tables: &Tables) -> bool {
-    let storage = Arc::new(DataStorage::new());
-    let mut processor = StreamProcessor::new(storage.clone(), tables.skills.clone(), tables.npcs.clone());
-    if let Some(ids) = &tables.dot_ids {
-        processor.set_dot_skill_ids(ids.clone());
-    }
-    for (dt_ms, packet) in decoded.0.iter() {
-        processor.set_override_timestamp(Some(*dt_ms as i64));
-        processor.consume_stream(packet);
-    }
-    processor.set_override_timestamp(None);
-    let combat = storage.get_combat_snapshot_light();
+/// is never called short: what it holds is not known. `all`: the whole slice
+/// replayed.
+fn short_boss_fight(all: &DataStorage, tables: &Tables) -> bool {
+    let combat = all.get_combat_snapshot_light();
     let span = |t: &crate::combat::data_storage::TargetCombatData| t.last_damage_time - t.first_damage_time;
     let mut boss_hit = false;
     for t in combat.values().filter(|t| t.total_damage > 0) {
-        match storage.mob_code(t.target_id) {
+        match all.mob_code(t.target_id) {
             Some(code) if tables.npcs.is_boss(code) => {
                 if span(t) >= BOSS_FIGHT_MIN_MS {
                     return false;
@@ -1174,23 +1235,11 @@ fn short_boss_fight(decoded: &Decoded, tables: &Tables) -> bool {
 /// (entity, boss code) for a slice whose most damaged target has no spawn,
 /// in an instance with `BOSS_SIGNS`, when the NPCs that spawned while it was
 /// being hit hold at least SIGN_MIN_ADDS of one boss's sign and none of any
-/// other boss's. None otherwise: a fight is never filed on a guess.
-pub fn boss_from_adds(decoded: &Decoded, tables: &Tables) -> Option<(i32, i32)> {
+/// other boss's. None otherwise: a fight is never filed on a guess. `all`:
+/// the whole slice replayed; the spawns during the fight take one more
+/// replay, to its last hit.
+pub fn boss_from_adds(decoded: &Decoded, tables: &Tables, all: &DataStorage) -> Option<(i32, i32)> {
     let records = &decoded.0;
-    let replay = |upto: usize| {
-        let storage = Arc::new(DataStorage::new());
-        let mut processor = StreamProcessor::new(storage.clone(), tables.skills.clone(), tables.npcs.clone());
-        if let Some(ids) = &tables.dot_ids {
-            processor.set_dot_skill_ids(ids.clone());
-        }
-        for (dt_ms, packet) in records.iter().take(upto) {
-            processor.set_override_timestamp(Some(*dt_ms as i64));
-            processor.consume_stream(packet);
-        }
-        processor.set_override_timestamp(None);
-        storage
-    };
-    let all = replay(records.len());
     let signs: Vec<&BossSign> = BOSS_SIGNS.iter().filter(|s| s.dungeon == all.current_dungeon_id()).collect();
     if signs.is_empty() {
         return None;
@@ -1206,12 +1255,11 @@ pub fn boss_from_adds(decoded: &Decoded, tables: &Tables) -> Option<(i32, i32)> 
     if all.mob_code(target).is_some() || last - first < SIGN_MIN_FIGHT_MS {
         return None;
     }
-    drop(all);
     // The NPCs that spawned between the first hit and the last.
     let start = records.iter().position(|(dt, _)| *dt as i64 >= first)?;
     let end = records.iter().skip(start).position(|(dt, _)| *dt as i64 > last).map_or(records.len(), |n| start + n);
-    let before: std::collections::HashSet<i32> = replay(start).get_mob_data().into_keys().collect();
-    let spawned: std::collections::HashSet<i32> = replay(end)
+    let (to_end, before, _) = replay_until(decoded, tables, end, Some(start));
+    let spawned: std::collections::HashSet<i32> = to_end
         .get_mob_data()
         .into_iter()
         .filter(|(id, _)| !before.contains(id))
@@ -1377,13 +1425,15 @@ fn derive_fight_assuming(
     canonicalise(&mut record);
     let on_target = totals.get(&record.target_id).copied().unwrap_or(0);
     let (count, lifted, bundles) = slice_structure(&records);
+    let cleared_after_ms = clear_near(records, record.start_time_ms + record.duration_ms);
     let checks = SliceChecks {
         unblinded_names: evidence_slice::unblinded_names(&records, &blind_map),
         records: count,
         lifted,
         bundles,
-        killed: dead.contains(&record.target_id),
+        killed: dead.contains(&record.target_id) || cleared_after_ms.is_some(),
         boss_named_by_adds: assume.is_some(),
+        cleared_after_ms,
         max_hp: record.details.max_hp as i64,
         damage: on_target,
     };
@@ -1583,6 +1633,26 @@ mod tests {
         let mut more = raw;
         more.push(hit(1600, 7, 9, 11010000, true, 5, 0));
         assert!(!FightHits::sorted(more, &record, &uid_of, fold).matches);
+    }
+
+    /// A dungeon's clear confirms the kill only when it comes as the fight
+    /// ends: the run cleared (`00 61` state 3) 2 s after the last hit, not a
+    /// clear long after (another fight's) nor a run merely going on.
+    #[test]
+    fn a_clear_as_the_fight_ends_is_a_kill() {
+        let state = |n: u8| {
+            let mut p = vec![0x18, 0x00, 0x61];
+            p.extend(600_071u32.to_le_bytes());
+            p.push(n);
+            p.extend((-450_000i64).to_le_bytes());
+            p.extend(150_000i64.to_le_bytes());
+            p
+        };
+        let last_hit = 120_000;
+        assert_eq!(clear_near(&[(5_000, state(2)), (122_000, state(3))], last_hit), Some(2_000));
+        assert_eq!(clear_near(&[(5_000, state(2))], last_hit), None, "running is no clear");
+        assert_eq!(clear_near(&[(200_000, state(3))], last_hit), None, "a clear well after this fight");
+        assert_eq!(clear_near(&[(110_000, state(3))], last_hit), None, "a clear before the last hit");
     }
 
     #[test]

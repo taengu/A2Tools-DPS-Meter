@@ -309,6 +309,24 @@ fn whereabouts_opcode(packet: &[u8]) -> Option<[u8; 2]> {
     matches!(op, [0x21, 0x36] | [0x02, 0x97] | [0x00, 0x61]).then_some(op)
 }
 
+/// A dungeon state's (`00 61`) two times, the game's unix ms, made relative
+/// to the fight's start (0, no deadline, stays 0): the slice carries no wall
+/// clock, and a run's start would tell how long the party had been in.
+/// The capture clock stands in for the server's; they agree within a second.
+fn run_times_relative(packet: &mut [u8], fight_start_ms: i64) {
+    let len = super::stream_processor::read_varint(packet, 0);
+    let Some(at) = usize::try_from(len.length).ok().filter(|&n| n > 0) else { return };
+    if packet.get(at..at + 2) != Some(&[0x00, 0x61][..]) || packet.len() < at + 23 {
+        return;
+    }
+    for field in [at + 7, at + 15] {
+        let ms = i64::from_le_bytes(packet[field..field + 8].try_into().unwrap());
+        if ms != 0 {
+            packet[field..field + 8].copy_from_slice(&(ms - fight_start_ms).to_le_bytes());
+        }
+    }
+}
+
 /// One captured buffer, as the packet logger recorded it.
 #[derive(Debug, Clone)]
 pub struct CapturedPacket {
@@ -1324,6 +1342,9 @@ pub fn build(
     for (at, packet) in before.into_iter().rev() {
         let dt = (at - fight_start_ms).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
         records.insert(0, (dt, packet));
+    }
+    for (_, packet) in records.iter_mut() {
+        run_times_relative(packet, fight_start_ms);
     }
 
     // The verifier. Everything above is pattern work; this is what we actually
@@ -2418,6 +2439,25 @@ mod tests {
             let slice = build(&moved, start, start + 10_000, &HashMap::new(), KEY).unwrap();
             assert!(slice.records.iter().all(|(_, p)| first_entity(p, &SPAWN).is_none()), "a spawn of the zone before");
         }
+    }
+
+    /// A dungeon state's times come out relative to the fight, as the
+    /// records' own (600071, 2026-10-09: running since 450 s before the
+    /// clear's fight, with an hour's limit).
+    #[test]
+    fn a_dungeon_state_carries_no_wall_clock() {
+        let start = 1_791_570_863_008 - 60_000;
+        let mut state = vec![0x00, 0x61];
+        state.extend(600_071u32.to_le_bytes());
+        state.push(2);
+        state.extend(1_791_570_413_009i64.to_le_bytes());
+        state.extend(1_791_574_013_009i64.to_le_bytes());
+        let hit = [0x04, 0x38, 0x01];
+        let slice = build(&[cap(start - 1_000, &state), cap(start, &hit)], start, start + 10_000, &HashMap::new(), KEY).unwrap();
+        let (_, kept) = slice.records.iter().find(|(_, p)| p[1..3] == [0x00, 0x61]).expect("kept");
+        let time = i64::from_le_bytes(kept[8..16].try_into().unwrap());
+        let deadline = i64::from_le_bytes(kept[16..24].try_into().unwrap());
+        assert_eq!((time, deadline - time), (1_791_570_413_009 - start, 3_600_000));
     }
 
     #[test]
