@@ -328,6 +328,10 @@ impl StreamProcessor {
         if let Some(run) = dungeon_state(packet) {
             self.data_storage.note_dungeon_state(run);
         }
+        // Timed events' openings, logged to learn their schedule.
+        if let Some(line) = timed_event(packet) {
+            tracing::info!("Timed event: {line}");
+        }
         // The field bosses on a map the player opened (boss timers).
         if let Some(map) = crate::capture::boss_map::parse(packet, crate::clock::now_ms()) {
             self.data_storage.note_boss_map(map);
@@ -2475,6 +2479,46 @@ fn dungeon_state(packet: &[u8]) -> Option<crate::combat::data_storage::DungeonRu
     let deadline = i64::from_le_bytes(b[13..21].try_into().ok()?);
     (content > 0 && (1..=9).contains(&state) && time != 0)
         .then_some(crate::combat::data_storage::DungeonRun { content, state, time, deadline })
+}
+
+/// The game's timed-event schedule, as a log line:
+///
+/// ```text
+/// <len> 01 60 <kind u8> <event varint> <state u8> <start u64 ms> [<from u64 ms> <until u64 ms>]
+/// ```
+///
+/// Seen 2026-11-13 (Global, Elyos): kind 3 state 1 as entry opens (from and
+/// until the 3-minute entry window), state 2 as it runs (its length); kind 0
+/// with one time, after the run. Event ids: first digit the side (1 Elyos,
+/// 2 Asmodian), second the event (1 the Shugo Festival at :00, its nine
+/// venues 01-09; 2 the Dimensional Invasion at :30), then which. Neither runs
+/// every hour (invasions at 19:30, 20:30 and 23:30 that evening, not 17:30,
+/// 18:30, 21:30 or 22:30), so each is logged to learn when they do.
+fn timed_event(packet: &[u8]) -> Option<String> {
+    let len = read_varint(packet, 0);
+    let at = usize::try_from(len.length).ok().filter(|&n| n > 0)?;
+    if packet.get(at..at + 2)? != [0x01, 0x60] {
+        return None;
+    }
+    let kind = *packet.get(at + 2)?;
+    let event = read_varint(packet, at + 3);
+    let after = at + 3 + usize::try_from(event.length).ok().filter(|&n| n > 0)?;
+    let state = *packet.get(after)?;
+    let times: Vec<i64> = (0..3)
+        .filter_map(|i| packet.get(after + 1 + i * 8..after + 9 + i * 8))
+        .map(|b| i64::from_le_bytes(b.try_into().unwrap()))
+        .collect();
+    let name = match (event.value / 10_000) % 10 {
+        1 => "Shugo Festival",
+        2 => "Dimensional Invasion",
+        _ => "event",
+    };
+    let side = if event.value / 100_000 == 2 { "Asmodian" } else { "Elyos" };
+    let utc = |ms: i64| {
+        chrono::DateTime::from_timestamp_millis(ms).map_or_else(|| ms.to_string(), |t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+    };
+    let times: Vec<String> = times.into_iter().map(utc).collect();
+    Some(format!("{name} ({side}) {} kind {kind} state {state}: {}", event.value, times.join(" / ")))
 }
 
 /// The entity a login record names as you.
@@ -5315,6 +5359,16 @@ mod tests {
         let mut packet = vec![(len as u8) | 0x80, (len >> 7) as u8];
         packet.extend(body);
         packet
+    }
+
+    /// A Dimensional Invasion opening (2026-11-13 20:30 UTC+8): its 3-minute
+    /// entry window.
+    #[test]
+    fn a_timed_event_reads_as_a_log_line() {
+        let line = timed_event(&hex("20016003a5aa070131e2e2d4a101000031e2e2d4a101000051a1e5d4a1010000")).unwrap();
+        assert!(line.starts_with("Dimensional Invasion (Elyos) 120101 kind 3 state 1:"), "{line}");
+        assert!(line.contains("2026-11-13 12:30:01 UTC") && line.ends_with("2026-11-13 12:33:01 UTC"), "{line}");
+        assert_eq!(timed_event(&hex("0d0160003d9f06008004d8d4a1010000")).map(|l| l.starts_with("Shugo Festival (Elyos) 110013")), Some(false));
     }
 
     /// Dungeon states of a 600071 run (2026-10-09) and the Shugo Festival's
