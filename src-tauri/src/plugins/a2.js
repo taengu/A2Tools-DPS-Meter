@@ -66,7 +66,12 @@
 //                                              gather = { type: "started", node, n } | { type: "refused",
 //                                              node } | { type: "done", node, item, count, bonus (extra
 //                                              copies), extraItem, extraCount (the random add-on, 0 when
-//                                              none) }. atPlace = { map, dungeon, content, contentState }:
+//                                              none) }; or { kind: "drops", at, drops: [{ source (the entity
+//                                              it fell from), mob (its NPC code, when known), item, count,
+//                                              owner ("you" | "party" | "other": in a party each member gets
+//                                              drops of their own) }], atPlace }; or { kind: "kill", at,
+//                                              entity, mob, byYou, byParty, atPlace } for a monster that
+//                                              died in sight. atPlace = { map, dungeon, content, contentState }:
 //                                              the map, the dungeon (0: none) and the timed content the
 //                                              game last stated (00 61: 1 entered, 2 running, 3 cleared)
 //   a2.on("blackMarket", (m) => ...)           the Black Cloud Merchants' stock, each time a tab of the

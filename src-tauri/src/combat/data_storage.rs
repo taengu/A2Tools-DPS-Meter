@@ -660,6 +660,8 @@ struct Inner {
     current_map_id: Option<i32>,
     /// The game's last word on the dungeon run (`00 61`).
     dungeon_run: Option<DungeonRun>,
+    /// Your character's id, from the login record (`53 20`).
+    local_dbid: Option<u64>,
     /// Power-scalar values observed per actor in its damage records. A summon
     /// inherits its owner's, so this links the two when no spawn packet (and
     /// therefore no `parent_key`) ever arrives — the case for a Cleric's Divine
@@ -893,6 +895,7 @@ impl DataStorage {
                 roster_dungeon_id: 0,
                 current_map_id: None,
                 dungeon_run: None,
+                local_dbid: None,
                 actor_power_scalars: HashMap::new(),
                 hostile_target_ids: HashSet::new(),
                 dead_entity_ids: HashSet::new(),
@@ -2336,11 +2339,31 @@ impl DataStorage {
         inner.boss_hp_now.remove(&entity_id);
         inner.boss_hp_sent.remove(&entity_id);
         self.stagger.lock().note_gone(entity_id, now_ms(), true);
-        inner.dead_entity_ids.insert(entity_id);
+        let first_death = inner.dead_entity_ids.insert(entity_id);
         inner.hp_floored_ids.remove(&entity_id);
         inner.death_log.push_back((entity_id, now_ms(), None));
         while inner.death_log.len() > MAX_DEATHS {
             inner.death_log.pop_front();
+        }
+        // A monster's death, for drop rates: who of yours hit it.
+        let kill = inner.mob_storage.get(&entity_id).copied().filter(|_| first_death).map(|mob| {
+            let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok());
+            let hitters: Vec<i32> = inner
+                .target_combat
+                .get(&entity_id)
+                .map(|t| t.actors.keys().map(|a| inner.summon_storage.get(a).copied().unwrap_or(*a)).collect())
+                .unwrap_or_default();
+            let by_you = me.is_some_and(|me| hitters.contains(&me));
+            let by_party = hitters.iter().any(|a| {
+                Some(*a) != me
+                    && inner.nickname_storage.get(a).is_some_and(|name| inner.party_members.contains_key(name))
+            });
+            (mob, by_you, by_party)
+        });
+        drop(inner);
+        if let Some((mob, by_you, by_party)) = kill {
+            let place = self.loot_place();
+            self.loot.lock().kill(now_ms(), entity_id, mob, by_you, by_party, place);
         }
     }
 
@@ -2474,6 +2497,37 @@ impl DataStorage {
     pub fn note_items(&self, entries: &[crate::capture::loot::ItemEntry]) {
         let place = self.loot_place();
         self.loot.lock().items(crate::clock::now_ms(), entries, place);
+    }
+
+    /// Your character's id, from the login record (`53 20`): the id drops
+    /// name their owner by.
+    pub fn note_local_dbid(&self, dbid: u64) {
+        self.inner.write().local_dbid = Some(dbid);
+    }
+
+    /// Drops seen (`1E 56`), kept for plugins: each with its monster's NPC
+    /// code, and whose it is (yours, a party member's, someone else's).
+    pub fn note_drops(&self, drops: &[crate::capture::loot::Drop]) {
+        use crate::capture::loot::{DropSeen, Owner};
+        let place = self.loot_place();
+        let seen: Vec<DropSeen> = {
+            let inner = self.inner.read();
+            drops
+                .iter()
+                .map(|d| {
+                    let owner = if d.owner_kind == 2 && inner.local_dbid == Some(d.owner) {
+                        Owner::You
+                    } else if d.owner_kind == 2 && inner.party_members.values().any(|m| m.dbid == d.owner) {
+                        Owner::Party
+                    } else {
+                        Owner::Other
+                    };
+                    let mob = i32::try_from(d.source).ok().and_then(|e| inner.mob_storage.get(&e).copied());
+                    DropSeen { source: d.source, mob, item: d.item, count: d.count, owner }
+                })
+                .collect()
+        };
+        self.loot.lock().drops(now_ms(), seen, place);
     }
 
     /// A gather (`31 8D`, `33 8D`), kept for plugins.

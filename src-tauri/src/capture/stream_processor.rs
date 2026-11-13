@@ -318,8 +318,9 @@ impl StreamProcessor {
             tracing::info!("server move: the game goes to {ip}:{port}");
             crate::capture::combat_port_detector::announce_port(port);
         }
-        if let Some(id) = login_record_entity(packet) {
+        if let Some((dbid, id)) = login_record(packet) {
             self.data_storage.note_login_record(id);
+            self.data_storage.note_local_dbid(dbid);
         }
         self.parse_death_packet(packet);
         self.parse_zone_change_packet(packet);
@@ -351,11 +352,13 @@ impl StreamProcessor {
         if let Some(roll) = crate::capture::loot_rolls::parse(packet) {
             self.data_storage.note_loot_roll(roll);
         }
-        // Items gained (pickups, rewards) and gathers, for drop rates.
+        // Items gained (pickups, rewards), gathers and drops, for drop rates.
         if let Some(entries) = crate::capture::loot::item_entries(packet) {
             self.data_storage.note_items(&entries);
         } else if let Some(gather) = crate::capture::loot::gather(packet) {
             self.data_storage.note_gather(gather);
+        } else if let Some(drops) = crate::capture::loot::drops(packet) {
+            self.data_storage.note_drops(&drops);
         }
         // The Supply Requests boards (at login), for Profiteer.
         if let Some(boards) = crate::capture::supply_requests::parse(packet) {
@@ -2490,7 +2493,7 @@ fn dungeon_state(packet: &[u8]) -> Option<crate::combat::data_storage::DungeonRu
 /// The one seen (2026-11-12, Global, 1,730 bytes) ended 4 bytes after the
 /// entity, which the self record 8 s later named as you. A result other than
 /// 0, or a layout that does not end within 8 bytes of the record, names no one.
-fn login_record_entity(packet: &[u8]) -> Option<i32> {
+fn login_record(packet: &[u8]) -> Option<(u64, i32)> {
     let len = read_varint(packet, 0);
     if len.length <= 0 {
         return None;
@@ -2523,7 +2526,8 @@ fn login_record_entity(packet: &[u8]) -> Option<i32> {
     }
     let id = read_varint(packet, at);
     let end = at + id.length.max(0) as usize;
-    (id.length > 0 && end <= packet.len() && packet.len() - end <= 8).then_some(id.value)
+    let dbid = u64::from_le_bytes(packet.get(len.length as usize + 2..len.length as usize + 10)?.try_into().ok()?);
+    (id.length > 0 && end <= packet.len() && packet.len() - end <= 8).then_some((dbid, id.value))
 }
 
 pub fn varint_ending_at(
@@ -5293,7 +5297,7 @@ mod tests {
     /// A login record shaped like the one of 2026-11-12 (Global): 1,347 bytes
     /// of option data, no skill customizing, char key 4385, 350 bytes of
     /// customizing data, then entity 15532 (`ac 79`) and 4 bytes more.
-    fn login_record(result: [u8; 2], skills: u8, tail: usize) -> Vec<u8> {
+    fn login_bytes(result: [u8; 2], skills: u8, tail: usize) -> Vec<u8> {
         let mut body = vec![0x53, 0x20];
         body.extend(367043369630931093i64.to_le_bytes());
         body.extend([0; 8]);
@@ -5340,18 +5344,19 @@ mod tests {
 
     #[test]
     fn a_login_record_names_you() {
-        assert_eq!(login_record_entity(&login_record([0, 0], 0, 4)), Some(15532));
-        assert_eq!(login_record_entity(&login_record([0, 0], 2, 0)), Some(15532), "skill entries are skipped");
-        assert_eq!(login_record_entity(&login_record([1, 0], 0, 4)), None, "a failed login");
-        assert_eq!(login_record_entity(&login_record([0, 0], 0, 40)), None, "not the layout");
-        let mut cut = login_record([0, 0], 0, 4);
+        let id = |p: &[u8]| login_record(p).map(|(_, id)| id);
+        assert_eq!(login_record(&login_bytes([0, 0], 0, 4)), Some((367_043_369_630_931_093, 15532)));
+        assert_eq!(id(&login_bytes([0, 0], 2, 0)), Some(15532), "skill entries are skipped");
+        assert_eq!(id(&login_bytes([1, 0], 0, 4)), None, "a failed login");
+        assert_eq!(id(&login_bytes([0, 0], 0, 40)), None, "not the layout");
+        let mut cut = login_bytes([0, 0], 0, 4);
         cut.truncate(400);
-        assert_eq!(login_record_entity(&cut), None);
+        assert_eq!(login_record(&cut), None);
 
         let storage = Arc::new(DataStorage::new());
         let mut p = StreamProcessor::new(storage.clone(), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()));
         storage.set_local_identity_from_game(4451, Some("Naicha".into()));
-        p.parse_perfect_packet(&login_record([0, 0], 0, 4));
+        p.parse_perfect_packet(&login_bytes([0, 0], 0, 4));
         assert_eq!(storage.local_player_id(), Some(15532));
         assert_eq!(storage.local_character_name(), None, "the self record names this one");
     }

@@ -9,7 +9,18 @@
 //! 31 8D 04 3a <node varint> 00...                           refused (someone is on it)
 //! 33 8D 00 3a <node varint> <item u32> <count u32> <bonus u32> <extra item u32> <extra count u32>
 //!                                                           a gather's result
+//! 1E 56 <n u8> (<drop>)* <u8>                               loot dropped
+//!   drop: <object u32> <from x y z f32> <to x y z f32> <source entity u32> <u32>
+//!         <item u32> <count u32> <owner kind u8> <owner id u64> <time u64 ms> 01 03
 //! ```
+//!
+//! A drop is 63 bytes. Its source is the entity it fell from (a monster, the
+//! festival's reward giver); its owner, kind 2, a character's id (the form
+//! the login record gives yours, and the roster each member's): every drop
+//! in sight comes, everyone's, and in a party each member gets drops of
+//! their own (one record held two, from two monsters, for two members).
+//! Owner kinds 1 and 5 are rarer, not understood. 5,004 records of
+//! 2026-11-12 all read: 4,996 of one drop, the rest of 2 or 4.
 //!
 //! Little-endian. An item entry's change is 0 for an item that took a new
 //! place (gear, a first stack), 1 for a stack that changed, 2 for one used
@@ -74,6 +85,37 @@ pub struct ItemGained {
     pub gained: Option<u64>,
 }
 
+/// One drop, as read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Drop {
+    pub source: u32,
+    pub item: u32,
+    pub count: u32,
+    pub owner_kind: u8,
+    pub owner: u64,
+}
+
+/// Whose a drop is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Owner {
+    You,
+    Party,
+    Other,
+}
+
+/// A drop as plugins get it: what fell from which monster (its NPC code
+/// when its spawn was seen), and whose it is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DropSeen {
+    pub source: u32,
+    pub mob: Option<i32>,
+    pub item: u32,
+    pub count: u32,
+    pub owner: Owner,
+}
+
 /// Where the player was.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -97,12 +139,22 @@ pub enum LootEvent {
     /// A gather.
     #[serde(rename_all = "camelCase")]
     Gather { at: i64, gather: Gather, at_place: Whereabouts },
+    /// Loot dropped in sight.
+    #[serde(rename_all = "camelCase")]
+    Drops { at: i64, drops: Vec<DropSeen>, at_place: Whereabouts },
+    /// A monster died in sight: `by_you` when you (or your summons) hit it,
+    /// `by_party` when a party member did.
+    #[serde(rename_all = "camelCase")]
+    Kill { at: i64, entity: i32, mob: i32, by_you: bool, by_party: bool, at_place: Whereabouts },
 }
 
 impl LootEvent {
     pub fn at(&self) -> i64 {
         match self {
-            LootEvent::Items { at, .. } | LootEvent::Gather { at, .. } => *at,
+            LootEvent::Items { at, .. }
+            | LootEvent::Gather { at, .. }
+            | LootEvent::Drops { at, .. }
+            | LootEvent::Kill { at, .. } => *at,
         }
     }
 }
@@ -165,6 +217,25 @@ pub fn item_entries(packet: &[u8]) -> Option<Vec<ItemEntry>> {
     Some(out)
 }
 
+/// The drops a `1E 56` record holds, or None when it isn't one or they don't
+/// all fall into place.
+pub fn drops(packet: &[u8]) -> Option<Vec<Drop>> {
+    const DROP: usize = 63;
+    let b = body(packet, [0x1E, 0x56])?;
+    let n = *b.first()? as usize;
+    if n == 0 || b.len() != 1 + n * DROP + 1 {
+        return None;
+    }
+    (0..n)
+        .map(|i| {
+            let d = &b[1 + i * DROP..1 + (i + 1) * DROP];
+            let item = u32_at(d, 36)?;
+            (100_000_000..1_000_000_000).contains(&item).then_some(())?;
+            Some(Drop { source: u32_at(d, 28)?, item, count: u32_at(d, 40)?, owner_kind: d[44], owner: u64_at(d, 45)? })
+        })
+        .collect()
+}
+
 /// A gather record, or None.
 pub fn gather(packet: &[u8]) -> Option<Gather> {
     use super::stream_processor::read_varint;
@@ -225,6 +296,14 @@ impl Loot {
 
     pub fn gather(&mut self, at: i64, gather: Gather, place: Whereabouts) {
         self.push(LootEvent::Gather { at, gather, at_place: place });
+    }
+
+    pub fn drops(&mut self, at: i64, drops: Vec<DropSeen>, place: Whereabouts) {
+        self.push(LootEvent::Drops { at, drops, at_place: place });
+    }
+
+    pub fn kill(&mut self, at: i64, entity: i32, mob: i32, by_you: bool, by_party: bool, place: Whereabouts) {
+        self.push(LootEvent::Kill { at, entity, mob, by_you, by_party, at_place: place });
     }
 
     fn push(&mut self, event: LootEvent) {
@@ -311,6 +390,22 @@ mod tests {
     fn an_item_used_up_reads_as_removed() {
         let p = hex("2b 1b56010200855e0200008e00006926b41f0000000000000000040000000000000000000000000000002600");
         assert_eq!(item_entries(&p), Some(vec![ItemEntry { item: 531_900_009, total: 0, change: Change::Removed }]));
+    }
+
+    /// Drops of 2026-11-12: one pet soul for one player, and a record of two
+    /// drops from two monsters for two party members.
+    #[test]
+    fn drops_name_their_source_and_owner() {
+        let one = hex("43 1e56017584000016b187c7bb6275c700d42f46779a87c7cdd374c700103046de5b00005f436200c243de1f0100000002ba2f0400000018055fcfeacfa1010000010301");
+        assert_eq!(
+            drops(&one),
+            Some(vec![Drop { source: 23_518, item: 534_660_034, count: 1, owner_kind: 2, owner: 0x0518_0000_0004_2fba }])
+        );
+        let two = hex("8201 1e5602106d0000438385c7c72e4fc700984f46f84e85c72a604fc700404f46ae5f00000f7d62004044de1f0100000002d62a040000002005c876edcfa10100000103925d00002fe286c79f5c56c700f44a4691ed86c75ce755c700544b46ae5f0000cc7d62004044de1f01000000028d03040000001805be80edcfa1010000010302");
+        let read = drops(&two).expect("two drops");
+        assert_eq!(read.iter().map(|d| (d.source, d.owner)).collect::<Vec<_>>(),
+            vec![(24_494, 0x0520_0000_0004_2ad6), (24_494, 0x0518_0000_0004_038d)]);
+        assert_eq!(drops(&two[..two.len() - 1]), None, "cut short");
     }
 
     /// Gathering an Aria node three times (2026-11-12), and one refused.
