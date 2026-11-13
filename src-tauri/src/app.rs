@@ -4112,6 +4112,41 @@ pub fn run() {
             crate::supply_report::spawn(app.handle().clone());
             #[cfg(feature = "online")]
             crate::ranking_report::spawn(app.handle().clone());
+            // Timed events (the Shugo Festival's and Dimensional Invasion's
+            // openings, `01 60`) kept in a file of their own, which, unlike
+            // debug.log, never rotates away: their schedule is learnt from it.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        let Some(state) = handle.try_state::<AppState>() else { continue };
+                        let lines = state.data_storage.take_timed_events();
+                        if lines.is_empty() {
+                            continue;
+                        }
+                        let server = crate::boss_report::report_server(&state);
+                        let text: String = lines
+                            .into_iter()
+                            .map(|(at, line)| {
+                                let when = chrono::DateTime::from_timestamp_millis(at)
+                                    .map(|t| t.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S%:z").to_string())
+                                    .unwrap_or_default();
+                                format!("{when} | server {server} | {line}\n")
+                            })
+                            .collect();
+                        let path = state.app_data_dir.join("timed_events.log");
+                        let written = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&path)
+                            .and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes()));
+                        if let Err(e) = written {
+                            tracing::warn!("timed_events.log: {e}");
+                        }
+                    }
+                });
+            }
             #[cfg(feature = "online")]
             crate::party_presence::spawn(app.handle().clone());
             // A deletion of guest uploads the player asked for that hasn't

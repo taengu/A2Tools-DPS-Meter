@@ -331,6 +331,7 @@ impl StreamProcessor {
         // Timed events' openings, logged to learn their schedule.
         if let Some(line) = timed_event(packet) {
             tracing::info!("Timed event: {line}");
+            self.data_storage.note_timed_event(line);
         }
         // The field bosses on a map the player opened (boss timers).
         if let Some(map) = crate::capture::boss_map::parse(packet, crate::clock::now_ms()) {
