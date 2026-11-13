@@ -9,6 +9,7 @@ pub mod rankings;
 pub mod flight_power;
 pub mod loot;
 pub mod loot_rolls;
+pub mod reward_cards;
 pub mod field_bosses;
 pub mod captured_payload;
 pub mod evidence_slice;
