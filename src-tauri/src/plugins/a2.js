@@ -57,6 +57,18 @@
 //                                              player } who won it. The highest roll wins. A roll can
 //                                              come before its "open" or without one. Once each, kept
 //                                              like a decoder's events
+//   a2.on("loot", (e) => ...)                 your loot (permission "events:loot", meter 2.0.98 on), once
+//                                              each, kept like a decoder's events. e = { kind: "items", at,
+//                                              items: [{ item (Item id), total (the stack after), change
+//                                              ("new" | "changed" | "removed"), gained (how many, when
+//                                              known, else null) }], atPlace } for items you pick up, are
+//                                              given or use up; or { kind: "gather", at, gather, atPlace },
+//                                              gather = { type: "started", node, n } | { type: "refused",
+//                                              node } | { type: "done", node, item, count, bonus (extra
+//                                              copies), extraItem, extraCount (the random add-on, 0 when
+//                                              none) }. atPlace = { map, dungeon, content, contentState }:
+//                                              the map, the dungeon (0: none) and the timed content the
+//                                              game last stated (00 61: 1 entered, 2 running, 3 cleared)
 //   a2.on("blackMarket", (m) => ...)           the Black Cloud Merchants' stock, each time a tab of the
 //                                              shop is opened (permission "events:black-market", meter
 //                                              2.0.93 on): m = { at, kind, refreshAt (unix ms, when the

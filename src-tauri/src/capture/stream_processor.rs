@@ -351,6 +351,12 @@ impl StreamProcessor {
         if let Some(roll) = crate::capture::loot_rolls::parse(packet) {
             self.data_storage.note_loot_roll(roll);
         }
+        // Items gained (pickups, rewards) and gathers, for drop rates.
+        if let Some(entries) = crate::capture::loot::item_entries(packet) {
+            self.data_storage.note_items(&entries);
+        } else if let Some(gather) = crate::capture::loot::gather(packet) {
+            self.data_storage.note_gather(gather);
+        }
         // The Supply Requests boards (at login), for Profiteer.
         if let Some(boards) = crate::capture::supply_requests::parse(packet) {
             self.data_storage.note_supply_requests(boards);

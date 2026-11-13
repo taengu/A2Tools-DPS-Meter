@@ -757,6 +757,7 @@
       "permFps": "Mostrar los FPS del juego (en Windows, el medidor pide ejecutarse como administrador para ello)",
       "permDeathRecap": "Cuando un jugador te mata: quién era y el daño que te hizo",
       "permLootRolls": "Ver el botín por dados: el objeto, quién sacó cuánto y quién lo ganó",
+      "permLoot": "Ver tu botín: los objetos que recoges o recibes, y lo que recolectas",
       "permBlackMarket": "Ver las existencias del Mercader de la Nube Negra al abrir la tienda: los objetos y sus precios",
       "permKda": "Contar tus bajas, asistencias y muertes contra jugadores (sin nombres)",
       "permStats": "Ver las estadísticas de tu personaje, como la reducción de reutilización",

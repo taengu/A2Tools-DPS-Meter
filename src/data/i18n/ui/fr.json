@@ -757,6 +757,7 @@
       "permFps": "Afficher les FPS du jeu (sous Windows, le compteur demande à s'exécuter en tant qu'administrateur pour cela)",
       "permDeathRecap": "Après qu'un joueur vous a tué : qui c'était et les dégâts qu'il vous a infligés",
       "permLootRolls": "Voir le butin aux dés : l'objet, qui a obtenu quel score et qui l'a remporté",
+      "permLoot": "Voir votre butin : les objets ramassés ou reçus, et ce que vous récoltez",
       "permBlackMarket": "Voir le stock du Marchand du Nuage noir quand vous ouvrez la boutique : les objets et leurs prix",
       "permKda": "Compter vos éliminations, assistances et morts contre des joueurs (sans noms)",
       "permStats": "Voir les statistiques de votre personnage, comme la réduction du temps de recharge",

@@ -558,6 +558,8 @@ pub struct DataStorage {
     death_recaps: Mutex<DeathRecaps>,
     /// Dice Roll loot as read (`capture::loot_rolls`), for plugins.
     loot_rolls: Mutex<crate::capture::loot_rolls::LootRolls>,
+    /// Items gained and gathers (`capture::loot`), for plugins.
+    loot: Mutex<crate::capture::loot::Loot>,
     /// The Black Cloud Merchant's stock as read (`capture::black_market`),
     /// for plugins.
     black_markets: Mutex<crate::capture::black_market::BlackMarkets>,
@@ -958,6 +960,7 @@ impl DataStorage {
             entry: Mutex::new(Default::default()),
             death_recaps: Mutex::new(DeathRecaps::default()),
             loot_rolls: Mutex::new(Default::default()),
+            loot: Mutex::new(Default::default()),
             black_markets: Mutex::new(Default::default()),
             flight_powers: Mutex::new(Default::default()),
             kda: Mutex::new(Kda::default()),
@@ -2453,6 +2456,36 @@ impl DataStorage {
     pub fn note_loot_roll(&self, roll: crate::capture::loot_rolls::LootRoll) {
         let at = crate::clock::now_ms();
         self.loot_rolls.lock().push(crate::capture::loot_rolls::LootRollEvent { at, roll });
+    }
+
+    /// Where the player is, for loot: the map, the dungeon and the timed
+    /// content the game last stated.
+    fn loot_place(&self) -> crate::capture::loot::Whereabouts {
+        let inner = self.inner.read();
+        crate::capture::loot::Whereabouts {
+            map: inner.current_map_id.unwrap_or(0),
+            dungeon: inner.current_dungeon_id,
+            content: inner.dungeon_run.map_or(0, |r| r.content),
+            content_state: inner.dungeon_run.map_or(0, |r| r.state),
+        }
+    }
+
+    /// Items gained (`1B 56`), kept for plugins.
+    pub fn note_items(&self, entries: &[crate::capture::loot::ItemEntry]) {
+        let place = self.loot_place();
+        self.loot.lock().items(crate::clock::now_ms(), entries, place);
+    }
+
+    /// A gather (`31 8D`, `33 8D`), kept for plugins.
+    pub fn note_gather(&self, gather: crate::capture::loot::Gather) {
+        let place = self.loot_place();
+        self.loot.lock().gather(crate::clock::now_ms(), gather, place);
+    }
+
+    /// The loot events read since `seq`, and the count to ask with next
+    /// time; None when there are none.
+    pub fn loot_since(&self, seq: u64) -> Option<(u64, Vec<crate::capture::loot::LootEvent>)> {
+        self.loot.lock().since(seq)
     }
 
     /// The roll events read since `seq`, and the count to ask with next

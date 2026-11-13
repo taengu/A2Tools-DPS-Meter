@@ -765,6 +765,7 @@
       "permFps": "Show the game's frame rate (on Windows, the meter asks to run as administrator for it)",
       "permDeathRecap": "After a player kills you: who they were and the damage they did to you",
       "permLootRolls": "See Dice Roll loot: the item, who rolled what, and who won it",
+      "permLoot": "See your loot: the items you pick up or receive, and what you gather",
       "permBlackMarket": "See the Black Cloud Merchants' stock when you open their shop: the items and their prices",
       "permKda": "Count your kills, assists and deaths against players (no names)",
       "permStats": "See your character's stats, such as cooldown reduction",

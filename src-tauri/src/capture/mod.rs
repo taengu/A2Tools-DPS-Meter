@@ -7,6 +7,7 @@ pub mod black_market;
 pub mod boss_map;
 pub mod rankings;
 pub mod flight_power;
+pub mod loot;
 pub mod loot_rolls;
 pub mod field_bosses;
 pub mod captured_payload;
