@@ -994,7 +994,17 @@ pub async fn upload_detailed(
     record: &FightRecord,
     settings: &crate::config::settings::Settings,
 ) -> Result<UploadResult, UploadFailure> {
-    upload_claiming(client, app_data_dir, record, settings, None).await
+    upload_claiming(client, app_data_dir, record, settings, claim_of(record)).await
+}
+
+/// The boss this meter saw in a fight, sent with every upload: the service
+/// takes it only when the slice names no boss and nothing contradicts it, so
+/// a fight refused for having none (a boss pulled long after its spawn) is
+/// named when uploaded again from History. None for a training dummy and the
+/// open world.
+pub fn claim_of(record: &FightRecord) -> Option<Claim> {
+    (!record.is_train && record.dungeon_id > 0 && record.mob_code > 0)
+        .then_some(Claim { mob: record.mob_code, dungeon: record.dungeon_id })
 }
 
 /// The boss this meter saw in a fight, sent with it when its slice names
@@ -1318,6 +1328,14 @@ mod upload_tests {
         assert_eq!(picked, vec![("a-boss".to_string(), claim), ("f-old".to_string(), claim)],
             "refused for no boss fight, or before the reason was kept");
         assert_eq!(claim_json(claim), serde_json::json!({"mob": 2_301_014, "dungeon": 600_082}));
+
+        let mut dummy = fight("t", 0, 60_000, true);
+        dummy.mob_code = 2_301_014;
+        assert_eq!(claim_of(&dummy), None, "a training dummy claims nothing");
+        let mut boss = fight("b", 0, 60_000, false);
+        boss.mob_code = 2_301_014;
+        boss.dungeon_id = 600_082;
+        assert_eq!(claim_of(&boss), Some(claim), "every upload of a boss fight carries it");
 
         note_claim_swept(&dir, "a-boss");
         note_claim_swept(&dir, "f-old");
