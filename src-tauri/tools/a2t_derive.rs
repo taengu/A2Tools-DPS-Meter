@@ -78,6 +78,29 @@ fn main() {
     std::process::exit(if same == tried && tried > 0 { 0 } else { 1 });
 }
 
+/// An open-world boss (a field boss outside an instance): the server sends
+/// no one else's direct hits on these, only some of their damage over time
+/// (`DpsCalculator::world_boss_rows`), so where another player's stray ticks
+/// land says nothing about the slice. Left out of the comparison.
+fn world_boss(r: &FightRecord) -> bool {
+    r.dungeon_id == 0 && a2tools_dps_meter_lib::capture::field_bosses::is_field_boss(r.mob_code)
+}
+
+/// A stored slice's bytes: zstd (the meter's since slice version 3), gzip
+/// (before it, and partners' files) or plain.
+fn unpack(raw: Vec<u8>) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut out = Vec::new();
+    if raw.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]) {
+        zstd::stream::read::Decoder::new(&raw[..]).ok()?.read_to_end(&mut out).ok()?;
+    } else if raw.starts_with(&[0x1f, 0x8b]) {
+        flate2::read::GzDecoder::new(&raw[..]).read_to_end(&mut out).ok()?;
+    } else {
+        return Some(raw);
+    }
+    Some(out)
+}
+
 /// Saved fights that some capture in the data dir covers.
 fn from_history(dir: &Path, wanted: &[String], t: &Tables) -> (usize, usize) {
     let captures = find_captures(dir);
@@ -94,6 +117,11 @@ fn from_history(dir: &Path, wanted: &[String], t: &Tables) -> (usize, usize) {
     for saved in &fights {
         let packets = covering(&captures, saved.start_time_ms);
         if packets.is_empty() {
+            continue;
+        }
+        if world_boss(saved) {
+            println!("
+== {} {}: world boss, left out (the server sends only your own hits on it)", saved.id, saved.boss_name);
             continue;
         }
         let (storage, whole) = replay(&packets, t, false);
@@ -119,7 +147,6 @@ fn from_history(dir: &Path, wanted: &[String], t: &Tables) -> (usize, usize) {
 /// The automatic path: the same segments through the in-memory ring, the
 /// slice cut by `save_slice` as the auto-save would, read back and derived.
 fn ring_check(packets: &[CapturedPacket], storage: &DataStorage, w: &FightRecord, t: &Tables) {
-    use std::io::Read;
     // The ring is process-wide, like the live one. Feed each capture once, or
     // a second fight from the same capture sees every packet twice.
     static FED: Mutex<Vec<i64>> = Mutex::new(Vec::new());
@@ -131,10 +158,9 @@ fn ring_check(packets: &[CapturedPacket], storage: &DataStorage, w: &FightRecord
     let dir = std::env::temp_dir().join(format!("a2t-ring-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let result = a2tools_dps_meter_lib::share::save_slice(&dir, w, &a2tools_dps_meter_lib::share::SliceNames::of(storage)).and_then(|bytes| {
-        let gz = std::fs::read(a2tools_dps_meter_lib::share::slices_dir(&dir).join(format!("{}.a2es.gz", w.id)))
+        let raw = std::fs::read(a2tools_dps_meter_lib::share::slices_dir(&dir).join(format!("{}.a2es.gz", w.id)))
             .map_err(|e| e.to_string())?;
-        let mut slice = Vec::new();
-        flate2::read::GzDecoder::new(&gz[..]).read_to_end(&mut slice).map_err(|e| e.to_string())?;
+        let slice = unpack(raw).ok_or("unreadable slice")?;
         let (d, _) = derive(&slice, t).map_err(|e| format!("{e:?}"))?;
         Ok((bytes, d))
     });
@@ -168,6 +194,11 @@ fn from_capture(path: &Path, t: &Tables, partner: Option<&[(String, DerivedFight
     whole.retain(|r| !r.is_train);
     if dummies > 0 {
         println!("{dummies} training-dummy fights left out: never uploaded");
+    }
+    let bosses = whole.len();
+    whole.retain(|r| !world_boss(r));
+    if whole.len() < bosses {
+        println!("{} world-boss fights left out: the server sends only your own hits on them", bosses - whole.len());
     }
     let (mut tried, mut same) = (0, 0);
     for w in &whole {
@@ -206,16 +237,7 @@ fn partner_slices(dir: &Path, t: &Tables) -> Vec<(String, DerivedFight, i64)> {
         if !(file.ends_with(".a2es") || file.ends_with(".a2es.gz")) {
             continue;
         }
-        let Ok(raw) = std::fs::read(&path) else { continue };
-        let slice = if raw.starts_with(&[0x1f, 0x8b]) {
-            let mut s = Vec::new();
-            if std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(&raw[..]), &mut s).is_err() {
-                continue;
-            }
-            s
-        } else {
-            raw
-        };
+        let Some(slice) = std::fs::read(&path).ok().and_then(unpack) else { continue };
         let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         match derive(&slice, t) {
             Ok((d, hidden)) => out.push((name, d, hidden)),
