@@ -70,11 +70,18 @@ pub fn for_server(server: u16) -> Option<serde_json::Value> {
     Some(serde_json::json!({ "server": server, "abyss": o.abyss, "rift": o.rift, "from": feed.from }))
 }
 
+/// After a failed read, the next tries: soon at first (a connection that
+/// fails once often works a moment later: a player in Egypt got a reset, then
+/// the list), then hourly.
+#[cfg(feature = "online")]
+const RETRY_SECS: [u64; 5] = [15, 30, 60, 120, 300];
+
 /// Read the list now, then every `EVERY`. A failed read keeps the last list
-/// and tries again in an hour.
+/// and tries again after `RETRY_SECS`, then hourly.
 #[cfg(feature = "online")]
 pub fn spawn(client: reqwest::Client) {
     tauri::async_runtime::spawn(async move {
+        let mut failures = 0usize;
         loop {
             let read = async {
                 for url in URLS {
@@ -91,12 +98,15 @@ pub fn spawn(client: reqwest::Client) {
             };
             let wait = match read.await {
                 Some(feed) => {
+                    failures = 0;
                     set(feed);
                     EVERY
                 }
                 None => {
-                    tracing::info!("Server pairings: not read, trying again in an hour");
-                    std::time::Duration::from_secs(3600)
+                    let secs = RETRY_SECS.get(failures).copied().unwrap_or(3600);
+                    failures += 1;
+                    tracing::info!("Server pairings: not read, trying again in {secs} s");
+                    std::time::Duration::from_secs(secs)
                 }
             };
             tokio::time::sleep(wait).await;
