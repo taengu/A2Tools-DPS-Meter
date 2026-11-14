@@ -361,7 +361,7 @@ pub fn save_place(window: &tauri::WebviewWindow) {
 }
 
 /// `save_place` without the window, for the store alone.
-fn save_place_at(title: &str, rect: Rect) {
+pub(super) fn save_place_at(title: &str, rect: Rect) {
     if let Some(places) = PLACES.get() {
         (places.save)(title, rect);
     }
@@ -373,7 +373,7 @@ pub fn place_of(window: &tauri::WebviewWindow) -> Option<(i32, i32)> {
 }
 
 /// `place_of` without the window, for the store alone.
-fn place_of_title(title: &str) -> Option<(i32, i32)> {
+pub(super) fn place_of_title(title: &str) -> Option<(i32, i32)> {
     let (x, y, _, _) = PLACES.get().and_then(|places| (places.load)(title))?;
     Some((x, y))
 }

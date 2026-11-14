@@ -309,6 +309,10 @@ pub fn activate_from_user(window: &tauri::WebviewWindow, _before: Option<isize>)
 }
 
 pub fn start_drag(window: &tauri::WebviewWindow) {
+    // An overlay surface (COSMIC) is moved by the meter, not the compositor.
+    if super::layer::start_drag(window) {
+        return;
+    }
     let _ = window.start_dragging();
 }
 
@@ -514,6 +518,9 @@ pub fn places_own_windows() -> bool {
 /// the meter where the player left each one (`focus::place_of`). None
 /// elsewhere: there the window's own position is right.
 pub fn known_position(window: &tauri::WebviewWindow) -> Option<(i32, i32)> {
+    if let Some(at) = super::layer::position(window) {
+        return Some(at);
+    }
     if super::focus::kwin_places_windows() { super::focus::place_of(window) } else { None }
 }
 
@@ -674,8 +681,15 @@ pub fn share_process<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
 }
 
 /// A window of the group built: later windows of the group may share its
-/// process, until it closes.
+/// process, until it closes. On COSMIC the meter's windows are made sticky
+/// as they appear (`cosmic_sticky`), or each becomes an overlay surface where
+/// that is asked for (`layer::apply`).
 pub fn joined(window: &tauri::WebviewWindow, group: crate::platform::ProcessGroup) {
+    if super::process::cosmic_overlay_requested() {
+        super::layer::apply(window);
+    } else {
+        super::cosmic_sticky::start();
+    }
     let slot = group_slot(group);
     let label = window.label().to_string();
     let _ = window.with_webview(move |webview| {

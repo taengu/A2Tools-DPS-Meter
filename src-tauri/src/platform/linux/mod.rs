@@ -16,6 +16,8 @@ pub mod discord_ipc;
 /// No frame record to read: under Proton the frames go through Vulkan.
 #[path = "../unsupported/fps.rs"]
 pub mod fps;
+mod cosmic_sticky;
+mod layer;
 mod file_permissions;
 mod focus;
 pub mod pcap;

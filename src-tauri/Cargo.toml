@@ -62,6 +62,10 @@ desktop = [
     "dep:x11-dl",
     "dep:libc",
     "dep:zbus",
+    "dep:wayland-client",
+    "dep:wayland-backend",
+    "dep:wayland-protocols",
+    "dep:wayland-scanner",
 ]
 
 # Both binaries are declared rather than left to auto-discovery, so adding the
@@ -202,6 +206,13 @@ x11-dl = { version = "2.21", optional = true }
 # Global hotkeys through the GlobalShortcuts portal (D-Bus). The zbus the
 # opener plugin and secret-service already bring in, so no second D-Bus stack.
 zbus = { version = "5", optional = true }
+# COSMIC (Pop!_OS): the meter's windows made sticky through its own toplevel
+# management protocol (platform/linux/cosmic_sticky.rs), on a Wayland
+# connection of its own. Pure Rust, no system library.
+wayland-client = { version = "0.31", optional = true }
+wayland-backend = { version = "0.3", optional = true }
+wayland-protocols = { version = "0.32", features = ["client", "staging"], optional = true }
+wayland-scanner = { version = "0.31", optional = true }
 
 [dev-dependencies]
 flate2 = "1"

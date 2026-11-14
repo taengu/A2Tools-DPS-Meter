@@ -13,6 +13,7 @@ Every package needs a 64-bit (x86_64) system with WebKitGTK 4.1: Ubuntu 22.04, D
 - **[Start and remove](#start-and-remove)**
 - **[What works on Linux](#what-works-on-linux)**
 - **[GNOME: keep the meter above other windows](#gnome-keep-the-meter-above-other-windows)**
+- **[COSMIC (Pop!_OS 24.04): keep the meter above other windows](#cosmic-pop_os-2404-keep-the-meter-above-other-windows)**
 - **[Build from source](#build-from-source-other-distributions)**, for distributions with no package
 - **[Sending us your logs](#sending-us-your-logs)**
 - **[Tiling desktops](#tiling-desktops-hyprland-sway-i3)** (Hyprland, Sway, i3)
@@ -313,6 +314,12 @@ KDE Plasma, Hyprland, Sway, i3 and other desktops retain the existing overlay vi
 The meter's minimum height is measured from its current content, so shrinking removes empty space without letting the frame overlap the header, rows or footer.
 
 Pausing with the mouse button held does not end the resize. If you release outside the window, move the pointer back over it to resume automatic sizing to the meter's content.
+
+## COSMIC (Pop!_OS 24.04): keep the meter above other windows
+
+COSMIC keeps no window above the others because an app asks, so the meter uses COSMIC's own **sticky** windows instead: a sticky window stays on top, even over a fullscreen game. From 2.0.99 the meter runs itself through XWayland on COSMIC, as on GNOME, and makes each of its windows sticky as it opens: the meter, Settings, Details, History, plugin windows and pins. Nothing to set up. COSMIC draws its focus outline around the window you last clicked; turn it off in **COSMIC Settings → Desktop → Window management → Show active window hint**.
+
+On older versions, make each window sticky yourself: in **COSMIC Settings → Keyboard → Keyboard Shortcuts**, search for **sticky** and give that shortcut a key (it has none by default), then click a meter window and press it. Repeat for Details and the other meter windows.
 
 ## Build from source (other distributions)
 
