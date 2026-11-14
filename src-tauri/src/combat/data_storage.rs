@@ -560,8 +560,6 @@ pub struct DataStorage {
     loot_rolls: Mutex<crate::capture::loot_rolls::LootRolls>,
     /// Items gained and gathers (`capture::loot`), for plugins.
     loot: Mutex<crate::capture::loot::Loot>,
-    /// Timed events' records waiting to be written (`note_timed_event`).
-    timed_events: Mutex<Vec<(i64, String)>>,
     /// The Black Cloud Merchant's stock as read (`capture::black_market`),
     /// for plugins.
     black_markets: Mutex<crate::capture::black_market::BlackMarkets>,
@@ -966,7 +964,6 @@ impl DataStorage {
             death_recaps: Mutex::new(DeathRecaps::default()),
             loot_rolls: Mutex::new(Default::default()),
             loot: Mutex::new(Default::default()),
-            timed_events: Mutex::new(Vec::new()),
             black_markets: Mutex::new(Default::default()),
             flight_powers: Mutex::new(Default::default()),
             kda: Mutex::new(Kda::default()),
@@ -2559,6 +2556,15 @@ impl DataStorage {
         self.loot.lock().drops(now_ms(), seen, place);
     }
 
+    /// A timed content's reward cards (`0A 57`), kept for plugins.
+    pub fn note_reward_cards(&self, cards: Vec<crate::capture::reward_cards::Card>) {
+        let place = self.loot_place();
+        let count = cards.len();
+        if self.loot.lock().cards(now_ms(), cards, place) {
+            tracing::info!("Reward cards: {count} read");
+        }
+    }
+
     /// A gather (`31 8D`, `33 8D`), kept for plugins.
     pub fn note_gather(&self, gather: crate::capture::loot::Gather) {
         let place = self.loot_place();
@@ -2957,20 +2963,6 @@ impl DataStorage {
         }
         tracing::info!("Party left — clearing party rows");
         self.end_party();
-    }
-
-    /// A timed event's record (`01 60`), as a line for `timed_events.log`
-    /// (app.rs writes them out).
-    pub fn note_timed_event(&self, line: String) {
-        let mut lines = self.timed_events.lock();
-        if lines.len() < 1000 {
-            lines.push((crate::clock::now_ms(), line));
-        }
-    }
-
-    /// The timed events' lines not yet written, with when each was read.
-    pub fn take_timed_events(&self) -> Vec<(i64, String)> {
-        std::mem::take(&mut *self.timed_events.lock())
     }
 
     /// The game's word on a dungeon run (`00 61`, see

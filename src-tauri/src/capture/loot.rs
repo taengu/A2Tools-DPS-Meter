@@ -146,6 +146,11 @@ pub enum LootEvent {
     /// `by_party` when a party member did.
     #[serde(rename_all = "camelCase")]
     Kill { at: i64, entity: i32, mob: i32, by_you: bool, by_party: bool, at_place: Whereabouts },
+    /// The reward cards a timed content (the Dimensional Invasion, the Shugo
+    /// Festival) shows at its end: every card's items, picked or not
+    /// (`reward_cards`, no names).
+    #[serde(rename_all = "camelCase")]
+    Cards { at: i64, cards: Vec<super::reward_cards::Card>, at_place: Whereabouts },
 }
 
 impl LootEvent {
@@ -154,7 +159,8 @@ impl LootEvent {
             LootEvent::Items { at, .. }
             | LootEvent::Gather { at, .. }
             | LootEvent::Drops { at, .. }
-            | LootEvent::Kill { at, .. } => *at,
+            | LootEvent::Kill { at, .. }
+            | LootEvent::Cards { at, .. } => *at,
         }
     }
 }
@@ -269,6 +275,9 @@ pub fn gather(packet: &[u8]) -> Option<Gather> {
 
 /// The loot events read, numbered, for plugins (as loot rolls are), and the
 /// last stack total of each item seen, for what a change gained.
+/// A run's reward cards read again this soon are the same run's.
+const SAME_CARDS_MS: i64 = 120_000;
+
 #[derive(Default)]
 pub struct Loot {
     events: VecDeque<LootEvent>,
@@ -304,6 +313,20 @@ impl Loot {
 
     pub fn kill(&mut self, at: i64, entity: i32, mob: i32, by_you: bool, by_party: bool, place: Whereabouts) {
         self.push(LootEvent::Kill { at, entity, mob, by_you, by_party, at_place: place });
+    }
+
+    /// A run's reward cards. The invasion sends its record twice: the same
+    /// cards again within `SAME_CARDS_MS` are that, not another run.
+    pub fn cards(&mut self, at: i64, cards: Vec<super::reward_cards::Card>, place: Whereabouts) -> bool {
+        let repeat = self.events.iter().rev().any(|e| match e {
+            LootEvent::Cards { at: when, cards: seen, .. } => at - when < SAME_CARDS_MS && *seen == cards,
+            _ => false,
+        });
+        if repeat {
+            return false;
+        }
+        self.push(LootEvent::Cards { at, cards, at_place: place });
+        true
     }
 
     fn push(&mut self, event: LootEvent) {
@@ -353,6 +376,18 @@ mod tests {
                 ItemEntry { item: 610_670_042, total: 16, change: Change::Changed },
             ])
         );
+    }
+
+    /// The invasion's reward cards, sent twice as they came up: one run.
+    #[test]
+    fn a_runs_cards_read_twice_are_one_event() {
+        let cards = crate::capture::reward_cards::parse(&hex(include_str!("testdata/reward_cards_invasion.hex"))).unwrap();
+        let mut loot = Loot::default();
+        assert!(loot.cards(1_000, cards.clone(), Whereabouts::default()));
+        assert!(!loot.cards(1_500, cards.clone(), Whereabouts::default()));
+        // Another run, later, with the same cards would be another event.
+        assert!(loot.cards(1_000 + SAME_CARDS_MS, cards, Whereabouts::default()));
+        assert_eq!(loot.since(0).unwrap().1.len(), 2);
     }
 
     /// The Shugo Festival's rewards (2026-11-12, 3 tokens on one card): six

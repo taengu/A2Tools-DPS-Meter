@@ -58,6 +58,7 @@
             <div class="headerBtn lockBtn" style="display:none" role="button" tabindex="0" aria-label="Lock overlay (click-through)" data-i18n-aria-label="settings.showLockBtn"><i data-lucide="lock-open"></i></div>
             <div class="headerBtn updatesBtn" role="button" hidden><i data-lucide="circle-arrow-down"></i></div>
             <div class="headerBtn suspendBtn" style="display:none"><i data-lucide="power"></i></div>
+            <div class="headerBtn dockBtn" style="display:none" role="button" tabindex="0" aria-label="Plugin dock" title="Plugin dock" data-i18n-aria-label="header.pluginDock" data-i18n-title="header.pluginDock"><i data-lucide="puzzle"></i></div>
             <div class="headerBtn chatCopyBtn" role="button" tabindex="0" aria-label="Copy your result for the game's chat" title="Copy your result for the game's chat" data-i18n-aria-label="chatCopy.title" data-i18n-title="chatCopy.title"><i data-lucide="message-square-text"></i></div>
             <div class="headerBtn historyBtn" role="button" tabindex="0" aria-label="Fight history" data-i18n-aria-label="history.title"><i data-lucide="scroll-text"></i></div>
             <div class="headerBtn resetBtn"><i data-lucide="rotate-ccw"></i></div>
@@ -741,6 +742,13 @@
                     <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showSuspendBtn" title="A button on the meter that stops reading game traffic until you press it again." data-i18n-title="settings.tips.showSuspendBtn">Show pause capture button</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showSuspendBtnCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showDockBtn" title="A button on the meter that opens and closes the plugin dock." data-i18n-title="settings.tips.showDockBtn">Show plugin dock button</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showDockBtnCheckbox" />
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>

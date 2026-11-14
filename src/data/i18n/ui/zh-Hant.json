@@ -1,6 +1,7 @@
 {
   "header": {
     "title": "A2Tools DPS Meter",
+"pluginDock": "外掛停駐列",
     "display": {
       "dps": "DPS",
       "total": "DMG",
@@ -399,6 +400,7 @@
     },
     "showSuspendBtn": "顯示暫停擷取按鈕",
     "showLockBtn": "顯示點擊穿透鎖定按鈕",
+    "showDockBtn": "顯示外掛停駐列按鈕",
     "playerLimit": {
       "label": "最大顯示人數"
     },
@@ -660,6 +662,7 @@
       "roundDps": "13,412 顯示為 13k。",
       "showSuspendBtn": "在計量器上顯示一個按鈕，按下後停止讀取遊戲流量，再按一次恢復。",
       "showLockBtn": "讓計量器忽略滑鼠、點擊直接作用於遊戲的按鈕。",
+      "showDockBtn": "在計量器上放一個開啟與關閉外掛停駐列的按鈕。",
       "windowOpacity": "計量器背景的透明程度。條形和文字不受影響。",
       "titleOpacity": "統計視窗標題列的透明程度，與下方背景分開設定。移動它之前，它跟隨背景不透明度。",
       "meterOpacity": "彩色傷害條的不透明程度。",

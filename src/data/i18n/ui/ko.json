@@ -1,6 +1,7 @@
 {
   "header": {
     "title": "A2Tools DPS Meter",
+"pluginDock": "플러그인 독",
     "display": {
       "dps": "DPS",
       "total": "DMG",
@@ -399,6 +400,7 @@
     },
     "showSuspendBtn": "수집 일시정지 버튼 표시",
     "showLockBtn": "클릭 통과 잠금 버튼 표시",
+    "showDockBtn": "플러그인 독 버튼 표시",
     "playerLimit": {
       "label": "최대 표시 인원"
     },
@@ -660,6 +662,7 @@
       "roundDps": "13,412는 13k로 표시됩니다.",
       "showSuspendBtn": "다시 누를 때까지 게임 트래픽 읽기를 멈추는 버튼을 미터에 표시합니다.",
       "showLockBtn": "미터가 마우스를 무시하게 하여 클릭이 게임으로 전달되도록 하는 버튼입니다.",
+      "showDockBtn": "미터에 플러그인 독을 열고 닫는 버튼을 둡니다.",
       "windowOpacity": "미터 배경의 투명도입니다. 막대와 글자는 그대로입니다.",
       "titleOpacity": "미터 제목 표시줄의 투명도를 아래 배경과 따로 정합니다. 움직이기 전까지는 배경 불투명도를 따릅니다.",
       "meterOpacity": "색이 있는 피해량 막대의 불투명도입니다.",

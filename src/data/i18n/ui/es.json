@@ -1,6 +1,7 @@
 {
   "header": {
     "title": "A2Tools DPS Meter",
+"pluginDock": "Panel de plugins",
     "display": {
       "dps": "DPS",
       "total": "DÑO",
@@ -399,6 +400,7 @@
     },
     "showSuspendBtn": "Mostrar botón de pausar captura",
     "showLockBtn": "Mostrar botón de bloqueo (clic a través)",
+    "showDockBtn": "Mostrar el botón del panel de plugins",
     "playerLimit": {
       "label": "Máx. jugadores mostrados"
     },
@@ -660,6 +662,7 @@
       "roundDps": "13.412 se muestra como 13k.",
       "showSuspendBtn": "Un botón en el medidor que deja de leer el tráfico del juego hasta que lo pulses de nuevo.",
       "showLockBtn": "Un botón que hace que el medidor ignore el ratón, para que los clics lleguen al juego.",
+      "showDockBtn": "Un botón en el medidor que abre y cierra el panel de plugins.",
       "windowOpacity": "Cuán transparente es el fondo del medidor. Las barras y el texto no cambian.",
       "titleOpacity": "Qué tan transparente es la barra de título del medidor, aparte del fondo de debajo. Hasta que lo muevas, sigue al fondo.",
       "meterOpacity": "Cuán sólidas son las barras de daño de color.",

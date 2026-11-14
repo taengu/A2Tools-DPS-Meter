@@ -347,6 +347,35 @@ pub fn dock_close(app: tauri::AppHandle) {
     sync(&app, None);
 }
 
+/// The meter's dock button: the dock on screen is closed as by its ×; else
+/// it comes back with the tabs it had (`CLOSED_WITH_KEY`), or its first.
+/// True when it is now open. Async: it may build the window.
+#[tauri::command]
+pub async fn dock_toggle(app: tauri::AppHandle) -> Result<bool, String> {
+    if let Some(window) = app.get_webview_window(LABEL) {
+        if window.is_visible().unwrap_or(false) {
+            // Hidden in place by the plugin windows hotkey: shown again.
+            if crate::platform::window::is_hidden_in_place(&window) {
+                if !crate::platform::window::reveal_in_place(&window) {
+                    crate::platform::window::show_on_top_without_focus(&window);
+                }
+                return Ok(true);
+            }
+            dock_close(app);
+            return Ok(false);
+        }
+    }
+    let off = disabled(&app);
+    let own = listed(&app, OWN_WINDOW_KEY);
+    let id = listed(&app, CLOSED_WITH_KEY)
+        .into_iter()
+        .find(|id| valid_id(id) && !off.contains(id) && !own.contains(id))
+        .or_else(|| members(&app).into_iter().next())
+        .ok_or("no plugin is in the dock")?;
+    super::plugin_open(app, id).await?;
+    Ok(true)
+}
+
 /// Dock a plugin, or give it a window of its own (Settings → Plugins, and
 /// the dock tab's pop-out button / the window's dock button).
 /// Async: it may build a window.

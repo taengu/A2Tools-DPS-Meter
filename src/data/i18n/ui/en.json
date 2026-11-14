@@ -1,6 +1,7 @@
 {
   "header": {
     "title": "A2Tools DPS Meter",
+"pluginDock": "Plugin dock",
     "display": {
       "dps": "DPS",
       "total": "DMG",
@@ -399,6 +400,7 @@
     },
     "showSuspendBtn": "Show pause capture button",
     "showLockBtn": "Show click-through lock button",
+    "showDockBtn": "Show plugin dock button",
     "playerLimit": {
       "label": "Max players shown"
     },
@@ -669,6 +671,7 @@
       "roundDps": "13,412 shows as 13k.",
       "showSuspendBtn": "A button on the meter that stops reading game traffic until you press it again.",
       "showLockBtn": "A button that makes the meter ignore the mouse, so clicks go through to the game.",
+      "showDockBtn": "A button on the meter that opens and closes the plugin dock.",
       "windowOpacity": "How see-through the meter's background is. Bars and text stay as they are.",
       "titleOpacity": "How see-through the meter's title bar is, apart from the background under it. Until you move it, it follows the background.",
       "meterOpacity": "How solid the coloured damage bars are.",

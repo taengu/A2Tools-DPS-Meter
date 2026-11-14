@@ -1,6 +1,7 @@
 {
   "header": {
     "title": "A2Tools DPS Meter",
+"pluginDock": "Dock des plugins",
     "display": {
       "dps": "DPS",
       "total": "DGT",
@@ -399,6 +400,7 @@
     },
     "showSuspendBtn": "Afficher le bouton de pause de capture",
     "showLockBtn": "Afficher le bouton de verrouillage (clic au travers)",
+    "showDockBtn": "Afficher le bouton du dock des plugins",
     "playerLimit": {
       "label": "Joueurs affichés max."
     },
@@ -660,6 +662,7 @@
       "roundDps": "13 412 s'affiche 13k.",
       "showSuspendBtn": "Un bouton sur le compteur qui arrête la lecture du trafic du jeu jusqu'à ce que tu appuies à nouveau.",
       "showLockBtn": "Un bouton qui fait ignorer la souris au compteur, pour que les clics passent au jeu.",
+      "showDockBtn": "Un bouton sur le meter qui ouvre et ferme le dock des plugins.",
       "windowOpacity": "La transparence du fond du compteur. Les barres et le texte ne changent pas.",
       "titleOpacity": "La transparence de la barre de titre du meter, à part du fond en dessous. Tant que vous ne le bougez pas, il suit le fond.",
       "meterOpacity": "L'opacité des barres de dégâts colorées.",

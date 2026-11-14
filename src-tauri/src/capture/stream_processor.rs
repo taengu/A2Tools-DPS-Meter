@@ -331,7 +331,6 @@ impl StreamProcessor {
         // Timed events' openings, logged to learn their schedule.
         if let Some(line) = timed_event(packet) {
             tracing::info!("Timed event: {line}");
-            self.data_storage.note_timed_event(line);
         }
         // The field bosses on a map the player opened (boss timers).
         if let Some(map) = crate::capture::boss_map::parse(packet, crate::clock::now_ms()) {
@@ -364,6 +363,8 @@ impl StreamProcessor {
             self.data_storage.note_gather(gather);
         } else if let Some(drops) = crate::capture::loot::drops(packet) {
             self.data_storage.note_drops(&drops);
+        } else if let Some(cards) = crate::capture::reward_cards::parse(packet) {
+            self.data_storage.note_reward_cards(cards);
         }
         // The Supply Requests boards (at login), for Profiteer.
         if let Some(boards) = crate::capture::supply_requests::parse(packet) {

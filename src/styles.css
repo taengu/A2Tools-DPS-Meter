@@ -566,7 +566,7 @@ html:not(.detailsWindow):not(.historyWindow):not(.settingsWindow) .meter {
 }
 .header .headerBtns .headerBtn svg { width: 15px; height: 15px; }
 .header .headerBtns .headerBtn:hover { color: #fff; }
-.header .headerBtns.hasSuspendBtn { gap: 6px; }
+.header .headerBtns.hasSuspendBtn, .header .headerBtns.hasDockBtn { gap: 6px; }
 .header .headerBtns .suspendBtn { color: rgba(255, 255, 255, 0.55); }
 .header .headerBtns .suspendBtn.isSuspended { color: #ff6b6b; }
 /* An update waiting (meter or plugins): green, until clicked. */

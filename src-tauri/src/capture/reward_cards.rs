@@ -1,8 +1,8 @@
 //! A timed content's reward cards: the five a Dimensional Invasion shows at
 //! its end, of which the player's tokens pick what they get. Sent once as the
 //! cards come up, with every card's items, picked or not: what could have
-//! been won, the fair sample for the items' odds (`reward_report` pools it
-//! across players). Read 2026-11-13 from two invasions (Global, Elyos).
+//! been won, the fair sample for the items' odds: plugins get them as the
+//! loot event's `cards`. Read 2026-11-13 from two invasions (Global, Elyos).
 //!
 //! ```text
 //! 0A 57 00 00 <u32> <u32> <u32> <cards u8>
