@@ -251,7 +251,9 @@ impl PcapLib {
             (self.open_live)(
                 c_name.as_ptr(),
                 65535,  // snaplen
-                0,      // not promiscuous: only this machine's own traffic
+                // Not promiscuous (only this machine's own traffic), but for
+                // a mirror port's copy of another PC's.
+                mirrored() as c_int,
                 100,    // timeout ms
                 errbuf.as_mut_ptr() as *mut c_char,
             )
@@ -287,6 +289,21 @@ impl PcapLib {
         unsafe { (f.freecode)(&mut program) };
         result
     }
+}
+
+/// Mirrored capture (#84): the game runs on another PC and this one reads a
+/// copy of its traffic from a switch's mirror port. Every adapter is read,
+/// one with no address of its own too, in promiscuous mode (the frames are
+/// addressed to the game's PC), and the game counts as open with no AION2
+/// window here. Settings → Connection, read at start.
+static MIRRORED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_mirrored(on: bool) {
+    MIRRORED.store(on, Ordering::Relaxed);
+}
+
+pub fn mirrored() -> bool {
+    MIRRORED.load(Ordering::Relaxed)
 }
 
 /// With AION2 open this long and no game stream found, the filter may be what
@@ -457,7 +474,7 @@ impl PcapCapturer {
         // rule out (Linux's catch-all "any" would duplicate every packet).
         let devices: Vec<_> = devices
             .into_iter()
-            .filter(|d| d.has_addresses && !crate::platform::pcap::skip_device(&d.name))
+            .filter(|d| (d.has_addresses || mirrored()) && !crate::platform::pcap::skip_device(&d.name))
             .collect();
 
         if devices.is_empty() {
@@ -552,7 +569,7 @@ impl PcapCapturer {
                 }
                 let Ok(devices) = pcap.find_all_devs() else { continue };
                 for device in devices {
-                    if !device.has_addresses || crate::platform::pcap::skip_device(&device.name) {
+                    if !(device.has_addresses || mirrored()) || crate::platform::pcap::skip_device(&device.name) {
                         continue;
                     }
                     if shared.failed.lock().unwrap_or_else(|p| p.into_inner()).contains(&device.name) {
@@ -583,7 +600,7 @@ pub fn list_device_labels() -> Result<Vec<String>, String> {
     let devices = pcap.find_all_devs().map_err(|e| e.to_string())?;
     Ok(devices
         .into_iter()
-        .filter(|d| d.has_addresses && !crate::platform::pcap::skip_device(&d.name))
+        .filter(|d| (d.has_addresses || mirrored()) && !crate::platform::pcap::skip_device(&d.name))
         .map(|d| d.label().to_string())
         .collect())
 }
@@ -640,7 +657,7 @@ fn start_capture_thread(
             if pcap.filter.is_some() && !filter_failed && !shared.unfiltered.load(Ordering::Relaxed) {
                 if now - last_game_check >= GAME_CHECK_MS {
                     last_game_check = now;
-                    game_open = crate::platform::window_detector::find_aion2_window_title().is_some();
+                    game_open = mirrored() || crate::platform::window_detector::find_aion2_window_title().is_some();
                 }
                 let locked = shared.port_detector.locked_port_now().is_some();
                 if net.note(game_open, locked, now) && !shared.unfiltered.swap(true, Ordering::Relaxed) {

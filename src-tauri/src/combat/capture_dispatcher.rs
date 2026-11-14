@@ -278,7 +278,8 @@ impl CaptureDispatcher {
             if now - last_window_check_ms >= interval {
                 last_window_check_ms = now;
                 let title = window_detector::find_aion2_window_title();
-                let running = title.is_some();
+                // Mirrored capture: the game is on another PC (#84).
+                let running = title.is_some() || crate::capture::pcap_capturer::mirrored();
                 if window_logged != Some(running) {
                     match &title {
                         Some(t) => info!("AION2 window found: {:?}", t),

@@ -4036,6 +4036,8 @@ pub fn run() {
             if settings.get("dpsMeter.saveRawPackets").as_deref() == Some("true") {
                 logging::logger::set_packet_log_enabled(true, &app_data_dir);
             }
+            // The game on another PC, its traffic mirrored here (#84).
+            crate::capture::pcap_capturer::set_mirrored(settings.get("dpsMeter.mirroredCapture").as_deref() == Some("true"));
             // A capture device the player picked by hand (Settings, Auto-detect
             // off) is kept across restarts: it was held in memory only, so a
             // VPN adapter chosen over auto-detection was lost (#39).

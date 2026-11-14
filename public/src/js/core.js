@@ -3446,6 +3446,15 @@ class DpsApp {
       });
     }
     // And while not in a party (the same loop).
+    // The game on another PC, its traffic mirrored to this one (#84): read
+    // by the capture at start, so it applies after a restart.
+    const mirroredCaptureCheckbox = document.querySelector(".mirroredCaptureCheckbox");
+    if (mirroredCaptureCheckbox) {
+      mirroredCaptureCheckbox.checked = this.safeGetSetting("dpsMeter.mirroredCapture") === "true";
+      mirroredCaptureCheckbox.addEventListener("change", (event) => {
+        this.safeSetSetting("dpsMeter.mirroredCapture", String(!!event.target?.checked));
+      });
+    }
     this.hideWhenSoloCheckbox = document.querySelector(".hideWhenSoloCheckbox");
     if (this.hideWhenSoloCheckbox) {
       this.hideWhenSoloCheckbox.checked = this.safeGetSetting(this.storageKeys.hideWhenSolo) === "true";
