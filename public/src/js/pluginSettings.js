@@ -145,7 +145,7 @@
         return t("settings.plugins.permBlackMarket", "See the Black Cloud Merchants' stock when you open their shop: the items and their prices");
       }
       if (permission === "events:kda") {
-        return t("settings.plugins.permKda", "Count your kills, assists and deaths against players (no names)");
+        return t("settings.plugins.permKda", "Count your kills, assists and deaths against players, naming the players you kill or help kill");
       }
       if (permission === "events:stats") {
         return t("settings.plugins.permStats", "See your character's stats, such as cooldown reduction");

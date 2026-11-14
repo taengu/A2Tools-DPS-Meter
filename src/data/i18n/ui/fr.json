@@ -759,7 +759,7 @@
       "permLootRolls": "Voir le butin aux dés : l'objet, qui a obtenu quel score et qui l'a remporté",
       "permLoot": "Voir votre butin : les objets ramassés ou reçus, et ce que vous récoltez",
       "permBlackMarket": "Voir le stock du Marchand du Nuage noir quand vous ouvrez la boutique : les objets et leurs prix",
-      "permKda": "Compter vos éliminations, assistances et morts contre des joueurs (sans noms)",
+      "permKda": "Compter tes éliminations, assistances et morts contre des joueurs, avec le nom des joueurs que tu élimines ou aides à éliminer",
       "permStats": "Voir les statistiques de votre personnage, comme la réduction du temps de recharge",
       "permScreenshot": "Faire des captures de sa propre fenêtre, dans le presse-papiers et votre dossier de captures",
       "testHint": "Des versions précoces que tout le monde peut essayer, signées comme les autres. Elles peuvent changer ou avoir des défauts : dis-nous ce que tu trouves.",

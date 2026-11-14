@@ -614,7 +614,7 @@ impl StreamProcessor {
                 if (1..=1_000_000_000).contains(&limit) && points <= limit {
                     let now = self.override_timestamp.unwrap_or_else(crate::clock::now_ms);
                     self.data_storage.set_abyss_points(points, limit, now);
-                    self.data_storage.note_abyss_points_total(points, now);
+                    self.data_storage.note_abyss_points_total(points, limit, now);
                 }
             }
             _ => {}
@@ -1023,7 +1023,7 @@ impl StreamProcessor {
             }
             // Another player's death, for your kills and assists.
             let at = self.override_timestamp.unwrap_or_else(crate::clock::now_ms);
-            self.data_storage.note_player_killed(summon_id, owner_id, at);
+            self.data_storage.note_player_killed(summon_id, owner_id, r.server_id, at);
             if self.data_storage.is_confirmed_summon(summon_id) {
                 self.data_storage.append_summon(owner_id, summon_id);
             }
@@ -4931,8 +4931,8 @@ mod tests {
         p.parse_perfect_packet(&hex("13abff6805020000000000a025260000000000"));
         p.parse_perfect_packet(&hex("13abfff908020000000000a025260000000000"));
         let (_, events) = storage.kda_since(0).unwrap();
-        let told: Vec<_> = events.iter().map(|e| (e.amount, e.abyss)).collect();
-        assert_eq!(told, vec![(None, Some(true)), (Some(913), None)]);
+        let told: Vec<_> = events.iter().map(|e| (e.amount, e.abyss, e.week)).collect();
+        assert_eq!(told, vec![(None, Some(true), None), (None, None, Some(132_456)), (Some(913), None, Some(133_369))]);
     }
 
     /// Kinah gained today at a login, then a pickup; the week's Abyss Points

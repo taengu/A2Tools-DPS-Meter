@@ -1939,9 +1939,9 @@ impl DataStorage {
         inner.login_abyss_points = Some((points, limit, at));
     }
 
-    /// The Abyss Points total the game just sent, for the K/D/A feed.
-    pub fn note_abyss_points_total(&self, total: u64, at: i64) {
-        self.kda.lock().abyss_points(total, at);
+    /// The week's Abyss Points and cap the game just sent, for the K/D/A feed.
+    pub fn note_abyss_points_total(&self, total: u64, limit: u64, at: i64) {
+        self.kda.lock().abyss_points(total, limit, at);
     }
 
     /// The week's Abyss Points and limit at `now` (unix ms): 0 points once a
@@ -2430,17 +2430,23 @@ impl DataStorage {
         self.death_recaps.lock().push(recap);
     }
 
-    /// The record that names who killed `victim` came at `at`. Counted when
-    /// the victim is a player and the record names you (a kill) or you hit
-    /// them just before (an assist).
-    pub fn note_player_killed(&self, victim: i32, killer: i32, at_ms: i64) -> Option<KdaKind> {
-        let by_me = {
+    /// The record that names who killed `victim` (`killer`, of server
+    /// `killer_server`) came at `at`. Counted when the victim is a player and
+    /// the record names you (a kill), or names someone on your side and you
+    /// hit the victim just before (an assist). Your side: your party, or your
+    /// faction (a server's first digit, 1 Elyos, 2 Asmodian) fighting a
+    /// player not of it. Your "hits" take in buffs on players near you, and
+    /// an ally an enemy killed was counted as your assist.
+    pub fn note_player_killed(&self, victim: i32, killer: i32, killer_server: u16, at_ms: i64) -> Option<KdaKind> {
+        let own_server = self.own_server();
+        let (by_me, ally_killer, who) = {
             let inner = self.inner.read();
             let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok())?;
             if victim == me {
                 return None;
             }
-            let player = inner.known_player_ids.contains(&victim) || self.death_recaps.lock().knows(victim);
+            let recaps = self.death_recaps.lock();
+            let player = inner.known_player_ids.contains(&victim) || recaps.knows(victim);
             if !player {
                 // A mob's loot record, unless you had just hit it.
                 if let Some(age) = self.kda.lock().hit_age(victim, at_ms) {
@@ -2448,10 +2454,30 @@ impl DataStorage {
                 }
                 return None;
             }
-            killer == me
+            let profile = recaps.profile_of(victim).cloned().unwrap_or_default();
+            let name = profile.name.clone().or_else(|| inner.nickname_storage.get(&victim).cloned());
+            let server = profile
+                .server_id
+                .or_else(|| name.as_deref().and_then(|n| inner.player_servers.get(n.trim()).copied()))
+                .filter(|&s| s != 0);
+            let faction = |s: u16| (s != 0).then_some(s / 1000);
+            let mine = faction(own_server);
+            let ally_killer = in_party(&inner, killer)
+                || (mine.is_some() && faction(killer_server) == mine && server.and_then(faction) != mine);
+            let who = crate::combat::kda::Victim {
+                name,
+                server_id: server,
+                class: profile.class.map(death_recap::class_key),
+                level: profile.level,
+                legion: profile.legion,
+            };
+            (killer == me, ally_killer, who)
         };
-        let kind = self.kda.lock().player_died(victim, by_me, at_ms);
-        tracing::debug!("KDA: player {victim} died, killer {killer}{}: {kind:?}", if by_me { " (you)" } else { "" });
+        let kind = self.kda.lock().player_died(victim, by_me, ally_killer, at_ms, who);
+        tracing::debug!(
+            "KDA: player {victim} died, killer {killer} of {killer_server}{}: {kind:?}",
+            if by_me { " (you)" } else if ally_killer { " (your side)" } else { "" }
+        );
         kind
     }
 
@@ -4243,6 +4269,32 @@ mod tests {
         storage.note_player_hp(2695, 12_419); // you are revived 40 s later
         crate::clock::set_override(None);
         assert_eq!(storage.deaths_between(0, 50_000), vec![(2695, 2_000, Some(42_000)), (14106, 2_000, None)]);
+    }
+
+    /// The Abyss, 2026-11-14 (an Elyos of 1304): your buffs and hits on the
+    /// players around you, then the kill records. One named Shiozuki of 1304
+    /// (your side) is an assist and names the player; one named Tayna of
+    /// 2303 killing your ally was counted as an assist too, and is none.
+    #[test]
+    fn an_assist_is_on_an_enemy_your_side_killed() {
+        let storage = DataStorage::new();
+        storage.set_local_player_id(Some(1000));
+        storage.note_self_server(1304);
+        storage.append_nickname_authoritative(3312, "Mocha");
+        storage.note_player_server("Mocha", 2303);
+        storage.note_player_profile(3312, death_recap::Profile { legion: Some("Dusk".into()), ..Default::default() });
+        storage.append_nickname_authoritative(3533, "Ally");
+        storage.note_player_server("Ally", 1304);
+        {
+            let mut kda = storage.kda.lock();
+            kda.note_my_hit(3312, 1_000);
+            kda.note_my_hit(3533, 1_000);
+        }
+        assert_eq!(storage.note_player_killed(3533, 16233, 2303, 2_000), None);
+        assert_eq!(storage.note_player_killed(3312, 3396, 1304, 2_000), Some(KdaKind::Assist));
+        let (_, events) = storage.kda_since(0).unwrap();
+        let victim = events[0].victim.clone().unwrap();
+        assert_eq!((victim.name.as_deref(), victim.server_id, victim.legion.as_deref()), (Some("Mocha"), Some(2303), Some("Dusk")));
     }
 
     fn who(s: &DataStorage) -> (Option<i64>, Option<String>, bool) {

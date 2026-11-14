@@ -218,7 +218,7 @@ fn fight_hits(hits: Option<VecDeque<Hit>>, at: i64) -> Vec<Hit> {
     fight
 }
 
-fn class_key(class: JobClass) -> &'static str {
+pub(crate) fn class_key(class: JobClass) -> &'static str {
     match class {
         JobClass::Gladiator => "gladiator",
         JobClass::Templar => "templar",
@@ -277,6 +277,11 @@ impl DeathRecaps {
     /// Whether a record gave this player's profile.
     pub fn knows(&self, id: i32) -> bool {
         self.profiles.contains_key(&id)
+    }
+
+    /// What this player's record gave.
+    pub fn profile_of(&self, id: i32) -> Option<&Profile> {
+        self.profiles.get(&id)
     }
 
     /// Another player's hit on you.

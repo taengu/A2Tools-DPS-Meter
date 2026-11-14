@@ -759,7 +759,7 @@
       "permLootRolls": "Ver o saque por dados: o item, quem tirou quanto e quem ganhou",
       "permLoot": "Ver seu saque: os itens que você pega ou recebe, e o que você coleta",
       "permBlackMarket": "Ver o estoque do Mercador da Nuvem Negra ao abrir a loja: os itens e seus preços",
-      "permKda": "Contar seus abates, assistências e mortes contra jogadores (sem nomes)",
+      "permKda": "Contar seus abates, assistências e mortes contra jogadores, com o nome dos jogadores que você abate ou ajuda a abater",
       "permStats": "Ver os atributos do seu personagem, como a redução de recarga",
       "permScreenshot": "Tirar capturas da própria janela, para a área de transferência e sua pasta de capturas",
       "testHint": "Versões iniciais para qualquer um experimentar, assinadas como as outras. Podem mudar ou ter arestas: conte o que encontrar.",

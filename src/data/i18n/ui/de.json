@@ -759,7 +759,7 @@
       "permLootRolls": "Würfel-Beute sehen: den Gegenstand, wer was gewürfelt hat und wer ihn bekommen hat",
       "permLoot": "Deine Beute sehen: Gegenstände, die du aufhebst oder erhältst, und was du sammelst",
       "permBlackMarket": "Das Angebot des Schwarzwolken-Händlers sehen, wenn du den Laden öffnest: die Gegenstände und ihre Preise",
-      "permKda": "Deine Kills, Assists und Tode gegen Spieler zählen (ohne Namen)",
+      "permKda": "Zählt deine Kills, Assists und Tode gegen Spieler und nennt die Spieler, die du tötest oder töten hilfst",
       "permStats": "Die Werte deines Charakters sehen, etwa die Abklingzeitverringerung",
       "permScreenshot": "Bildschirmfotos des eigenen Fensters machen, in die Zwischenablage und deinen Screenshot-Ordner",
       "testHint": "Frühe Versionen zum Ausprobieren für alle, signiert wie die anderen. Sie können sich noch ändern oder Ecken und Kanten haben: Sag uns, was dir auffällt.",

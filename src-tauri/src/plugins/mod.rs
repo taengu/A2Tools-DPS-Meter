@@ -784,7 +784,7 @@ impl PluginHost {
                         if let Some((next, events)) = state.data_storage.kda_since(kda_seq) {
                             kda_seq = next;
                             for e in events {
-                                let data = serde_json::to_value(e).unwrap_or_default();
+                                let data = serde_json::to_value(&e).unwrap_or_default();
                                 host.queue_permitted("events:kda", "kda", e.at, data);
                             }
                         }
@@ -1406,7 +1406,7 @@ fn prompt_texts(data_dir: Option<&Path>, lang: &str) -> PromptTexts {
         perm_loot_rolls: perm("permLootRolls", "See Dice Roll loot: the item, who rolled what, and who won it"),
         perm_loot: perm("permLoot", "See your loot: the items you pick up or receive, and what you gather"),
         perm_black_market: perm("permBlackMarket", "See the Black Cloud Merchants' stock when you open their shop: the items and their prices"),
-        perm_kda: perm("permKda", "Count your kills, assists and deaths against players (no names)"),
+        perm_kda: perm("permKda", "Count your kills, assists and deaths against players, naming the players you kill or help kill"),
         perm_stats: perm("permStats", "See your character's stats, such as cooldown reduction"),
         perm_screenshot: perm("permScreenshot", "Take screenshots of its own window, to the clipboard and your screenshot folder"),
     }

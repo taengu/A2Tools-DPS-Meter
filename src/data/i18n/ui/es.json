@@ -759,7 +759,7 @@
       "permLootRolls": "Ver el botín por dados: el objeto, quién sacó cuánto y quién lo ganó",
       "permLoot": "Ver tu botín: los objetos que recoges o recibes, y lo que recolectas",
       "permBlackMarket": "Ver las existencias del Mercader de la Nube Negra al abrir la tienda: los objetos y sus precios",
-      "permKda": "Contar tus bajas, asistencias y muertes contra jugadores (sin nombres)",
+      "permKda": "Contar tus bajas, asistencias y muertes contra jugadores, con el nombre de los jugadores que matas o ayudas a matar",
       "permStats": "Ver las estadísticas de tu personaje, como la reducción de reutilización",
       "permScreenshot": "Hacer capturas de su propia ventana, al portapapeles y a tu carpeta de capturas",
       "testHint": "Versiones tempranas para que cualquiera las pruebe, firmadas como las demás. Pueden cambiar o tener detalles sin pulir: cuéntanos lo que encuentres.",

@@ -767,7 +767,7 @@
       "permLootRolls": "See Dice Roll loot: the item, who rolled what, and who won it",
       "permLoot": "See your loot: the items you pick up or receive, and what you gather",
       "permBlackMarket": "See the Black Cloud Merchants' stock when you open their shop: the items and their prices",
-      "permKda": "Count your kills, assists and deaths against players (no names)",
+      "permKda": "Count your kills, assists and deaths against players, naming the players you kill or help kill",
       "permStats": "See your character's stats, such as cooldown reduction",
       "permScreenshot": "Take screenshots of its own window, to the clipboard and your screenshot folder",
       "testHint": "Early versions for anyone to try, signed like the others. They may change or have rough edges: tell us what you find.",
