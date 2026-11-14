@@ -1203,9 +1203,16 @@ pub fn claim_sweep_candidates(
             if meta.url.is_some() || meta.claim_swept || !refused || !slice_path(app_data_dir, &id).exists() {
                 return None;
             }
-            let record = record_of(&id)?;
-            (!record.is_train && record.dungeon_id > 0 && record.mob_code > 0 && is_boss(record.mob_code))
-                .then(|| (id, Claim { mob: record.mob_code, dungeon: record.dungeon_id }))
+            // A fight that does not qualify never will: marked so, so a start
+            // does not load it again (44 fights, 23 MB at every start).
+            let qualifies = record_of(&id).filter(|record| {
+                !record.is_train && record.dungeon_id > 0 && record.mob_code > 0 && is_boss(record.mob_code)
+            });
+            let Some(record) = qualifies else {
+                note_claim_swept(app_data_dir, &id);
+                return None;
+            };
+            Some((id, Claim { mob: record.mob_code, dungeon: record.dungeon_id }))
         })
         .collect()
 }
@@ -1328,6 +1335,10 @@ mod upload_tests {
         assert_eq!(picked, vec![("a-boss".to_string(), claim), ("f-old".to_string(), claim)],
             "refused for no boss fight, or before the reason was kept");
         assert_eq!(claim_json(claim), serde_json::json!({"mob": 2_301_014, "dungeon": 600_082}));
+        for id in ["b-open-world", "c-dummy", "g-not-a-boss"] {
+            assert!(read_meta(&dir, id).claim_swept, "{id}: not loaded again at the next start");
+        }
+        assert!(!read_meta(&dir, "a-boss").claim_swept, "marked only once sent");
 
         let mut dummy = fight("t", 0, 60_000, true);
         dummy.mob_code = 2_301_014;
