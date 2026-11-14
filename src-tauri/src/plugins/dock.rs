@@ -75,7 +75,7 @@ pub(super) fn open_manually(app: &tauri::AppHandle, id: &str) -> Result<(), Stri
     }
     sync(app, Some(id));
     if let Some(window) = app.get_webview_window(LABEL) {
-        if current() && window.is_visible().unwrap_or(false)
+        if current() && crate::platform::window::is_on_screen(&window)
             && !crate::platform::window::is_hidden_in_place(&window)
         {
             // One attempt only. No simulated keys, cursor unlocking or retry
@@ -191,7 +191,7 @@ pub fn sync(app: &tauri::AppHandle, focus: Option<&str>) {
     if let Some(id) = focus {
         let _ = app.emit_to(LABEL, "dock-focus", id);
     }
-    let up = window.is_visible().unwrap_or(false) && !crate::platform::window::is_hidden_in_place(&window);
+    let up = crate::platform::window::is_on_screen(&window) && !crate::platform::window::is_hidden_in_place(&window);
     if visible && !up {
         if super::window_game_hides(app, LABEL) {
             super::hold_for_game(&window);
@@ -222,7 +222,7 @@ fn raised() -> &'static std::sync::Mutex<std::collections::HashMap<String, Raise
 pub fn note_raised(app: &tauri::AppHandle, id: &str) {
     let dock_was_up = app
         .get_webview_window(LABEL)
-        .is_some_and(|w| w.is_visible().unwrap_or(false) && !crate::platform::window::is_hidden_in_place(&w));
+        .is_some_and(|w| crate::platform::window::is_on_screen(&w) && !crate::platform::window::is_hidden_in_place(&w));
     let tab_was_shown = shown_members(app).iter().any(|m| m == id);
     raised()
         .lock()
@@ -353,7 +353,7 @@ pub fn dock_close(app: tauri::AppHandle) {
 #[tauri::command]
 pub async fn dock_toggle(app: tauri::AppHandle) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window(LABEL) {
-        if window.is_visible().unwrap_or(false) {
+        if crate::platform::window::is_on_screen(&window) {
             // Hidden in place by the plugin windows hotkey: shown again.
             if crate::platform::window::is_hidden_in_place(&window) {
                 if !crate::platform::window::reveal_in_place(&window) {

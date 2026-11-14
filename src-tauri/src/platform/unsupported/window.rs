@@ -187,3 +187,12 @@ pub fn share_process<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
 
 /// Linux only (see the Linux version).
 pub fn joined(_window: &tauri::WebviewWindow, _group: crate::platform::ProcessGroup) {}
+
+/// Windows only (see the Windows version): WebKitGTK has no such setting.
+pub fn lean_memory(_webview: &tauri::Webview) {}
+
+/// Whether the window is on screen (see the Windows version): tao's flag is
+/// right here.
+pub fn is_on_screen(window: &tauri::WebviewWindow) -> bool {
+    window.is_visible().unwrap_or(false)
+}

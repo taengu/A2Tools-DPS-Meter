@@ -706,3 +706,12 @@ pub fn joined(window: &tauri::WebviewWindow, group: crate::platform::ProcessGrou
         }
     });
 }
+
+/// Windows only (see the Windows version): WebKitGTK has no such setting.
+pub fn lean_memory(_webview: &tauri::Webview) {}
+
+/// Whether the window is on screen (see the Windows version): tao's flag is
+/// right here.
+pub fn is_on_screen(window: &tauri::WebviewWindow) -> bool {
+    window.is_visible().unwrap_or(false)
+}

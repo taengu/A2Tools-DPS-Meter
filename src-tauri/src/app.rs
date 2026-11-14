@@ -2555,10 +2555,26 @@ fn keep_on_top_while_ours(app: &tauri::AppHandle, label: &str, focused: bool) {
 /// raised without it never does, so it floated over the app clicked next.
 /// Watched until another app takes the front (unpinned then), the window
 /// takes focus (its own handler from then), it closes, or 30 minutes pass.
+/// One watcher per window: each click on a player while Details was open
+/// started another, each living its 30 minutes behind a game in front.
 fn unpin_when_left(app: &tauri::AppHandle, label: &str) {
+    static WATCHED: std::sync::LazyLock<std::sync::Mutex<HashSet<String>>> =
+        std::sync::LazyLock::new(|| std::sync::Mutex::new(HashSet::new()));
+    /// The window's watch, ended however the watcher returns.
+    struct Watch(String);
+    impl Drop for Watch {
+        fn drop(&mut self) {
+            WATCHED.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.0);
+        }
+    }
+    if !WATCHED.lock().unwrap_or_else(|e| e.into_inner()).insert(label.to_string()) {
+        return;
+    }
+    let watch = Watch(label.to_string());
     let app = app.clone();
     let label = label.to_string();
     std::thread::spawn(move || {
+        let _watch = watch;
         let mut ours = platform::window::front_is_ours_or_game();
         for _ in 0..(30 * 60 * 4) {
             std::thread::sleep(std::time::Duration::from_millis(250));
@@ -3740,6 +3756,13 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        // Every window but the meter itself asks its browser to keep its
+        // memory low: they draw a widget, a pin or the plugins' pages.
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished && webview.label() != "main" {
+                platform::window::lean_memory(webview);
+            }
+        })
         .append_invoke_initialization_script(format!(
             "window.__A2_WINDOW_STARTUP__ = {{loadsHidden:{},reusesSettings:{}}};",
             platform::window_startup::loads_hidden(),

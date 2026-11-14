@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "A2Tools DPS Meter",
+        "title": "A2Tools DPS Meter", "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --process-per-site",
         "width": 400,
         "height": 300,
         "decorations": false,

@@ -525,14 +525,71 @@ pub fn click_through_by_region() -> bool {
     false
 }
 
-/// Linux only (see the Linux version). WebView2 has no related views: its
-/// browser and GPU processes are shared, and Chromium decides the renderers.
+/// WebView2's flags for every window; the main window has the same in
+/// tauri.conf.json (`additionalBrowserArgs`), as WebView2 refuses a window
+/// whose flags differ from the others'. wry's own defaults, plus one renderer
+/// per site: each window had a renderer of its own, 25-40 MB before it drew
+/// anything, and the widget windows and pins only hold a small page of the
+/// meter's (the plugin's own page in them runs with the other plugins'). The
+/// meter's pages now share one renderer and the plugins' theirs; a plugin's
+/// page is still never in the meter's process (eight renderers and 656 MB
+/// became two and 423 MB, 2026-11-15).
+pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --process-per-site";
+
+/// Every window's WebView2 flags (`BROWSER_ARGS`). WebView2 has no related
+/// views as WebKitGTK has (see the Linux version): its browser and GPU
+/// processes are shared already, and the flags decide the renderers.
 pub fn share_process<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
     builder: tauri::WebviewWindowBuilder<'a, R, M>,
     _group: crate::platform::ProcessGroup,
 ) -> tauri::WebviewWindowBuilder<'a, R, M> {
-    builder
+    builder.additional_browser_args(BROWSER_ARGS)
+}
+
+#[cfg(test)]
+mod browser_args_tests {
+    /// The main window's flags (tauri.conf.json) and the other windows' must
+    /// be the same, or WebView2 refuses to make the others.
+    #[test]
+    fn the_main_window_has_the_same_webview2_flags() {
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../../../tauri.conf.json")).unwrap();
+        let main = &conf["app"]["windows"][0];
+        assert_eq!(main["additionalBrowserArgs"].as_str(), Some(super::BROWSER_ARGS));
+    }
 }
 
 /// Linux only (see the Linux version).
 pub fn joined(_window: &tauri::WebviewWindow, _group: crate::platform::ProcessGroup) {}
+
+/// Asks WebView2 to keep this window's memory low: it trims its caches and
+/// collects garbage sooner, at a little speed the window does not need. For
+/// the windows that only draw a small widget or sit hidden (the pins, plugin
+/// widgets, the plugin dock); each is a browser renderer of its own, 25-40 MB
+/// before it draws anything (2026-11-15, 656 MB for eight windows).
+pub fn lean_memory(webview: &tauri::Webview) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW};
+    use windows_core::Interface;
+    let label = webview.label().to_string();
+    let _ = webview.with_webview(move |platform| {
+        // SAFETY: COM calls on the webview's own controller, on its thread.
+        let set = unsafe {
+            platform
+                .controller()
+                .CoreWebView2()
+                .and_then(|core| core.cast::<ICoreWebView2_19>())
+                .and_then(|core| core.SetMemoryUsageTargetLevel(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW))
+        };
+        if let Err(e) = set {
+            tracing::debug!("WebView2 low memory target not set on {label}: {e}");
+        }
+    });
+}
+
+/// Whether the window is on screen, asked of Windows rather than tao: windows
+/// hidden or shown without focus are hidden and shown behind tao's back, and
+/// tao's flag stays "visible" (see `shown`). The plugin dock's button read
+/// tao's and took a hidden dock for an open one: its first click closed
+/// nothing, and it took a second to open the dock (2026-11-15).
+pub fn is_on_screen(window: &tauri::WebviewWindow) -> bool {
+    shown(window)
+}
