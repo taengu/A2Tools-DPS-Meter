@@ -3604,7 +3604,9 @@ body.noDeaths .list .item .deathCount { display: none !important; }
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 1;
-  pointer-events: none;
+  /* Takes the pointer for its jitter tooltip (#164); a press on it still
+     drags the meter. */
+  pointer-events: auto;
   white-space: nowrap;
   width: auto;
   flex: 0 0 auto;

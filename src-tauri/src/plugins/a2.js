@@ -98,8 +98,10 @@
 //                                              shortens cooldowns). The latest is kept for a window opened later
 //   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
 //                                              (meter 2.0.65 on)
-//   a2.on("ping", ({ ms }) => ...)             the ping to the game server in ms (null while not known),
-//                                              at start and on change, about every 10 s (meter 2.0.73 on)
+//   a2.on("ping", ({ ms, jitter }) => ...)     the ping to the game server in ms (null while not known),
+//                                              at start and at each reading, about every 10 s (meter 2.0.73 on);
+//                                              jitter: the mean change between recent readings in ms, to 0.1
+//                                              (null until three readings; meter 2.0.99 on)
 //   a2.on("language", (code) => ...)           the meter's language ("en", "ko", "zh-Hans", ...), at start and on change
 //   a2.on("theme", ({ bg, panel, accent }) => ...)  the Settings colours (#rrggbb each), at start and on change
 //                                              (meter 2.0.76 on). The page has them as CSS too: var(--a2-accent),

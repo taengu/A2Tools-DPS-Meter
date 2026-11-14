@@ -216,6 +216,12 @@ impl PingTracker {
         self.inner.lock().last_ping
     }
 
+    /// When the latest reading came in, so a reading equal to the one before
+    /// still counts as new.
+    pub fn last_reading_at(&self) -> Option<i64> {
+        self.inner.lock().history.last().map(|&(at, _)| at)
+    }
+
     /// How much the ping moves from one reading to the next: the mean
     /// difference between the last JITTER_SAMPLES readings, in ms (#164,
     /// after talyaseen's). None until there are three.

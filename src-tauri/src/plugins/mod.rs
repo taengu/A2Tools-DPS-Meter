@@ -679,7 +679,7 @@ impl PluginHost {
                 GAME_OPEN.store(game, std::sync::atomic::Ordering::Relaxed);
                 sync_game_hiding(&app);
                 let mut game_checked = Instant::now();
-                let mut ping: Option<i32> = None;
+                let mut ping: (Option<i32>, Option<i64>) = (None, None);
                 let mut fps_told: Option<Value> = None;
                 let mut map_seq = 0u64;
                 let mut abyss_seq = 0u64;
@@ -799,12 +799,15 @@ impl PluginHost {
                             }
                         }
                     }
-                    // The ping to the game server, when it changes (about every
-                    // 10 s), to every plugin: a ping widget needs no permission.
-                    let now_ping = app.try_state::<AppState>().and_then(|s| s.ping_tracker.current_ping_ms());
-                    if now_ping != ping {
-                        ping = now_ping;
-                        host.tell_all(&app, "ping", serde_json::json!({ "ms": now_ping }));
+                    // The ping to the game server, at each reading (about every
+                    // 10 s), with its jitter, to every plugin: a ping widget
+                    // needs no permission.
+                    if let Some(state) = app.try_state::<AppState>() {
+                        let now_ping = (state.ping_tracker.current_ping_ms(), state.ping_tracker.last_reading_at());
+                        if now_ping != ping {
+                            ping = now_ping;
+                            host.tell_all(&app, "ping", ping_event(&state.ping_tracker));
+                        }
                     }
                     // The game's frame rate, while a plugin asks (fps.rs), to
                     // plugins with "fps" when it changes.
@@ -2397,7 +2400,15 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
         "reviewed": reviewed,
         "game": crate::platform::window_detector::find_aion2_window(),
         "ping": app.try_state::<AppState>().and_then(|s| s.ping_tracker.current_ping_ms()),
+        "jitter": app.try_state::<AppState>().map(|s| ping_event(&s.ping_tracker)["jitter"].clone()).unwrap_or(Value::Null),
     }))
+}
+
+/// The `ping` event: the ping in ms and its jitter (the mean change between
+/// recent readings, to 0.1 ms; meter 2.0.99 on), each null while not known.
+fn ping_event(tracker: &crate::combat::ping_tracker::PingTracker) -> Value {
+    let jitter = tracker.current_jitter_ms().map(|j| (j * 10.0).round() / 10.0);
+    serde_json::json!({ "ms": tracker.current_ping_ms(), "jitter": jitter })
 }
 
 /// Debug builds only: feed a game packet (hex, with its length prefix) to the
