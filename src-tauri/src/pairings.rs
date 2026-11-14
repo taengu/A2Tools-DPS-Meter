@@ -16,8 +16,14 @@ use std::sync::RwLock;
 
 use serde::Deserialize;
 
+/// The list, from the CDN; then, if that cannot be read (Cloudflare can
+/// challenge a network, and an app cannot pass a challenge: a player in Egypt
+/// could not open it, 2026-11-15), the same file in this repo on GitHub.
 #[cfg(feature = "online")]
-const URL: &str = "https://cdn.a2tools.app/feeds/pairings.json";
+const URLS: [&str; 2] = [
+    "https://cdn.a2tools.app/feeds/pairings.json",
+    "https://raw.githubusercontent.com/taengu/A2Tools-DPS-Meter/main/feeds/pairings.json",
+];
 /// How often the list is read again: a new one comes with a notice, so a
 /// meter left running picks it up the same day.
 #[cfg(feature = "online")]
@@ -71,9 +77,17 @@ pub fn spawn(client: reqwest::Client) {
     tauri::async_runtime::spawn(async move {
         loop {
             let read = async {
-                let text = client.get(URL).timeout(std::time::Duration::from_secs(30)).send().await.ok()?
-                    .error_for_status().ok()?.text().await.ok()?;
-                parse(&text)
+                for url in URLS {
+                    let text = async {
+                        client.get(url).timeout(std::time::Duration::from_secs(30)).send().await.ok()?
+                            .error_for_status().ok()?.text().await.ok()
+                    };
+                    // A challenge page is HTML, not the list: parse refuses it.
+                    if let Some(feed) = text.await.as_deref().and_then(parse) {
+                        return Some(feed);
+                    }
+                }
+                None
             };
             let wait = match read.await {
                 Some(feed) => {
