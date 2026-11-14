@@ -320,21 +320,14 @@ impl SafetyNet {
 /// local port would otherwise leave every device filtered for the old one,
 /// with nothing ever arriving to notice.
 ///
-/// Where a filter change empties the kernel's queue (Npcap), the device the
-/// game is locked on keeps the wide filter (its queue holds the game's
-/// packets), and only the others narrow: none of the game's packets wait on
-/// them, so emptying their queue loses nothing. They still see the game's
-/// port, so a relay taking it over or the game moving to them is noticed. Left
-/// wide, every device read all TCP but the web's for the whole session:
-/// Npcap's loopback, every program on the PC talking to another, read at
-/// 7.8 MB/s against 0.5 MB/s off the network (2026-10-29).
-fn filter_port(detector: &CombatPortDetector, now: i64, device: &str) -> Option<u16> {
+/// Every device narrows, the game's own too: left wide, it read all TCP but
+/// the web's for the whole session, and on loopback that is every program on
+/// the PC talking through a local proxy (7.8 MB/s against 0.5 MB/s off the
+/// network, 2026-10-29; Task Manager's reads, 2026-11-15). Where a filter
+/// change empties the kernel's queue (Npcap), the device changes handles
+/// instead (`Handover`), so the game's queued packets are kept.
+fn filter_port(detector: &CombatPortDetector, now: i64) -> Option<u16> {
     let port = detector.locked_port_now()?;
-    if !crate::platform::pcap::FILTER_CHANGE_KEEPS_QUEUE
-        && detector.current_device().map_or(true, |locked| locked.trim() == device.trim())
-    {
-        return None;
-    }
     let last = detector.last_parsed_at_ms();
     let stale = last > 0 && now - last > crate::combat::capture_dispatcher::STALE_CONNECTION_MS;
     // The locked port gone quiet: the game may be on a new connection (a
@@ -362,6 +355,22 @@ fn capture_filters(port: Option<u16>) -> [String; 2] {
     // expression, so side-by-side alternatives would add their tags up.
     [format!("({plain}) or (vlan and (({plain}) or (vlan and {plain})))"), plain]
 }
+
+/// A new filter on a second handle of the same device, where setting it on the
+/// first would empty the kernel's queue (Npcap) and cut the game's stream
+/// where the lock found it. Both are read until the old handle reaches the
+/// first packet the new one caught, then the old one closes. A segment read
+/// through both is dropped by `TcpOrder` as already had.
+struct Handover {
+    handle: PcapT,
+    /// Capture time of the new handle's first packet.
+    first_at: Option<i64>,
+    opened_at: i64,
+}
+
+/// A handover whose new handle has caught nothing in this long: the game's
+/// port is quiet, so there is nothing to keep, and it takes over.
+const HANDOVER_IDLE_MS: i64 = 3_000;
 
 // Safety: PcapLib function pointers are thread-safe (each thread gets its own pcap handle)
 unsafe impl Send for PcapLib {}
@@ -596,7 +605,7 @@ fn start_capture_thread(
                 shared.failed.lock().unwrap_or_else(|p| p.into_inner()).insert(dev_name.clone());
             }
         };
-        let handle = match pcap.open_live_handle(&dev_name) {
+        let mut handle = match pcap.open_live_handle(&dev_name) {
             Ok(h) => h,
             Err(e) => {
                 warn!("Failed to open capture on {}: {}", label, e);
@@ -619,6 +628,7 @@ fn start_capture_thread(
         let mut net = SafetyNet::default();
         let mut game_open = false;
         let mut last_game_check: i64 = 0;
+        let mut handover: Option<Handover> = None;
         let mut nonblocking = false;
         if let (false, Some(f)) = (crate::platform::pcap::READ_TIMES_OUT_WHEN_IDLE, &pcap.filter) {
             let mut errbuf = [0u8; 256];
@@ -649,11 +659,37 @@ fn start_capture_thread(
                     }
                 }
             }
-            let port = filter_port(&shared.port_detector, now, &label);
+            let port = filter_port(&shared.port_detector, now);
             if !shared.unfiltered.load(Ordering::Relaxed) && filtered_for != Some(port) && !filter_failed {
+                let first = filtered_for.is_none();
                 filtered_for = Some(port);
                 let [full, plain] = capture_filters(port);
-                let result = pcap.set_filter(handle, &full).or_else(|_| pcap.set_filter(handle, &plain));
+                let set = |h: PcapT| pcap.set_filter(h, &full).or_else(|_| pcap.set_filter(h, &plain));
+                // A change after the first, where it would empty the queue:
+                // on a second handle. One that cannot open changes in place.
+                let mut result = None;
+                if !first && !crate::platform::pcap::FILTER_CHANGE_KEEPS_QUEUE {
+                    if let Some(old) = handover.take() {
+                        unsafe { (pcap.close)(old.handle) };
+                    }
+                    tracing::debug!("Capture handover on {}: opening a second handle", label);
+                    if let Ok(next) = pcap.open_live_handle(&dev_name) {
+                        tracing::debug!("Capture handover on {}: opened, setting its filter", label);
+                        match set(next) {
+                            Ok(()) => {
+                                // Read without waiting while both are open.
+                                if let Some(f) = &pcap.filter {
+                                    let mut errbuf = [0u8; 256];
+                                    unsafe { (f.setnonblock)(next, 1, errbuf.as_mut_ptr() as *mut c_char) };
+                                }
+                                handover = Some(Handover { handle: next, first_at: None, opened_at: now });
+                                result = Some(Ok(()));
+                            }
+                            Err(_) => unsafe { (pcap.close)(next) },
+                        }
+                    }
+                }
+                let result = result.unwrap_or_else(|| set(handle));
                 match result {
                     Ok(()) => info!("Capture filter on {}: {}", label, match port {
                         Some(p) => format!("game port {p} only"),
@@ -673,31 +709,67 @@ fn start_capture_thread(
                 }
             }
 
-            let mut header: *mut PcapPkthdr = ptr::null_mut();
-            let mut data: *const u8 = ptr::null();
-
-            let ret = unsafe { (pcap.next_ex)(handle, &mut header, &mut data) };
-
-            match ret {
-                1 => {
-                    let hdr = unsafe { &*header };
-                    let len = hdr.caplen as usize;
-                    // Use pcap hardware timestamp (seconds + microseconds since epoch)
-                    let pcap_ts_ms = (hdr.ts_sec as i64) * 1000 + (hdr.ts_usec as i64) / 1000;
-                    // Sanity check: if pcap timestamp looks bogus, fall back to wall clock
-                    let ts = if pcap_ts_ms > 1_000_000_000_000 && pcap_ts_ms < 2_000_000_000_000 {
-                        pcap_ts_ms
-                    } else {
-                        now_ms()
-                    };
-                    let frame = unsafe { std::slice::from_raw_parts(data, len) };
-                    if let Some(mut payload) = parse_tcp_payload(frame, link_type, &label) {
-                        payload.captured_at_ms = ts;
-                        if sender.try_send(payload).is_err() {
-                            shared.dropped.fetch_add(1, Ordering::Relaxed);
-                        }
+            // One packet from `h`, handed to the dispatcher: its capture time,
+            // or the read's code when there was none.
+            let read = |h: PcapT| -> Result<i64, c_int> {
+                let mut header: *mut PcapPkthdr = ptr::null_mut();
+                let mut data: *const u8 = ptr::null();
+                let ret = unsafe { (pcap.next_ex)(h, &mut header, &mut data) };
+                if ret != 1 {
+                    return Err(ret);
+                }
+                let hdr = unsafe { &*header };
+                let len = hdr.caplen as usize;
+                // Use pcap hardware timestamp (seconds + microseconds since epoch)
+                let pcap_ts_ms = (hdr.ts_sec as i64) * 1000 + (hdr.ts_usec as i64) / 1000;
+                // Sanity check: if pcap timestamp looks bogus, fall back to wall clock
+                let ts = if pcap_ts_ms > 1_000_000_000_000 && pcap_ts_ms < 2_000_000_000_000 {
+                    pcap_ts_ms
+                } else {
+                    now_ms()
+                };
+                let frame = unsafe { std::slice::from_raw_parts(data, len) };
+                if let Some(mut payload) = parse_tcp_payload(frame, link_type, &label) {
+                    payload.captured_at_ms = ts;
+                    if sender.try_send(payload).is_err() {
+                        shared.dropped.fetch_add(1, Ordering::Relaxed);
                     }
                 }
+                Ok(ts)
+            };
+
+            // The new handle first, without waiting; it takes over once the
+            // old one has read up to its first packet, or at once on a quiet
+            // port.
+            if let Some(h) = handover.as_mut() {
+                while let Ok(ts) = read(h.handle) {
+                    h.first_at.get_or_insert(ts);
+                }
+                if h.first_at.is_none() && now - h.opened_at >= HANDOVER_IDLE_MS {
+                    h.first_at = Some(i64::MIN);
+                }
+            }
+            let ret = read(handle);
+            let caught_up = match (&handover, ret) {
+                (Some(Handover { first_at: Some(first), .. }), Ok(ts)) => ts >= *first,
+                (Some(Handover { first_at: Some(i64::MIN), .. }), _) => true,
+                _ => false,
+            };
+            if caught_up {
+                let next = handover.take().expect("a handover");
+                tracing::debug!("Capture handover on {}: the new handle takes over", label);
+                unsafe { (pcap.close)(handle) };
+                handle = next.handle;
+                // Reads wait again where they did before.
+                if let (false, Some(f)) = (nonblocking, &pcap.filter) {
+                    let mut errbuf = [0u8; 256];
+                    unsafe { (f.setnonblock)(handle, 0, errbuf.as_mut_ptr() as *mut c_char) };
+                }
+                continue;
+            }
+
+            match ret.map_or_else(|code| code, |_| 1) {
+                1 => {}
                 // Nothing yet (a timeout, or nothing waiting).
                 0 => {
                     if nonblocking {
@@ -706,13 +778,16 @@ fn start_capture_thread(
                     continue;
                 }
                 -2 => break,   // EOF (savefile)
-                _ => {
-                    warn!("Capture error on {} (ret={})", label, ret);
+                code => {
+                    warn!("Capture error on {} (ret={})", label, code);
                     break;
                 }
             }
         }
 
+        if let Some(h) = handover.take() {
+            unsafe { (pcap.close)(h.handle) };
+        }
         unsafe { (pcap.close)(handle) };
         info!("Capture stopped on {}", label);
         release(false);
@@ -957,23 +1032,19 @@ mod tests {
     #[test]
     fn the_filter_narrows_to_a_live_lock_and_widens_once_it_goes_quiet() {
         let detector = CombatPortDetector::new();
-        assert_eq!(filter_port(&detector, now_ms(), "NPF_Loopback"), None, "nothing locked");
+        assert_eq!(filter_port(&detector, now_ms()), None, "nothing locked");
         let loopback = Some("NPF_Loopback");
         detector.register_candidate(13328, (13328, 50000), loopback);
         detector.confirm_candidate(13328, 50000, loopback);
         detector.mark_packet_parsed();
         let now = now_ms();
-        // The locked device narrows only where that keeps its queue; any
-        // other device narrows everywhere (none of the game's packets wait
-        // there).
-        let live = if crate::platform::pcap::FILTER_CHANGE_KEEPS_QUEUE { Some(13328) } else { None };
-        assert_eq!(filter_port(&detector, now, "NPF_Loopback"), live);
-        assert_eq!(filter_port(&detector, now, "Wi-Fi"), Some(13328));
+        // Every device narrows, the locked one too (on a second handle
+        // where a filter change would empty its queue).
+        assert_eq!(filter_port(&detector, now), Some(13328));
         // A relay that reconnected elsewhere: nothing parsed for the stale
         // time, so the filter lets other traffic through to notice it.
         let quiet = now + crate::combat::capture_dispatcher::STALE_CONNECTION_MS + 1;
-        assert_eq!(filter_port(&detector, quiet, "NPF_Loopback"), None);
-        assert_eq!(filter_port(&detector, quiet, "Wi-Fi"), None);
+        assert_eq!(filter_port(&detector, quiet), None);
     }
 
     #[test]
