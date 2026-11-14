@@ -22,18 +22,6 @@ pub(crate) fn is_gnome() -> bool {
     desktop_is_gnome(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
 }
 
-/// System76's COSMIC (Pop!_OS 24.04). Its compositor keeps no window above
-/// the others on request, natively or through XWayland; its "sticky"
-/// windows stay on top, even over a fullscreen game, and an X11 window can
-/// ask to be one before it first shows (`window::joined`).
-fn desktop_is_cosmic(desktop: &str) -> bool {
-    desktop.split(':').any(|name| name.eq_ignore_ascii_case("cosmic"))
-}
-
-pub(crate) fn is_cosmic() -> bool {
-    desktop_is_cosmic(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
-}
-
 pub(crate) fn is_kde() -> bool {
     crate::platform::kwin_rules::is_kde(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
 }
@@ -44,7 +32,7 @@ pub(crate) fn is_hyprland() -> bool {
 }
 
 fn prefer_xwayland(backend_set: bool, desktop: &str, wayland: bool, x11_available: bool) -> bool {
-    !backend_set && wayland && x11_available && (desktop_is_gnome(desktop) || desktop_is_cosmic(desktop))
+    !backend_set && wayland && x11_available && desktop_is_gnome(desktop)
 }
 
 /// Returns a note for the log when it changed anything.
@@ -54,13 +42,12 @@ pub fn prepare() -> Option<String> {
     let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
     let wayland = nonempty("WAYLAND_DISPLAY")
         || std::env::var("XDG_SESSION_TYPE").is_ok_and(|value| value.eq_ignore_ascii_case("wayland"));
-    // GTK's Wayland backend cannot request keep-above on GNOME, nor sticky
-    // on COSMIC. Prefer XWayland for the meter, with native Wayland as an
-    // availability fallback.
+    // GTK's Wayland backend cannot request keep-above on GNOME. Prefer
+    // XWayland for the meter, with native Wayland as an availability fallback.
     if prefer_xwayland(std::env::var_os("GDK_BACKEND").is_some(), &desktop, wayland, nonempty("DISPLAY")) {
         // SAFETY: prepare runs before the UI or any worker thread starts.
         unsafe { std::env::set_var("GDK_BACKEND", "x11,wayland") };
-        notes.push("GDK_BACKEND=x11,wayland (GNOME/COSMIC overlay; explicit GDK_BACKEND overrides this)".to_string());
+        notes.push("GDK_BACKEND=x11,wayland (GNOME overlay; explicit GDK_BACKEND overrides this)".to_string());
     }
     if std::env::var_os(DISABLE).is_none() && std::env::var_os(FORCE_SHM).is_none() {
         // SAFETY: prepare runs before the UI or any worker thread starts.
@@ -94,7 +81,7 @@ fn keep_allocator_lean() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{desktop_is_cosmic, desktop_is_gnome, prefer_xwayland};
+    use super::{desktop_is_gnome, prefer_xwayland};
 
     #[test]
     fn gnome_detection_matches_desktop_components_only() {
@@ -117,16 +104,5 @@ mod tests {
         assert!(!prefer_xwayland(false, "", true, true));
         assert!(!prefer_xwayland(false, "GNOME", false, true));
         assert!(!prefer_xwayland(false, "GNOME", true, false));
-    }
-
-    /// Pop!_OS 24.04 says `COSMIC` (2026-11-14, a player's neofetch).
-    #[test]
-    fn cosmic_runs_through_xwayland_too() {
-        assert!(desktop_is_cosmic("COSMIC"));
-        assert!(desktop_is_cosmic("pop:COSMIC"));
-        assert!(!desktop_is_cosmic("pop:GNOME"));
-        assert!(prefer_xwayland(false, "COSMIC", true, true));
-        assert!(!prefer_xwayland(true, "COSMIC", true, true));
-        assert!(!prefer_xwayland(false, "COSMIC", true, false));
     }
 }
