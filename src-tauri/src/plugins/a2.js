@@ -102,6 +102,14 @@
 //                                              at start and at each reading, about every 10 s (meter 2.0.73 on);
 //                                              jitter: the mean change between recent readings in ms, to 0.1
 //                                              (null until three readings; meter 2.0.99 on)
+//   a2.on("pairings", ({ server, abyss, rift, from }) => ...)  your character's server's opponents in
+//                                              the Abyss and the Spacetime Rift (server ids), from the list
+//                                              a2tools.app keeps of NC's Server Matchmaking notices; at start once
+//                                              known and when the list or your server changes (meter 2.0.99 on)
+//   a2.on("abyssPairing", ({ kind, servers }) => ...)  the servers sharing your Abyss, at start once
+//                                              known and on change (meter 2.0.99 on): servers [{ server, side }],
+//                                              yours among them on side 1 or 2 (the same faction can be on both);
+//                                              not the Spacetime Rift's opponent. kind: two bytes not yet understood
 //   a2.on("language", (code) => ...)           the meter's language ("en", "ko", "zh-Hans", ...), at start and on change
 //   a2.on("theme", ({ bg, panel, accent }) => ...)  the Settings colours (#rrggbb each), at start and on change
 //                                              (meter 2.0.76 on). The page has them as CSS too: var(--a2-accent),

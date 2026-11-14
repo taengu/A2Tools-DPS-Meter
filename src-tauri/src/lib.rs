@@ -20,6 +20,7 @@ pub mod entity;
 pub mod i18n;
 pub mod rederive;
 pub mod supporters;
+pub mod pairings;
 
 // ── desktop only ───────────────────────────────────────────────────────────
 #[cfg(feature = "online")]

@@ -332,6 +332,10 @@ impl StreamProcessor {
         if let Some(line) = timed_event(packet) {
             tracing::info!("Timed event: {line}");
         }
+        // The server yours is matched against for PvP (Spacetime Rift).
+        if let Some(matchup) = crate::capture::matchup::parse(packet) {
+            crate::capture::matchup::note(matchup);
+        }
         // The field bosses on a map the player opened (boss timers).
         if let Some(map) = crate::capture::boss_map::parse(packet, crate::clock::now_ms()) {
             self.data_storage.note_boss_map(map);

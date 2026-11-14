@@ -4644,6 +4644,10 @@ pub fn run() {
                 }
             });
 
+            // Each server's Abyss and Spacetime Rift opponents (a2tools.app).
+            #[cfg(feature = "online")]
+            crate::pairings::spawn(app.state::<AppState>().http.clone());
+
             // Supporter roster: fetched, never queried. See `crate::supporters`
             // — asking the server "is this player a supporter?" would hand it a
             // list of who you play with, every fight, for a cosmetic. The

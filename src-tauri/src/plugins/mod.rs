@@ -680,6 +680,8 @@ impl PluginHost {
                 sync_game_hiding(&app);
                 let mut game_checked = Instant::now();
                 let mut ping: (Option<i32>, Option<i64>) = (None, None);
+                let mut matchup_seq = 0u64;
+                let mut pairings_told: (u16, u64) = (0, 0);
                 let mut fps_told: Option<Value> = None;
                 let mut map_seq = 0u64;
                 let mut abyss_seq = 0u64;
@@ -807,6 +809,24 @@ impl PluginHost {
                         if now_ping != ping {
                             ping = now_ping;
                             host.tell_all(&app, "ping", ping_event(&state.ping_tracker));
+                        }
+                    }
+                    // The servers sharing your Abyss, when the game says
+                    // (meter 2.0.99 on): public game state, so to every plugin.
+                    if let Some((seq, matchup)) = crate::capture::matchup::since(matchup_seq) {
+                        matchup_seq = seq;
+                        host.tell_all(&app, "abyssPairing", matchup.to_json());
+                    }
+                    // The character's server's Abyss and Spacetime Rift
+                    // opponents (crate::pairings, meter 2.0.99 on), when the
+                    // list or the server changes: public, so to every plugin.
+                    if let Some(state) = app.try_state::<AppState>() {
+                        let now = (state.data_storage.local_profile().server_id, crate::pairings::seq());
+                        if now != pairings_told && now.0 > 0 {
+                            pairings_told = now;
+                            if let Some(pairings) = crate::pairings::for_server(now.0) {
+                                host.tell_all(&app, "pairings", pairings);
+                            }
                         }
                     }
                     // The game's frame rate, while a plugin asks (fps.rs), to
@@ -2400,6 +2420,9 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
         "reviewed": reviewed,
         "game": crate::platform::window_detector::find_aion2_window(),
         "ping": app.try_state::<AppState>().and_then(|s| s.ping_tracker.current_ping_ms()),
+        "abyssPairing": crate::capture::matchup::latest().map(|m| m.to_json()),
+        "pairings": app.try_state::<AppState>()
+            .and_then(|s| crate::pairings::for_server(s.data_storage.local_profile().server_id)),
         "jitter": app.try_state::<AppState>().map(|s| ping_event(&s.ping_tracker)["jitter"].clone()).unwrap_or(Value::Null),
     }))
 }
