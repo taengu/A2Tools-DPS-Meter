@@ -968,6 +968,12 @@
     "never": "Le nom de votre PC et le nom complet de votre personnage ne sont jamais envoyés.",
     "policy": "Politique de confidentialité",
     "continue": "Continuer"
+  },
+  "netNotice": {
+    "title": "Impossible de joindre les serveurs d'A2 Tools",
+    "text": "Les plugins, mises à jour et minuteurs de boss n'ont pas pu être téléchargés, même après de nouveaux essais. C'est généralement la connexion internet : l'application gratuite 1.1.1.1 de Cloudflare règle le problème pour la plupart des joueurs.",
+    "ok": "OK",
+    "help": "Comment corriger"
   },
   "sharingNotice": {
     "title": "Vos combats aident à construire les classements",

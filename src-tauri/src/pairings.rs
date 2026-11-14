@@ -50,6 +50,7 @@ pub fn parse(json: &str) -> Option<Feed> {
     serde_json::from_str::<Feed>(json).ok().filter(|f| !f.servers.is_empty())
 }
 
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
 fn set(feed: Feed) {
     tracing::info!("Server pairings: {} servers, from {}", feed.servers.len(), feed.from);
     *FEED.write().unwrap_or_else(|p| p.into_inner()) = Some(feed);
@@ -96,7 +97,9 @@ pub fn spawn(client: reqwest::Client) {
                 }
                 None
             };
-            let wait = match read.await {
+            let got = read.await;
+            crate::cdn::note(got.is_some());
+            let wait = match got {
                 Some(feed) => {
                     failures = 0;
                     set(feed);

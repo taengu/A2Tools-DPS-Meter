@@ -5321,7 +5321,15 @@ body.noDeaths .list .item .deathCount { display: none !important; }
 .sharingNotice .sharingKeep { background: #8b5cf6; }
 .sharingPrompt .sharingContinue:hover,
 .sharingNotice .sharingKeep:hover { background: #7c4ddb; }
-.sharingNotice .discordPromoCard { width: min(420px, 95vw); }
+.sharingNotice .discordPromoCard,
+.netNotice .discordPromoCard { width: min(420px, 95vw); }
+.netNotice .accountPromoActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.netNotice .accountPromoLater {
+  border: none; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600;
+  color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.12); cursor: pointer;
+}
+.netNotice .accountPromoLater:hover { background: rgba(255, 255, 255, 0.2); }
+.netNotice .discordPromoDone { padding: 8px 18px; font-size: 14px; }
 .sharingNotice .accountPromoActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .sharingNotice .accountPromoLater {
   border: none; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600;

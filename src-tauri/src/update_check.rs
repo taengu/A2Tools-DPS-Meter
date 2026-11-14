@@ -101,16 +101,20 @@ pub async fn fetch_changelog(client: &reqwest::Client) -> Result<serde_json::Val
     serde_json::from_slice(&body).map_err(|e| format!("release notes: {e}"))
 }
 
-/// A file's bytes, or None when it isn't there (404).
+/// A file's bytes, or None when it isn't there (404). Tried again on a
+/// poor connection (`crate::cdn`).
 async fn get(client: &reqwest::Client, url: &str, cap: usize) -> Result<Option<Vec<u8>>, String> {
-    let response = client.get(url).timeout(TIMEOUT).send().await.map_err(|e| e.to_string())?;
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-    if !response.status().is_success() {
-        return Err(format!("HTTP {}", response.status()));
-    }
-    read_capped(response, cap).await.map(Some)
+    crate::cdn::retry(|| async {
+        let response = client.get(url).timeout(TIMEOUT).send().await.map_err(|e| e.to_string())?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !response.status().is_success() {
+            return Err(format!("HTTP {}", response.status()));
+        }
+        read_capped(response, cap).await.map(Some)
+    })
+    .await
 }
 
 /// A response's body, read only as far as `cap`: a file that is not ours

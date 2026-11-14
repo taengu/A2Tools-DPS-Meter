@@ -968,6 +968,12 @@
     "never": "Der Name deines PCs und der volle Name deines Charakters werden nie gesendet.",
     "policy": "Datenschutzerklärung",
     "continue": "Weiter"
+  },
+  "netNotice": {
+    "title": "A2-Tools-Server nicht erreichbar",
+    "text": "Plugins, Updates und Boss-Timer ließen sich auch nach erneuten Versuchen nicht herunterladen. Meist liegt es an der Internetverbindung: Die kostenlose 1.1.1.1-App von Cloudflare hilft den meisten Spielern.",
+    "ok": "OK",
+    "help": "So behebst du es"
   },
   "sharingNotice": {
     "title": "Deine Kämpfe helfen bei den Bestenlisten",

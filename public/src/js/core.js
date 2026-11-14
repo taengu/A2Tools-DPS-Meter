@@ -8286,6 +8286,24 @@ class DpsApp {
     return true;
   }
 
+  // The meter couldn't reach cdn.a2tools.app, even after trying again
+  // (crate::cdn): what usually fixes it, with the troubleshooter's entry.
+  showNetNotice() {
+    const notice = document.querySelector("#netNotice");
+    if (!notice || notice.classList.contains("isOpen")) return;
+    const close = () => {
+      notice.classList.remove("isOpen");
+      notice.setAttribute("aria-hidden", "true");
+    };
+    notice.querySelector(".netNoticeOk")?.addEventListener("click", close, { once: true });
+    notice.querySelector(".netNoticeHelp")?.addEventListener("click", () => {
+      this.openExternalLink("https://a2tools.app/tweaks/troubleshoot#issue-a2tools-unreachable");
+      close();
+    }, { once: true });
+    notice.classList.add("isOpen");
+    notice.setAttribute("aria-hidden", "false");
+  }
+
   _updateSuspendStatusMessage() {
     const el = this.analysisStatusEl || document.querySelector(".battleTime .analysisStatus");
     if (!el) return;

@@ -175,11 +175,15 @@ fn safe_path(path: &str) -> bool {
 async fn get(http: &reqwest::Client, url: &str, cap: usize) -> Result<Vec<u8>, String> {
     // Its own time limit: the client's 30 s cut off Cooldowns' 5 MB voice
     // file on a slow connection ("error decoding response body", 2026-10-31).
-    let response = http.get(url).timeout(DOWNLOAD_TIMEOUT).send().await.map_err(|e| format!("{url}: {e}"))?;
-    if !response.status().is_success() {
-        return Err(format!("{url}: {}", response.status()));
-    }
-    crate::update_check::read_capped(response, cap).await.map_err(|e| format!("{url}: {e}"))
+    // Tried again on a poor connection (`crate::cdn`).
+    crate::cdn::retry(|| async {
+        let response = http.get(url).timeout(DOWNLOAD_TIMEOUT).send().await.map_err(|e| format!("{url}: {e}"))?;
+        if !response.status().is_success() {
+            return Err(format!("{url}: {}", response.status()));
+        }
+        crate::update_check::read_capped(response, cap).await.map_err(|e| format!("{url}: {e}"))
+    })
+    .await
 }
 
 /// Check a downloaded catalog and keep it, signed, with each of its entries.

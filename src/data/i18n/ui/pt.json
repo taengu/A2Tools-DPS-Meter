@@ -968,6 +968,12 @@
     "never": "O nome do seu PC e o nome completo do seu personagem nunca são enviados.",
     "policy": "Política de privacidade",
     "continue": "Continuar"
+  },
+  "netNotice": {
+    "title": "Não é possível acessar os servidores do A2 Tools",
+    "text": "Não foi possível baixar plugins, atualizações e timers de chefes, mesmo tentando de novo. Geralmente é a conexão com a internet: o app gratuito 1.1.1.1 da Cloudflare resolve para a maioria dos jogadores.",
+    "ok": "OK",
+    "help": "Como resolver"
   },
   "sharingNotice": {
     "title": "Suas lutas ajudam a montar os rankings",

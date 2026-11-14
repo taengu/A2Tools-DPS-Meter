@@ -297,6 +297,11 @@
     window._dpsApp?.updateFlightPower?.(event.payload);
   });
 
+  // Downloads from a2tools' CDN failing even after their tries: once a run.
+  if (viewMode !== "settings") listen("cdn-unreachable", () => {
+    window._dpsApp?.showNetNotice?.();
+  });
+
   if (viewMode !== "settings") listen("ping-jitter", (event) => {
     window._dpsApp?.updateJitter?.(event.payload);
   });

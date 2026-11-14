@@ -968,6 +968,12 @@
     "never": "El nombre de tu PC y el nombre completo de tu personaje nunca se envían.",
     "policy": "Política de privacidad",
     "continue": "Continuar"
+  },
+  "netNotice": {
+    "title": "No se puede conectar con los servidores de A2 Tools",
+    "text": "No se pudieron descargar los plugins, las actualizaciones ni los temporizadores de jefes, ni siquiera tras volver a intentarlo. Suele ser la conexión a internet: la app gratuita 1.1.1.1 de Cloudflare lo soluciona para la mayoría.",
+    "ok": "OK",
+    "help": "Cómo arreglarlo"
   },
   "sharingNotice": {
     "title": "Tus combates ayudan a construir las clasificaciones",

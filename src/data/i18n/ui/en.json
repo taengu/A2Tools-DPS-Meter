@@ -968,6 +968,12 @@
     "never": "Your PC's name and your character's full name are never sent.",
     "policy": "Privacy policy",
     "continue": "Continue"
+  },
+  "netNotice": {
+    "title": "Can't reach A2 Tools' servers",
+    "text": "Plugins, updates and boss timers couldn't be downloaded, even after trying again. This is usually the internet connection: Cloudflare's free 1.1.1.1 app fixes it for most players.",
+    "ok": "OK",
+    "help": "How to fix it"
   },
   "sharingNotice": {
     "title": "Your fights help build the leaderboards",

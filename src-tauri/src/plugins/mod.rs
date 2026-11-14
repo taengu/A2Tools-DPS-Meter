@@ -2637,12 +2637,16 @@ async fn feed_file(app: &tauri::AppHandle, feed: &'static str, server: u32) -> R
     }
     let state = app.try_state::<AppState>().ok_or("no app state")?;
     let url = format!("https://cdn.a2tools.app/feeds/{feed}/{server}.json");
-    let res = state.http.get(&url).timeout(Duration::from_secs(15)).send().await.map_err(|e| e.to_string())?;
-    let value = match res.status() {
-        s if s == reqwest::StatusCode::NOT_FOUND => None,
-        s if s.is_success() => Some(serde_json::from_str(&res.text().await.map_err(|e| e.to_string())?).map_err(|e| e.to_string())?),
-        s => return Err(format!("the feed answered {s}")),
-    };
+    // Tried again on a poor connection (`crate::cdn`).
+    let value = crate::cdn::retry(|| async {
+        let res = state.http.get(&url).timeout(Duration::from_secs(15)).send().await.map_err(|e| e.to_string())?;
+        match res.status() {
+            s if s == reqwest::StatusCode::NOT_FOUND => Ok(None),
+            s if s.is_success() => Ok(Some(serde_json::from_str::<Value>(&res.text().await.map_err(|e| e.to_string())?).map_err(|e| e.to_string())?)),
+            s => Err(format!("the feed answered {s}")),
+        }
+    })
+    .await?;
     cache.lock().unwrap_or_else(|p| p.into_inner()).insert(key, (Instant::now(), value.clone()));
     Ok(value)
 }
