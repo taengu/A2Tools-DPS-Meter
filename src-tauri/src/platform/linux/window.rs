@@ -673,9 +673,37 @@ pub fn share_process<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
     }
 }
 
+/// On COSMIC through XWayland, `window` made sticky, which COSMIC keeps above
+/// the others (even a fullscreen game) where it keeps nothing above on
+/// request. COSMIC takes the X11 request only from a window not yet shown
+/// (cosmic-comp `stick_request` reads it for pending windows alone), so a
+/// window already up is hidden, stuck and shown again; one still hidden
+/// carries it when it shows. Once per window: GTK keeps it through later
+/// hides and shows. Before, every meter window had to be made sticky by hand
+/// with COSMIC's shortcut (2026-11-14, a Pop!_OS 24.04 player).
+fn stick_on_cosmic(window: &tauri::WebviewWindow) {
+    if !super::process::is_cosmic() || !on_x11() {
+        return;
+    }
+    let window = window.clone();
+    super::dialog::on_gtk_thread(move || {
+        use gtk::prelude::*;
+        let Ok(gtk_window) = window.gtk_window() else { return };
+        let shown = gtk_window.is_visible();
+        if shown {
+            gtk_window.hide();
+        }
+        gtk_window.stick();
+        if shown {
+            gtk_window.show();
+        }
+    });
+}
+
 /// A window of the group built: later windows of the group may share its
-/// process, until it closes.
+/// process, until it closes. On COSMIC it is made sticky (`stick_on_cosmic`).
 pub fn joined(window: &tauri::WebviewWindow, group: crate::platform::ProcessGroup) {
+    stick_on_cosmic(window);
     let slot = group_slot(group);
     let label = window.label().to_string();
     let _ = window.with_webview(move |webview| {
