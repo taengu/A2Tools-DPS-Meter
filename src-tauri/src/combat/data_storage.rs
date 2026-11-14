@@ -2652,6 +2652,11 @@ impl DataStorage {
         std::mem::take(&mut self.inner.write().rankings)
     }
 
+    /// The boards as last told (empty before the login sends them).
+    pub fn supply_requests(&self) -> Vec<crate::capture::supply_requests::Board> {
+        self.inner.read().supply_requests.clone()
+    }
+
     /// The boards, when told since `seq`: (the new seq, the boards).
     pub fn supply_requests_since(&self, seq: u64) -> Option<(u64, Vec<crate::capture::supply_requests::Board>)> {
         let inner = self.inner.read();

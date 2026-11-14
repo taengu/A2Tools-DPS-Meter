@@ -682,6 +682,7 @@ impl PluginHost {
                 let mut ping: (Option<i32>, Option<i64>) = (None, None);
                 let mut matchup_seq = 0u64;
                 let mut pairings_told: (u16, u64) = (0, 0);
+                let mut supply_seq = 0u64;
                 let mut fps_told: Option<Value> = None;
                 let mut map_seq = 0u64;
                 let mut abyss_seq = 0u64;
@@ -827,6 +828,15 @@ impl PluginHost {
                             if let Some(pairings) = crate::pairings::for_server(now.0) {
                                 host.tell_all(&app, "pairings", pairings);
                             }
+                        }
+                    }
+                    // The Supply Requests boards, as the game sends them at
+                    // login (meter 2.0.99 on): the server's, not the
+                    // character's progress, so to every plugin.
+                    if let Some(state) = app.try_state::<AppState>() {
+                        if let Some((seq, boards)) = state.data_storage.supply_requests_since(supply_seq) {
+                            supply_seq = seq;
+                            host.tell_all(&app, "supplyBoards", supply_boards_event(&boards));
                         }
                     }
                     // The game's frame rate, while a plugin asks (fps.rs), to
@@ -2421,10 +2431,22 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
         "game": crate::platform::window_detector::find_aion2_window(),
         "ping": app.try_state::<AppState>().and_then(|s| s.ping_tracker.current_ping_ms()),
         "abyssPairing": crate::capture::matchup::latest().map(|m| m.to_json()),
+        "supplyBoards": app.try_state::<AppState>()
+            .map(|s| s.data_storage.supply_requests())
+            .filter(|b| !b.is_empty())
+            .map(|b| supply_boards_event(&b)),
         "pairings": app.try_state::<AppState>()
             .and_then(|s| crate::pairings::for_server(s.data_storage.local_profile().server_id)),
         "jitter": app.try_state::<AppState>().map(|s| ping_event(&s.ping_tracker)["jitter"].clone()).unwrap_or(Value::Null),
     }))
+}
+
+/// The `supplyBoards` event: each board's tab (1 Emergency, 2 Weekly, 3
+/// Craft, 4 Boss), window (ms) and request ids (SupplyRequest).
+fn supply_boards_event(boards: &[crate::capture::supply_requests::Board]) -> Value {
+    serde_json::json!({ "boards": boards.iter().map(|b| serde_json::json!({
+        "tab": b.tab, "start": b.start_ms, "end": b.end_ms, "requests": b.requests,
+    })).collect::<Vec<_>>() })
 }
 
 /// The `ping` event: the ping in ms and its jitter (the mean change between

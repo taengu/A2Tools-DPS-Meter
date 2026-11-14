@@ -219,6 +219,8 @@
       // Its window (or dock tab) shown or hidden (meter 2.0.77 on).
       if (typeof hello.visible === "boolean") out.push(["visible", hello.visible]);
       // The ping to the game server (meter 2.0.73 on); null until it is known.
+      // The Supply Requests boards, once the game has sent them (meter 2.0.99 on).
+      if (hello.supplyBoards) out.push(["supplyBoards", hello.supplyBoards]);
       // The character's server's opponents, from a2tools.app (meter 2.0.99 on).
       if (hello.pairings) out.push(["pairings", hello.pairings]);
       // The Abyss pairing, once the game has said it (meter 2.0.99 on).

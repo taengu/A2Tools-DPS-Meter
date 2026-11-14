@@ -102,6 +102,10 @@
 //                                              at start and at each reading, about every 10 s (meter 2.0.73 on);
 //                                              jitter: the mean change between recent readings in ms, to 0.1
 //                                              (null until three readings; meter 2.0.99 on)
+//   a2.on("supplyBoards", ({ boards }) => ...)  the Supply Requests boards as the game sends them at
+//                                              login (meter 2.0.99 on): [{ tab (1 Emergency, 2 Weekly,
+//                                              3 Craft, 4 Boss), start, end (ms), requests: [SupplyRequest ids] }];
+//                                              the server's boards, not your progress on them
 //   a2.on("pairings", ({ server, abyss, rift, from }) => ...)  your character's server's opponents in
 //                                              the Abyss and the Spacetime Rift (server ids), from the list
 //                                              a2tools.app keeps of NC's Server Matchmaking notices; at start once
