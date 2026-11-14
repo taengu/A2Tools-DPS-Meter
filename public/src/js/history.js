@@ -1,3 +1,15 @@
+// HP-derived Others is an aggregate, kept separately from the recorded hits
+// used by replay and personal bests. Older fights have only those hits.
+const historyTotalDamage = (fight) => {
+  const raw = Number(fight.totalDamage);
+  const observed = Number(fight.worldBossObservedDamage);
+  return Math.max(0, Number.isFinite(raw) ? raw : 0, Number.isFinite(observed) ? observed : 0);
+};
+const historyNearbyDps = (fight) => Number(fight.durationMs) > 0
+  ? historyTotalDamage(fight) * 1000 / Number(fight.durationMs) : 0;
+const historyDamageShare = (fight) => historyTotalDamage(fight) > 0
+  ? Math.round((Number(fight.myDamage) || 0) * 100 / historyTotalDamage(fight)) : 0;
+
 const createHistoryUI = ({ onOpenFight } = {}) => {
   const panel = document.querySelector(".historyPanel");
   if (!panel) return null;
@@ -286,7 +298,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
   };
 
   // Damage per second over the fight: the party's, and yours.
-  const partyDps = (f) => (Number(f.durationMs) > 0 ? (Number(f.totalDamage) || 0) * 1000 / Number(f.durationMs) : 0);
+  const partyDps = historyNearbyDps;
   const myDps = (f) => (Number(f.durationMs) > 0 ? (Number(f.myDamage) || 0) * 1000 / Number(f.durationMs) : 0);
   // What the search matches: the boss and its dungeon, in the shown language.
   const searchText = (f) => `${f.bossName || ""} ${dungeonTitle(f.dungeonId, f.mobCode)}`.toLowerCase();
@@ -529,7 +541,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
 
     const dmgEl = document.createElement("span");
     dmgEl.className = "historyRowDamage";
-    dmgEl.textContent = formatDamage(fight.totalDamage);
+    dmgEl.textContent = formatDamage(historyTotalDamage(fight));
 
     if (!grouped) metaEl.appendChild(timeEl);
     metaEl.appendChild(durEl);
@@ -551,7 +563,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
       metaEl.appendChild(stat("historyRowParty", total, partyDps(fight)));
       if (Number(fight.myDamage) > 0 && youIn(fight)) {
         const mine = stat("historyRowMine", t("history.you", "You"), myDps(fight));
-        const share = Number(fight.totalDamage) > 0 ? Math.round(Number(fight.myDamage) * 100 / Number(fight.totalDamage)) : 0;
+        const share = historyDamageShare(fight);
         if (share > 0 && share < 100) {
           const shareEl = document.createElement("span");
           shareEl.className = "historyRowShare";
@@ -719,7 +731,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
       const best = Math.min(...done.map((f) => Number(f.durationMs)));
       parts.push(t("history.best", "Best {time}").replace("{time}", formatTime(best)));
     }
-    const top = Math.max(...fights.map((f) => Number(f.totalDamage) || 0));
+    const top = Math.max(...fights.map(historyTotalDamage));
     if (top > 0) parts.push(t("history.top", "Top {damage}").replace("{damage}", formatDamage(top)));
     return parts.join(" · ");
   };

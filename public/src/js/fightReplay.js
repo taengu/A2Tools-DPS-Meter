@@ -129,7 +129,10 @@ const cutReplayAt = (model, tMs) => {
   const battleTime = atEnd ? model.durationMs : Math.max(1000, Math.round(t));
   const details = { ...model.details, battleTime, totalTargetDamage: totalDamage, skills, healSkills };
   if (deathsIn) details.deaths = deaths;
-  return { t: atEnd ? model.durationMs : t, atEnd, details, actorDamage, totalDamage, battleTime };
+  // HP loss has no hit times. Do not distribute Others over the replay;
+  // the observed aggregate is available only at the full-fight endpoint.
+  const worldBossObservedDamage = atEnd ? model.record?.worldBossObservedDamage : null;
+  return { t: atEnd ? model.durationMs : t, atEnd, details, actorDamage, totalDamage, battleTime, worldBossObservedDamage };
 };
 
 if (typeof module !== "undefined" && module.exports) {
@@ -261,8 +264,13 @@ if (typeof module !== "undefined" && module.exports) {
     healNote.dataset.i18n = "details.replay.noHealTiming";
     healNote.textContent = t("details.replay.noHealTiming",
       "Healing in this fight has no times (an older version saved it): it shows the whole fight.");
+    const othersNote = document.createElement("div");
+    othersNote.className = "fightReplayNote";
+    othersNote.dataset.i18n = "details.replay.noOthersTiming";
+    othersNote.textContent = t("details.replay.noOthersTiming",
+      "Replay excludes Others because their hit times were not recorded. End replay to see the observed total.");
 
-    bar.append(controls, scrubWrap, exitBtn, note, healNote);
+    bar.append(controls, scrubWrap, exitBtn, note, healNote, othersNote);
 
     // Under the title row, where it is seen at once; its columns still line
     // the slider up with the chart below (styles.css).
@@ -440,7 +448,8 @@ if (typeof module !== "undefined" && module.exports) {
         .then(([details, unfiltered]) => {
           if (seq !== cutSeq || !active || !details) return;
           const base = hooks.targets?.()?.[0] || { targetId: record?.targetId };
-          const target = { ...base, actorDamage: cut.actorDamage, totalDamage: cut.totalDamage, battleTime: cut.battleTime };
+          const target = { ...base, actorDamage: cut.actorDamage, totalDamage: cut.totalDamage, battleTime: cut.battleTime,
+            worldBossObservedDamage: cut.worldBossObservedDamage };
           ownRender = true;
           const started = performance.now();
           try {
@@ -716,6 +725,8 @@ if (typeof module !== "undefined" && module.exports) {
     // ── Keeping in step with the window ──
     const syncHealNote = () => {
       bar.classList.toggle("noHealTiming", !!model && !model.healTimed && panel.classList.contains("isHealMode"));
+      const observed = Number(record?.worldBossObservedDamage);
+      othersNote.style.display = Number.isFinite(observed) && observed > 0 && !panel.classList.contains("isHealMode") ? "" : "none";
     };
 
     // Shown for a saved fight that has hit times; a new fight or a closed
