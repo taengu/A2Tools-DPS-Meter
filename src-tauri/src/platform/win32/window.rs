@@ -527,14 +527,15 @@ pub fn click_through_by_region() -> bool {
 
 /// WebView2's flags for every window; the main window has the same in
 /// tauri.conf.json (`additionalBrowserArgs`), as WebView2 refuses a window
-/// whose flags differ from the others'. wry's own defaults, plus one renderer
+/// whose flags differ from the others'. wry's own defaults (with sound that
+/// needs no click first, as wry's autoplay is on by default), plus one renderer
 /// per site: each window had a renderer of its own, 25-40 MB before it drew
 /// anything, and the widget windows and pins only hold a small page of the
 /// meter's (the plugin's own page in them runs with the other plugins'). The
 /// meter's pages now share one renderer and the plugins' theirs; a plugin's
 /// page is still never in the meter's process (eight renderers and 656 MB
 /// became two and 423 MB, 2026-11-15).
-pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --process-per-site";
+pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --process-per-site";
 
 /// Every window's WebView2 flags (`BROWSER_ARGS`). WebView2 has no related
 /// views as WebKitGTK has (see the Linux version): its browser and GPU
