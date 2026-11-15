@@ -401,6 +401,9 @@
     },
     "showSuspendBtn": "顯示暫停擷取按鈕",
     "showLockBtn": "顯示點擊穿透鎖定按鈕",
+    "editLayout": "排列計量器、圖釘與小工具",
+    "editLayoutBtn": "編輯版面",
+    "editLayoutUnsupported": "此桌面會自行決定計量器視窗的位置，因此無法在這裡編輯版面。",
     "showDockBtn": "顯示外掛停駐列按鈕",
     "playerLimit": {
       "label": "最大顯示人數"
@@ -579,6 +582,7 @@
       "pressKeys": "請按下按鍵...",
       "tooManyKeys": "最多 3 個鍵",
       "plugins": "顯示/隱藏外掛視窗",
+      "layout": "編輯版面",
       "hidePins": "同時隱藏外掛圖釘",
       "notSet": "未設定",
       "restoreDefaults": "恢復預設",
@@ -664,6 +668,7 @@
       "roundDps": "13,412 顯示為 13k。",
       "showSuspendBtn": "在計量器上顯示一個按鈕，按下後停止讀取遊戲流量，再按一次恢復。",
       "showLockBtn": "讓計量器忽略滑鼠、點擊直接作用於遊戲的按鈕。",
+      "editLayout": "一次解鎖計量器、FP 圖釘與所有外掛小工具，拖曳到想要的位置。完成會保留新位置；取消會恢復原位。",
       "showDockBtn": "在計量器上放一個開啟與關閉外掛停駐列的按鈕。",
       "windowOpacity": "計量器背景的透明程度。條形和文字不受影響。",
       "titleOpacity": "統計視窗標題列的透明程度，與下方背景分開設定。移動它之前，它跟隨背景不透明度。",
@@ -945,6 +950,7 @@
     "showControls": "顯示控制項",
     "popOut": "在獨立視窗中開啟",
     "pluginSettings": "外掛程式設定",
+    "editLayout": "編輯版面",
     "hide": "隱藏（外掛繼續執行）",
     "close": "隱藏停靠欄（外掛繼續執行）",
     "hideMeter": "隱藏 DPS 計量器",
@@ -969,6 +975,15 @@
     "policy": "隱私權政策",
     "continue": "繼續"
   },
+  "layout": {
+    "title": "編輯版面",
+    "hint": "拖曳各部分到想要的位置。靠近邊緣放下時會自動對齊。",
+    "snap": "對齊",
+    "gridOff": "格線：關",
+    "gridOn": "格線：{px} px",
+    "cancel": "取消",
+    "done": "完成"
+  },
   "netNotice": {
     "title": "無法連線到 A2 Tools 伺服器",
     "text": "即使重試，仍無法下載外掛、更新和首領計時。這通常是網路連線的問題：Cloudflare 的免費 1.1.1.1 應用程式能幫大多數玩家解決。",

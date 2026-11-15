@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Layout</title>
+    <style>
+      /* The layout editor's bar (layout.rs): what editing does, snap and grid,
+         Cancel and Done, at the top of the meter's screen. */
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+      body {
+        font-family: "Pretendard", "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
+        color: #e8eef5;
+        user-select: none;
+      }
+      .bar {
+        box-sizing: border-box;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 10px 0 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(62, 232, 255, 0.55);
+        background: rgba(14, 20, 30, 0.94);
+        cursor: grab;
+      }
+      .text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+      .title { font-weight: 700; font-size: 14px; }
+      .hint { color: rgba(232, 238, 245, 0.7); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 7px 12px;
+        font: inherit;
+        font-weight: 600;
+        color: #e8eef5;
+        background: rgba(255, 255, 255, 0.1);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      button:hover { background: rgba(255, 255, 255, 0.18); }
+      button.toggle[aria-pressed="true"] { background: rgba(62, 232, 255, 0.22); color: #9ff3ff; }
+      button.done { background: #2a8fd8; color: #fff; }
+      button.done:hover { background: #3aa0ea; }
+    </style>
+  </head>
+  <body>
+    <div class="bar">
+      <div class="text">
+        <span class="title" data-key="title">Edit layout</span>
+        <span class="hint" data-key="hint">Drag any piece into place. Dropped near an edge, it snaps to it.</span>
+      </div>
+      <button type="button" class="toggle snap" aria-pressed="true" data-key="snap">Snap</button>
+      <button type="button" class="toggle grid" aria-pressed="false"></button>
+      <button type="button" class="cancel" data-key="cancel">Cancel</button>
+      <button type="button" class="done" data-key="done">Done</button>
+    </div>
+    <script src="/src/js/layoutBar.js"></script>
+  </body>
+</html>

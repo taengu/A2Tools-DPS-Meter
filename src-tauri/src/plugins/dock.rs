@@ -71,10 +71,16 @@ pub(super) fn open_manually(app: &tauri::AppHandle, id: &str) -> Result<(), Stri
         started.elapsed(), shown_members(app).iter().any(|member| member == id),
     ) && crate::platform::window::user_focus_unchanged(foreground);
     if !current() {
+        tracing::debug!(
+            "Dock: opening {id} given up (a newer request {}, {} ms, tab shown {}, focus unchanged {})",
+            request != MANUAL_OPEN.load(std::sync::atomic::Ordering::Relaxed), started.elapsed().as_millis(),
+            shown_members(app).iter().any(|member| member == id), crate::platform::window::user_focus_unchanged(foreground),
+        );
         return Ok(());
     }
     sync(app, Some(id));
     if let Some(window) = app.get_webview_window(LABEL) {
+        tracing::debug!("Dock: opened for {id}: {}", if crate::platform::window::is_on_screen(&window) { "on screen" } else { "still not on screen" });
         if current() && crate::platform::window::is_on_screen(&window)
             && !crate::platform::window::is_hidden_in_place(&window)
         {
@@ -353,6 +359,11 @@ pub fn dock_close(app: tauri::AppHandle) {
 #[tauri::command]
 pub async fn dock_toggle(app: tauri::AppHandle) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window(LABEL) {
+        tracing::debug!(
+            "Dock: button pressed, the dock {} (tao visible {:?}, minimized {:?})",
+            if crate::platform::window::is_on_screen(&window) { "on screen" } else { "not on screen" },
+            window.is_visible().ok(), window.is_minimized().ok(),
+        );
         if crate::platform::window::is_on_screen(&window) {
             // Hidden in place by the plugin windows hotkey: shown again.
             if crate::platform::window::is_hidden_in_place(&window) {
@@ -361,6 +372,25 @@ pub async fn dock_toggle(app: tauri::AppHandle) -> Result<bool, String> {
                 }
                 return Ok(true);
             }
+            // Open on another screen than the meter's: brought beside the
+            // meter, not closed. It opens again where it was left at start,
+            // and the button's first press closed it out of sight on the
+            // second screen (2026-11-15).
+            if let Some((x, y)) = beside_meter(&app, &window) {
+                tracing::debug!("Dock: on another screen than the meter: brought beside it at {x},{y}");
+                let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+                crate::platform::window::bring_forward(&window);
+                return Ok(true);
+            }
+            // Open but under another program's window (the dock is on top
+            // only while the game or the meter is in front): brought forward,
+            // not closed out of sight.
+            if let Some(by) = crate::platform::window::covered_by(&window) {
+                tracing::debug!("Dock: under {by:?}: brought forward");
+                crate::platform::window::bring_forward(&window);
+                return Ok(true);
+            }
+            tracing::debug!("Dock: closed by its button");
             dock_close(app);
             return Ok(false);
         }
@@ -374,6 +404,47 @@ pub async fn dock_toggle(app: tauri::AppHandle) -> Result<bool, String> {
         .ok_or("no plugin is in the dock")?;
     super::plugin_open(app, id).await?;
     Ok(true)
+}
+
+/// Where the dock goes beside the meter, when it is on another screen than
+/// the meter's: None when they share one (or either's is unknown).
+fn beside_meter(app: &tauri::AppHandle, dock: &tauri::WebviewWindow) -> Option<(i32, i32)> {
+    let main = app.get_webview_window("main")?;
+    let meter_screen = main.current_monitor().ok()??;
+    let dock_screen = dock.current_monitor().ok()??;
+    if meter_screen.position() == dock_screen.position() && meter_screen.size() == dock_screen.size() {
+        return None;
+    }
+    let at = main.outer_position().ok()?;
+    let size = main.outer_size().ok()?;
+    let dock_size = dock.outer_size().ok()?;
+    let area = meter_screen.work_area();
+    Some(place_beside(
+        (at.x, at.y, size.width as i32, size.height as i32),
+        (dock_size.width as i32, dock_size.height as i32),
+        (area.position.x, area.position.y, area.size.width as i32, area.size.height as i32),
+        (8.0 * meter_screen.scale_factor()).round() as i32,
+    ))
+}
+
+/// The dock (`size`) beside the `meter`: to its right, else its left, else
+/// as near as fits, its top level with the meter's, all on the screen's work
+/// `area` where it fits.
+fn place_beside(meter: (i32, i32, i32, i32), size: (i32, i32), area: (i32, i32, i32, i32), gap: i32) -> (i32, i32) {
+    let (mx, my, mw, _) = meter;
+    let (w, h) = size;
+    let (ax, ay, aw, ah) = area;
+    let right = mx + mw + gap;
+    let left = mx - gap - w;
+    let x = if right + w <= ax + aw {
+        right
+    } else if left >= ax {
+        left
+    } else {
+        right.min(ax + aw - w).max(ax)
+    };
+    let y = my.min(ay + ah - h).max(ay);
+    (x, y)
 }
 
 /// Dock a plugin, or give it a window of its own (Settings → Plugins, and
@@ -421,6 +492,19 @@ pub async fn plugin_set_docked(app: tauri::AppHandle, id: String, docked: bool) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_dock_comes_beside_the_meter_on_its_screen() {
+        let area = (0, 0, 2560, 1392);
+        // Room to the meter's right.
+        assert_eq!(place_beside((21, 354, 497, 67), (543, 825), area, 8), (526, 354));
+        // The meter at the right edge: to its left.
+        assert_eq!(place_beside((2000, 354, 497, 67), (543, 825), area, 8), (1449, 354));
+        // Low on the screen: raised to fit, its bottom on the work area's.
+        assert_eq!(place_beside((21, 1300, 497, 67), (543, 825), area, 8), (526, 567));
+        // No room either side: as near the right as fits.
+        assert_eq!(place_beside((100, 0, 2400, 67), (543, 825), area, 8), (2017, 0));
+    }
 
     #[test]
     fn a_manual_open_survives_construction_but_not_a_close_or_newer_open() {

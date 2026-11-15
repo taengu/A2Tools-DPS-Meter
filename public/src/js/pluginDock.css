@@ -69,6 +69,7 @@
   background: #ff6b6b;
   box-shadow: 0 0 0 2px rgba(var(--theme-panel, 10, 14, 22), 1);
 }
+.dockArrange,
 .dockLayout,
 .dockFold {
   flex: none;
@@ -84,6 +85,7 @@
   cursor: pointer;
   transition: color 120ms ease;
 }
+.dockArrange svg,
 .dockLayout svg,
 .dockFold svg {
   width: 15px;
@@ -95,6 +97,8 @@
 .dockFold[aria-pressed="true"] svg {
   transform: rotate(180deg);
 }
+.dockArrange:hover,
+.dockArrange:focus-visible,
 .dockLayout:hover,
 .dockLayout:focus-visible,
 .dockLayout[aria-pressed="true"],

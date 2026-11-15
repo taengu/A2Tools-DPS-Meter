@@ -401,6 +401,9 @@
     },
     "showSuspendBtn": "Mostrar botón de pausar captura",
     "showLockBtn": "Mostrar botón de bloqueo (clic a través)",
+    "editLayout": "Colocar el medidor, los pines y los widgets",
+    "editLayoutBtn": "Editar diseño",
+    "editLayoutUnsupported": "Este escritorio coloca él mismo las ventanas del medidor, así que aquí no se puede editar el diseño.",
     "showDockBtn": "Mostrar el botón del panel de plugins",
     "playerLimit": {
       "label": "Máx. jugadores mostrados"
@@ -579,6 +582,7 @@
       "pressKeys": "Pulsa las teclas...",
       "tooManyKeys": "Máximo 3 teclas",
       "plugins": "Mostrar/ocultar ventanas de plugins",
+      "layout": "Editar diseño",
       "hidePins": "Ocultar también los pines de plugins",
       "notSet": "Sin asignar",
       "restoreDefaults": "Restaurar predeterminados",
@@ -664,6 +668,7 @@
       "roundDps": "13.412 se muestra como 13k.",
       "showSuspendBtn": "Un botón en el medidor que deja de leer el tráfico del juego hasta que lo pulses de nuevo.",
       "showLockBtn": "Un botón que hace que el medidor ignore el ratón, para que los clics lleguen al juego.",
+      "editLayout": "Desbloquea a la vez el medidor, el pin de FP y todos los widgets de plugins para arrastrarlos a su sitio. Listo guarda los nuevos sitios; Cancelar los devuelve.",
       "showDockBtn": "Un botón en el medidor que abre y cierra el panel de plugins.",
       "windowOpacity": "Cuán transparente es el fondo del medidor. Las barras y el texto no cambian.",
       "titleOpacity": "Qué tan transparente es la barra de título del medidor, aparte del fondo de debajo. Hasta que lo muevas, sigue al fondo.",
@@ -945,6 +950,7 @@
     "showControls": "Mostrar los controles",
     "popOut": "Abrir en su propia ventana",
     "pluginSettings": "Ajustes de plugins",
+    "editLayout": "Editar diseño",
     "hide": "Ocultar (el plugin sigue funcionando)",
     "close": "Ocultar el dock (los plugins siguen funcionando)",
     "hideMeter": "Ocultar el medidor de DPS",
@@ -969,6 +975,15 @@
     "policy": "Política de privacidad",
     "continue": "Continuar"
   },
+  "layout": {
+    "title": "Editar diseño",
+    "hint": "Arrastra cada pieza a su sitio. Si la sueltas cerca de un borde, se ajusta a él.",
+    "snap": "Ajustar",
+    "gridOff": "Cuadrícula: no",
+    "gridOn": "Cuadrícula: {px} px",
+    "cancel": "Cancelar",
+    "done": "Listo"
+  },
   "netNotice": {
     "title": "No se puede conectar con los servidores de A2 Tools",
     "text": "No se pudieron descargar los plugins, las actualizaciones ni los temporizadores de jefes, ni siquiera tras volver a intentarlo. Suele ser la conexión a internet: la app gratuita 1.1.1.1 de Cloudflare lo soluciona para la mayoría.",

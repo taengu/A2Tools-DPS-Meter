@@ -5321,6 +5321,14 @@ body.noDeaths .list .item .deathCount { display: none !important; }
 .sharingNotice .sharingKeep { background: #8b5cf6; }
 .sharingPrompt .sharingContinue:hover,
 .sharingNotice .sharingKeep:hover { background: #7c4ddb; }
+/* The layout being edited (layout.rs): the meter outlined, as every other
+   piece is. */
+body.layoutEditing .meter {
+  outline: 2px dashed rgba(62, 232, 255, 0.9);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
 .sharingNotice .discordPromoCard,
 .netNotice .discordPromoCard { width: min(420px, 95vw); }
 .netNotice .accountPromoActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }

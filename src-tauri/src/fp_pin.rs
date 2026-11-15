@@ -19,8 +19,9 @@ fn setting(app: &tauri::AppHandle, key: &str) -> Option<String> {
     app.try_state::<AppState>()?.settings.get(key)
 }
 
+/// The meter's lock, lifted while the layout is edited.
 fn locked(app: &tauri::AppHandle) -> bool {
-    setting(app, LOCKED_KEY).as_deref() == Some("true")
+    setting(app, LOCKED_KEY).as_deref() == Some("true") && !crate::layout::editing()
 }
 
 fn saved_place(app: &tauri::AppHandle) -> Option<(i32, i32)> {

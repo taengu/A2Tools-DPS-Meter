@@ -401,6 +401,9 @@
     },
     "showSuspendBtn": "수집 일시정지 버튼 표시",
     "showLockBtn": "클릭 통과 잠금 버튼 표시",
+    "editLayout": "미터, 핀, 위젯 배치",
+    "editLayoutBtn": "레이아웃 편집",
+    "editLayoutUnsupported": "이 데스크톱은 미터 창의 위치를 직접 정하므로 여기서는 레이아웃을 편집할 수 없습니다.",
     "showDockBtn": "플러그인 독 버튼 표시",
     "playerLimit": {
       "label": "최대 표시 인원"
@@ -579,6 +582,7 @@
       "pressKeys": "키를 누르세요...",
       "tooManyKeys": "키는 최대 3개",
       "plugins": "플러그인 창 표시/숨기기",
+      "layout": "레이아웃 편집",
       "hidePins": "플러그인 핀도 숨기기",
       "notSet": "설정 안 됨",
       "restoreDefaults": "기본값으로 복원",
@@ -664,6 +668,7 @@
       "roundDps": "13,412는 13k로 표시됩니다.",
       "showSuspendBtn": "다시 누를 때까지 게임 트래픽 읽기를 멈추는 버튼을 미터에 표시합니다.",
       "showLockBtn": "미터가 마우스를 무시하게 하여 클릭이 게임으로 전달되도록 하는 버튼입니다.",
+      "editLayout": "미터, FP 핀, 모든 플러그인 위젯의 잠금을 한 번에 풀어 원하는 곳으로 끌어 놓습니다. 완료는 새 위치를 유지하고, 취소는 원래대로 되돌립니다.",
       "showDockBtn": "미터에 플러그인 독을 열고 닫는 버튼을 둡니다.",
       "windowOpacity": "미터 배경의 투명도입니다. 막대와 글자는 그대로입니다.",
       "titleOpacity": "미터 제목 표시줄의 투명도를 아래 배경과 따로 정합니다. 움직이기 전까지는 배경 불투명도를 따릅니다.",
@@ -945,6 +950,7 @@
     "showControls": "조작 버튼 보이기",
     "popOut": "별도 창으로 열기",
     "pluginSettings": "플러그인 설정",
+    "editLayout": "레이아웃 편집",
     "hide": "숨기기 (플러그인은 계속 실행됩니다)",
     "close": "독 숨기기 (플러그인은 계속 실행됩니다)",
     "hideMeter": "DPS 미터 숨기기",
@@ -969,6 +975,15 @@
     "policy": "개인정보 처리방침",
     "continue": "계속"
   },
+  "layout": {
+    "title": "레이아웃 편집",
+    "hint": "원하는 곳으로 끌어 놓으세요. 가장자리 가까이 놓으면 맞춰 붙습니다.",
+    "snap": "맞춤",
+    "gridOff": "격자: 끔",
+    "gridOn": "격자: {px}px",
+    "cancel": "취소",
+    "done": "완료"
+  },
   "netNotice": {
     "title": "A2 Tools 서버에 연결할 수 없습니다",
     "text": "다시 시도했지만 플러그인, 업데이트, 보스 타이머를 내려받지 못했습니다. 대개 인터넷 연결 문제이며, 대부분 Cloudflare의 무료 1.1.1.1 앱으로 해결됩니다.",

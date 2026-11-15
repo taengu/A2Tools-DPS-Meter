@@ -132,7 +132,9 @@ fn all_listed(ids: &[String], list: &[String]) -> bool {
 /// settings or start an update (security audit H2, 2026-10-26). Add a command
 /// here when a plugin page starts using it.
 const PLUGIN_SURFACE_COMMANDS: &[&str] = &[
-    "dock_close", "dock_fold", "dock_hello", "meter_shown", "open_settings_at", "open_settings_window",
+    // The dock's Edit layout button (crate::layout checks it is the dock's:
+    // a plugin's own window is refused there).
+    "dock_close", "dock_fold", "dock_hello", "layout_edit_start", "meter_shown", "open_settings_at", "open_settings_window",
     "open_url", "plugin_abyss_siege", "plugin_boss_follow", "plugin_boss_timers", "plugin_close",
     "plugin_fps_admin", "plugin_fps_watch", "plugin_hello", "plugin_screenshot", "plugin_set_docked", "plugin_storage_get",
     "plugin_storage_set", "plugin_widget_area", "plugin_widget_close", "plugin_widget_drag",
@@ -158,7 +160,8 @@ pub fn is_plugin_window(label: &str) -> bool {
 /// Using a configuration panel counts as using the game for focus hiding.
 /// Combat widgets are deliberately excluded: showing an alert is not focus.
 pub fn configuration_focused(app: &tauri::AppHandle) -> bool {
-    app.webview_windows().into_iter().any(|(label, window)| {
+    // The layout being edited, too: no piece hides while it is arranged.
+    crate::layout::editing() || app.webview_windows().into_iter().any(|(label, window)| {
         is_plugin_window(&label) && window.is_focused().unwrap_or(false)
     })
 }
@@ -821,13 +824,11 @@ impl PluginHost {
                     // The character's server's Abyss and Spacetime Rift
                     // opponents (crate::pairings, meter 2.0.99 on), when the
                     // list or the server changes: public, so to every plugin.
-                    if let Some(state) = app.try_state::<AppState>() {
-                        let now = (state.data_storage.local_profile().server_id, crate::pairings::seq());
-                        if now != pairings_told && now.0 > 0 {
-                            pairings_told = now;
-                            if let Some(pairings) = crate::pairings::for_server(now.0) {
-                                host.tell_all(&app, "pairings", pairings);
-                            }
+                    let now = (pairing_server(&app), crate::pairings::seq());
+                    if now != pairings_told && now.0 > 0 {
+                        pairings_told = now;
+                        if let Some(pairings) = crate::pairings::for_server(now.0) {
+                            host.tell_all(&app, "pairings", pairings);
                         }
                     }
                     // The Supply Requests boards, as the game sends them at
@@ -2436,9 +2437,30 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
             .filter(|b| !b.is_empty())
             .map(|b| supply_boards_event(&b)),
         "pairings": app.try_state::<AppState>()
-            .and_then(|s| crate::pairings::for_server(s.data_storage.local_profile().server_id)),
+            .and_then(|_| crate::pairings::for_server(pairing_server(&app))),
         "jitter": app.try_state::<AppState>().map(|s| ping_event(&s.ping_tracker)["jitter"].clone()).unwrap_or(Value::Null),
+        "layout": crate::layout::editing(),
     }))
+}
+
+/// Your own server, kept here once the game has said it.
+const LAST_SERVER_KEY: &str = "dpsMeter.lastOwnServer";
+
+/// The server whose pairings plugins hear: your own as the game states it,
+/// else the one it last stated. A meter started mid-game (after an update)
+/// knew no server until the game sent your record again, at the next zone,
+/// so Event Timers had no rift opponent until then (2026-11-15).
+fn pairing_server(app: &tauri::AppHandle) -> u16 {
+    let Some(state) = app.try_state::<AppState>() else { return 0 };
+    let own = state.data_storage.own_server();
+    let kept = state.settings.get(LAST_SERVER_KEY).and_then(|v| v.parse::<u16>().ok()).unwrap_or(0);
+    if own != 0 {
+        if own != kept {
+            state.settings.set(LAST_SERVER_KEY, &own.to_string());
+        }
+        return own;
+    }
+    if kept != 0 { kept } else { state.data_storage.local_profile().server_id }
 }
 
 /// The `supplyBoards` event: each board's tab (1 Emergency, 2 Weekly, 3

@@ -22,6 +22,8 @@
     const t = smooth(window.fpTime(fp, maxOf(fp)));
     if (!t) {
       pin.classList.remove("isShown");
+      // Nothing to show, but the layout being edited: a stand-in to place.
+      if (document.body.classList.contains("layoutEditing") && !timeEl.textContent) timeEl.textContent = "FP";
       return;
     }
     const text = window.fpTimeText(t.ms);
@@ -35,6 +37,10 @@
     render();
   });
   setInterval(render, 100);
+  window.__TAURI__?.event?.listen?.("layout-editing", (event) => {
+    document.body.classList.toggle("layoutEditing", !!event.payload);
+    render();
+  });
 
   document.addEventListener("mousedown", (event) => {
     if (event.button === 0) invoke?.("fp_pin_drag").catch(() => {});

@@ -1075,8 +1075,13 @@ struct Hotkeys {
 }
 
 /// The keybind settings: changing one registers the keys again.
-const HOTKEY_KEYS: [&str; 4] =
-    ["dpsMeter.hotkey", "dpsMeter.toggleWindowHotkey", "dpsMeter.lockHotkey", "dpsMeter.pluginWindowsHotkey"];
+const HOTKEY_KEYS: [&str; 5] = [
+    "dpsMeter.hotkey",
+    "dpsMeter.toggleWindowHotkey",
+    "dpsMeter.lockHotkey",
+    "dpsMeter.pluginWindowsHotkey",
+    "dpsMeter.layoutHotkey",
+];
 
 /// Open the desktop's own shortcut settings, where the keys are set on
 /// Linux (KDE keeps its own; see platform::hotkeys).
@@ -1127,12 +1132,13 @@ fn restart_global_hotkeys(app: &tauri::AppHandle) {
 }
 
 /// The keybind settings and their defaults, as Settings shows them: the
-/// plugin windows key has none (`""`), so it is off until one is set.
-pub const HOTKEY_DEFAULTS: [(&str, &str); 4] = [
+/// plugin windows and layout keys have none (`""`), so they are off until set.
+pub const HOTKEY_DEFAULTS: [(&str, &str); 5] = [
     ("dpsMeter.hotkey", "Ctrl+Alt+R"),
     ("dpsMeter.toggleWindowHotkey", "Ctrl+Alt+Up"),
     ("dpsMeter.lockHotkey", "Ctrl+Alt+L"),
     ("dpsMeter.pluginWindowsHotkey", ""),
+    ("dpsMeter.layoutHotkey", ""),
 ];
 
 /// A keybind setting's key: what is saved, else (unset or unreadable) its
@@ -1222,8 +1228,14 @@ fn start_hotkeys(app: &tauri::AppHandle, settings: &Settings) {
         });
     }));
 
+    let h = app.clone();
+    let layout = binding("layout", "dpsMeter.layoutHotkey", Box::new(move || {
+        tracing::info!("Hotkey: the layout editor");
+        crate::layout::toggle(&h);
+    }));
+
     hotkeys.manager.start(
-        vec![reload, toggle, lock, plugins],
+        vec![reload, toggle, lock, plugins, layout],
         move |key, state, assigned| {
             set_hotkey_status(&status_handle, |s| {
                 s.insert(key.to_string(), state.to_string());
@@ -3856,6 +3868,18 @@ pub fn run() {
             {
                 save_window_geometry(window.app_handle(), window.label(), FIGHT_WINDOW_KEY);
             }
+            // The layout editor: a piece let go snaps into place.
+            if let tauri::WindowEvent::Moved(_) = event {
+                crate::layout::note_moved(window.app_handle(), window.label());
+            }
+            // The layout bar closed some other way (Alt+F4): editing ends,
+            // the new places kept.
+            if let tauri::WindowEvent::Destroyed = event
+                && window.label() == crate::layout::BAR_LABEL
+            {
+                tracing::debug!("Layout: its bar closed");
+                crate::layout::stop(window.app_handle(), true);
+            }
             // The flight power pin opens where it was left.
             if let tauri::WindowEvent::Moved(at) = event
                 && window.label() == crate::fp_pin::LABEL
@@ -4813,6 +4837,11 @@ pub fn run() {
             crate::plugins::widgets::plugin_widget_drag,
             crate::fp_pin::fp_pin_show,
             crate::fp_pin::fp_pin_drag,
+            crate::layout::layout_edit_start,
+            crate::layout::layout_edit_stop,
+            crate::layout::layout_options,
+            crate::layout::layout_set_options,
+            crate::layout::layout_bar_drag,
             crate::plugins::boss_live::plugin_boss_follow,
             crate::plugins::fps::plugin_fps_watch,
             set_run_as_admin,

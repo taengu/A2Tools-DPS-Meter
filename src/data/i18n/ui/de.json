@@ -401,6 +401,9 @@
     },
     "showSuspendBtn": "Taste „Erfassung pausieren“ anzeigen",
     "showLockBtn": "Taste für Durchklick-Sperre anzeigen",
+    "editLayout": "Meter, Pins und Widgets anordnen",
+    "editLayoutBtn": "Layout bearbeiten",
+    "editLayoutUnsupported": "Dieser Desktop platziert die Fenster des Meters selbst, daher lässt sich das Layout hier nicht bearbeiten.",
     "showDockBtn": "Plugin-Dock-Taste anzeigen",
     "playerLimit": {
       "label": "Max. angezeigte Spieler"
@@ -579,6 +582,7 @@
       "pressKeys": "Tasten drücken...",
       "tooManyKeys": "Höchstens 3 Tasten",
       "plugins": "Plugin-Fenster ein-/ausblenden",
+      "layout": "Layout bearbeiten",
       "hidePins": "Plugin-Pins auch ausblenden",
       "notSet": "Nicht belegt",
       "restoreDefaults": "Standard wiederherstellen",
@@ -664,6 +668,7 @@
       "roundDps": "13.412 wird als 13k angezeigt.",
       "showSuspendBtn": "Eine Taste am Meter, die das Lesen des Spielverkehrs anhält, bis du sie erneut drückst.",
       "showLockBtn": "Eine Taste, mit der das Meter die Maus ignoriert, sodass Klicks im Spiel ankommen.",
+      "editLayout": "Entsperrt das Meter, den FP-Pin und alle Plugin-Widgets auf einmal, um sie an ihren Platz zu ziehen. Fertig behält die neuen Plätze, Abbrechen stellt sie zurück.",
       "showDockBtn": "Eine Taste am Meter, die das Plugin-Dock öffnet und schließt.",
       "windowOpacity": "Wie durchsichtig der Hintergrund des Meters ist. Balken und Text bleiben, wie sie sind.",
       "titleOpacity": "Wie durchsichtig die Titelleiste des Meters ist, getrennt vom Hintergrund darunter. Bis du ihn bewegst, folgt er dem Hintergrund.",
@@ -945,6 +950,7 @@
     "showControls": "Bedienelemente einblenden",
     "popOut": "In eigenem Fenster öffnen",
     "pluginSettings": "Plugin-Einstellungen",
+    "editLayout": "Layout bearbeiten",
     "hide": "Ausblenden (das Plugin läuft weiter)",
     "close": "Dock ausblenden (die Plugins laufen weiter)",
     "hideMeter": "DPS-Meter ausblenden",
@@ -969,6 +975,15 @@
     "policy": "Datenschutzerklärung",
     "continue": "Weiter"
   },
+  "layout": {
+    "title": "Layout bearbeiten",
+    "hint": "Ziehe jedes Teil an seinen Platz. Nahe einer Kante rastet es dort ein.",
+    "snap": "Einrasten",
+    "gridOff": "Raster: aus",
+    "gridOn": "Raster: {px} px",
+    "cancel": "Abbrechen",
+    "done": "Fertig"
+  },
   "netNotice": {
     "title": "A2-Tools-Server nicht erreichbar",
     "text": "Plugins, Updates und Boss-Timer ließen sich auch nach erneuten Versuchen nicht herunterladen. Meist liegt es an der Internetverbindung: Die kostenlose 1.1.1.1-App von Cloudflare hilft den meisten Spielern.",

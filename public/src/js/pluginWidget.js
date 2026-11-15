@@ -60,12 +60,35 @@
     if (payload.event === "widget" || payload.event === "locked" || payload.event === "language") {
       deliver(payload.event, payload.data);
     }
+    // The layout being edited (layout.rs): outlined, and its widget told.
+    if (payload.event === "layout") {
+      setLayout(!!payload.data?.editing);
+      deliver("layout", payload.data);
+    }
   });
+
+  // An outline and the widget's name while the layout is edited, over the
+  // widget, so even an empty or see-through one can be found and dragged.
+  const layoutFrame = document.createElement("div");
+  layoutFrame.className = "layoutFrame";
+  const layoutName = document.createElement("span");
+  layoutFrame.appendChild(layoutName);
+  layoutFrame.addEventListener("mousedown", (event) => {
+    if (event.button === 0) invoke("plugin_widget_drag").catch(() => {});
+  });
+  document.body.appendChild(layoutFrame);
+  function setLayout(on) {
+    document.body.classList.toggle("layoutEditing", on);
+  }
 
   invoke("plugin_widget_hello").then((hello) => {
     document.title = name;
+    layoutName.textContent = `${hello.pluginName || id} · ${name}`;
+    layoutFrame.title = layoutName.textContent;
+    setLayout(!!hello.layout);
     deliver("language", hello.language || "en");
     deliver("locked", !!hello.locked);
+    if (hello.layout) deliver("layout", { editing: true });
     frame = document.createElement("iframe");
     frame.setAttribute("sandbox", "allow-scripts");
     // Copying text on a click (Event Timers' double right-click on an icon);

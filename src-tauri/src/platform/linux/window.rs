@@ -715,3 +715,8 @@ pub fn lean_memory(_webview: &tauri::Webview) {}
 pub fn is_on_screen(window: &tauri::WebviewWindow) -> bool {
     window.is_visible().unwrap_or(false)
 }
+
+/// Another program's window over most of this one: only asked on Windows.
+pub fn covered_by(_window: &tauri::WebviewWindow) -> Option<String> {
+    None
+}

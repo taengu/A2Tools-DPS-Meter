@@ -401,6 +401,9 @@
     },
     "showSuspendBtn": "显示暂停捕获按钮",
     "showLockBtn": "显示点击穿透锁定按钮",
+    "editLayout": "排列计量器、图钉与小部件",
+    "editLayoutBtn": "编辑布局",
+    "editLayoutUnsupported": "此桌面会自行决定计量器窗口的位置，因此无法在这里编辑布局。",
     "showDockBtn": "显示插件停靠栏按钮",
     "playerLimit": {
       "label": "最大显示人数"
@@ -579,6 +582,7 @@
       "pressKeys": "请按下按键...",
       "tooManyKeys": "最多 3 个键",
       "plugins": "显示/隐藏插件窗口",
+      "layout": "编辑布局",
       "hidePins": "同时隐藏插件图钉",
       "notSet": "未设置",
       "restoreDefaults": "恢复默认",
@@ -664,6 +668,7 @@
       "roundDps": "13,412 显示为 13k。",
       "showSuspendBtn": "在计量器上显示一个按钮，按下后停止读取游戏流量，再按一次恢复。",
       "showLockBtn": "让计量器忽略鼠标、点击直接作用于游戏的按钮。",
+      "editLayout": "一次解锁计量器、FP 图钉与所有插件小部件，拖动到想要的位置。完成会保留新位置；取消会恢复原位。",
       "showDockBtn": "在计量器上放一个打开和关闭插件停靠栏的按钮。",
       "windowOpacity": "计量器背景的透明程度。条形和文字不受影响。",
       "titleOpacity": "统计窗口标题栏的透明程度，与下方背景分开设置。移动它之前，它跟随背景不透明度。",
@@ -945,6 +950,7 @@
     "showControls": "显示控件",
     "popOut": "在单独窗口中打开",
     "pluginSettings": "插件设置",
+    "editLayout": "编辑布局",
     "hide": "隐藏（插件继续运行）",
     "close": "隐藏停靠栏（插件继续运行）",
     "hideMeter": "隐藏 DPS 计量器",
@@ -969,6 +975,15 @@
     "policy": "隐私政策",
     "continue": "继续"
   },
+  "layout": {
+    "title": "编辑布局",
+    "hint": "拖动各部分到想要的位置。靠近边缘放下时会自动对齐。",
+    "snap": "对齐",
+    "gridOff": "网格：关",
+    "gridOn": "网格：{px} px",
+    "cancel": "取消",
+    "done": "完成"
+  },
   "netNotice": {
     "title": "无法连接到 A2 Tools 服务器",
     "text": "即使重试，仍无法下载插件、更新和首领计时。这通常是网络连接的问题：Cloudflare 的免费 1.1.1.1 应用能帮大多数玩家解决。",

@@ -3490,6 +3490,7 @@ class DpsApp {
       });
     }
     this.initOverlayLock();
+    this.initLayoutEditor();
     // Restore suspend state from backend on load
     this._captureSuspended = !!window.javaBridge?.isCaptureSuspended?.();
     this._updateSuspendBtnIcon();
@@ -5028,6 +5029,7 @@ class DpsApp {
     const toggleBtn = document.querySelector(".toggleKeybindBtn");
     const lockKeyBtn = document.querySelector(".lockKeybindBtn");
     const pluginsKeyBtn = document.querySelector(".pluginsKeybindBtn");
+    const layoutKeyBtn = document.querySelector(".layoutKeybindBtn");
     const notSet = () => this.i18n?.t?.("settings.keybind.notSet", "Not set") ?? "Not set";
 
     this.refreshKeybindLabels = () => {
@@ -5048,6 +5050,11 @@ class DpsApp {
         pluginsKeyBtn.querySelector(".keybindText").textContent = label || notSet();
         pluginsKeyBtn.classList.toggle("isUnset", !label);
       }
+      if (layoutKeyBtn) {
+        const label = window.javaBridge?.getCurrentLayoutHotKey?.() || "";
+        layoutKeyBtn.querySelector(".keybindText").textContent = label || notSet();
+        layoutKeyBtn.classList.toggle("isUnset", !label);
+      }
     };
     this.refreshKeybindLabels();
 
@@ -5058,7 +5065,7 @@ class DpsApp {
     let lastHotkeyStatus = {};
     this.applyHotkeyStatus = (status) => {
       lastHotkeyStatus = status && typeof status === "object" ? status : {};
-      const rows = [[reloadBtn, "reload"], [toggleBtn, "toggle"], [lockKeyBtn, "lock"], [pluginsKeyBtn, "plugins"]]
+      const rows = [[reloadBtn, "reload"], [toggleBtn, "toggle"], [lockKeyBtn, "lock"], [pluginsKeyBtn, "plugins"], [layoutKeyBtn, "layout"]]
         .filter(([btn]) => btn && btn.closest?.(".settingsRowKeybind")?.style?.display !== "none")
         .filter(([btn]) => !btn.classList?.contains?.("isUnset"));
       const labelOf = (btn) => (btn.querySelector?.(".keybindText")?.textContent || "").trim().toLowerCase();
@@ -5153,6 +5160,7 @@ class DpsApp {
     toggleBtn?.addEventListener("click", () => handleKeybindClick(toggleBtn, "toggle"));
     lockKeyBtn?.addEventListener("click", () => handleKeybindClick(lockKeyBtn, "lock"));
     pluginsKeyBtn?.addEventListener("click", () => handleKeybindClick(pluginsKeyBtn, "plugins"));
+    layoutKeyBtn?.addEventListener("click", () => handleKeybindClick(layoutKeyBtn, "layout"));
     document.querySelector(".keybindDesktopBtn")?.addEventListener("click", () => {
       Promise.resolve(window.javaBridge?.openDesktopShortcuts?.()).catch(() => {});
     });
@@ -5225,6 +5233,8 @@ class DpsApp {
         if (lockKeyBtn) lockKeyBtn.querySelector(".keybindText").textContent = label;
       } else if (type === "plugins") {
         window.javaBridge?.setPluginWindowsHotkey?.(mods, vk);
+      } else if (type === "layout") {
+        window.javaBridge?.setLayoutHotkey?.(mods, vk);
       }
       this.refreshKeybindLabels();
     }, true);
@@ -7786,6 +7796,40 @@ class DpsApp {
     icon.setAttribute("data-lucide", this._overlayLocked ? "lock" : "lock-open");
     this.lockBtn.replaceChildren(icon);
     window.lucide?.createIcons?.({ root: this.lockBtn });
+  }
+
+  // ===== Layout editor (layout.rs) =====
+  // Settings -> Meter Settings -> Edit layout: the meter, the FP pin and every
+  // plugin widget unlocked at once to drag into place, with a bar for Done
+  // and Cancel. The meter is outlined meanwhile, and its click-through lock
+  // lifted, then put back as it was.
+
+  initLayoutEditor() {
+    const button = document.querySelector(".editLayoutBtn");
+    button?.addEventListener("click", () => {
+      Promise.resolve(window.javaBridge?.editLayout?.()).catch(() => {
+        const t = (key, fallback) => this.i18n?.t(key, fallback) ?? fallback;
+        button.title = t("settings.editLayoutUnsupported",
+          "This desktop places the meter's windows itself, so the layout can't be edited here.");
+        button.disabled = true;
+      });
+    });
+  }
+
+  setLayoutEditing(on) {
+    if (window.A2_VIEW !== "main") return;
+    document.body.classList.toggle("layoutEditing", on);
+    if (on) {
+      this._lockedBeforeLayout = !!this._overlayLocked;
+      if (this._lockedBeforeLayout) window.javaBridge?.setOverlayLocked?.(false);
+      this.setMetricMenuOpen?.(false);
+      this.setTargetMenuOpen?.(false);
+      this.setFooterMenuOpen?.(false);
+    } else if (this._lockedBeforeLayout) {
+      this._lockedBeforeLayout = false;
+      this._sendLockBtnRect();
+      window.javaBridge?.setOverlayLocked?.(true);
+    }
   }
 
   _applyDockBtnVisibility(show) {

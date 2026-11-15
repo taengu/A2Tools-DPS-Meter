@@ -95,6 +95,7 @@
       d.tab.setAttribute("aria-selected", String(active));
       tabsEl.appendChild(d.tab);
     }
+    for (const d of docked.values()) syncVisible(d);
     // New tabs' icons, now that they're in the page (Lucide draws only
     // what the page holds; ones already drawn are left alone).
     try { window.lucide?.createIcons(); } catch {}
@@ -104,6 +105,17 @@
     setLabel(foldBtn, prefs.folded ? t("unfold", "Unfold the dock") : t("fold", "Fold the dock"));
     savePrefs();
   };
+
+  // Whether each plugin is on view ("visible"): the dock shown (the meter
+  // says), and its own tab the open one, or the plugins stacked, and the dock
+  // not folded. A tab switched away from looked visible to its page, so
+  // Event Timers kept its anchor's placing frame up (2026-11-15).
+  function syncVisible(d) {
+    const onView = d.windowShown !== false && d.shown && !d.panel.hidden && !prefs.folded;
+    if (d.toldVisible === onView) return;
+    d.toldVisible = onView;
+    d.plugin.receive({ plugin: d.id, event: "visible", data: onView });
+  }
 
   const activate = (id) => {
     prefs.active = id;
@@ -227,7 +239,11 @@
         });
         docked.set(d.id, d);
         stage.appendChild(d.panel);
-        d.plugin.start().catch((e) => {
+        d.plugin.start().then(() => {
+          // Its start told it the dock's state: its tab's, now.
+          d.toldVisible = undefined;
+          syncVisible(d);
+        }).catch((e) => {
           d.panel.querySelector(".dockFrame").textContent = t("failed", "This plugin could not start: {error}", { error: String(e) });
         });
       }
@@ -264,7 +280,15 @@
       for (const d of docked.values()) d.plugin.receive(payload);
       return;
     }
-    docked.get(payload.plugin)?.plugin.receive(payload);
+    const d = docked.get(payload.plugin);
+    if (!d) return;
+    // The dock shown or hidden: told with its tab's state.
+    if (payload.event === "visible") {
+      d.windowShown = payload.data !== false;
+      syncVisible(d);
+      return;
+    }
+    d.plugin.receive(payload);
   };
   listen("plugin-event", (event) => onEvent(event.payload));
   // The meter's numbered events, several at once (pluginHost.js).
@@ -286,6 +310,10 @@
     render();
   });
   foldBtn.addEventListener("click", () => setFolded(!prefs.folded));
+  // The meter's layout editor (layout.rs): every piece unlocked to arrange.
+  document.querySelector(".dockArrange").addEventListener("click", () => {
+    invoke("layout_edit_start").catch((e) => showToast(String(e)));
+  });
   // A double-click on the tab strip's empty part folds or unfolds too.
   tabsEl.addEventListener("dblclick", (e) => {
     if (e.target === tabsEl) setFolded(!prefs.folded);
@@ -322,6 +350,7 @@
     applyTheme(hello.theme);
     setLabel(opacity, t("opacity", "Background opacity"));
     setLabel(document.querySelector(".pluginSettings"), t("pluginSettings", "Plugin settings"));
+    setLabel(document.querySelector(".dockArrange"), t("editLayout", "Edit layout"));
     setLabel(document.querySelector(".pluginClose"), t("close", "Hide the dock (the plugins keep running)"));
     applyLayout(hello);
     // Built to show one plugin (a widget double-clicked): on its tab.

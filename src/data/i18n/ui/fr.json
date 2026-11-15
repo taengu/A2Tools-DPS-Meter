@@ -401,6 +401,9 @@
     },
     "showSuspendBtn": "Afficher le bouton de pause de capture",
     "showLockBtn": "Afficher le bouton de verrouillage (clic au travers)",
+    "editLayout": "Disposer le compteur, les épingles et les widgets",
+    "editLayoutBtn": "Modifier la disposition",
+    "editLayoutUnsupported": "Ce bureau place lui-même les fenêtres du compteur : la disposition ne peut pas être modifiée ici.",
     "showDockBtn": "Afficher le bouton du dock des plugins",
     "playerLimit": {
       "label": "Joueurs affichés max."
@@ -579,6 +582,7 @@
       "pressKeys": "Appuyez sur des touches...",
       "tooManyKeys": "3 touches au maximum",
       "plugins": "Afficher/masquer les fenêtres des plugins",
+      "layout": "Modifier la disposition",
       "hidePins": "Masquer aussi les épingles des plugins",
       "notSet": "Non défini",
       "restoreDefaults": "Rétablir par défaut",
@@ -664,6 +668,7 @@
       "roundDps": "13 412 s'affiche 13k.",
       "showSuspendBtn": "Un bouton sur le compteur qui arrête la lecture du trafic du jeu jusqu'à ce que tu appuies à nouveau.",
       "showLockBtn": "Un bouton qui fait ignorer la souris au compteur, pour que les clics passent au jeu.",
+      "editLayout": "Déverrouille d'un coup le compteur, l'épingle FP et tous les widgets de plugins pour les faire glisser en place. Terminé garde les nouvelles places ; Annuler les remet.",
       "showDockBtn": "Un bouton sur le meter qui ouvre et ferme le dock des plugins.",
       "windowOpacity": "La transparence du fond du compteur. Les barres et le texte ne changent pas.",
       "titleOpacity": "La transparence de la barre de titre du meter, à part du fond en dessous. Tant que vous ne le bougez pas, il suit le fond.",
@@ -945,6 +950,7 @@
     "showControls": "Afficher les commandes",
     "popOut": "Ouvrir dans sa propre fenêtre",
     "pluginSettings": "Réglages des plugins",
+    "editLayout": "Modifier la disposition",
     "hide": "Masquer (le plugin continue de tourner)",
     "close": "Masquer le dock (les plugins continuent de tourner)",
     "hideMeter": "Masquer le compteur DPS",
@@ -969,6 +975,15 @@
     "policy": "Politique de confidentialité",
     "continue": "Continuer"
   },
+  "layout": {
+    "title": "Modifier la disposition",
+    "hint": "Fais glisser chaque élément en place. Lâché près d'un bord, il s'y aimante.",
+    "snap": "Aimanter",
+    "gridOff": "Grille : non",
+    "gridOn": "Grille : {px} px",
+    "cancel": "Annuler",
+    "done": "Terminé"
+  },
   "netNotice": {
     "title": "Impossible de joindre les serveurs d'A2 Tools",
     "text": "Les plugins, mises à jour et minuteurs de boss n'ont pas pu être téléchargés, même après de nouveaux essais. C'est généralement la connexion internet : l'application gratuite 1.1.1.1 de Cloudflare règle le problème pour la plupart des joueurs.",

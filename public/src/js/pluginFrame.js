@@ -225,6 +225,8 @@
       if (hello.pairings) out.push(["pairings", hello.pairings]);
       // The Abyss pairing, once the game has said it (meter 2.0.99 on).
       if (hello.abyssPairing) out.push(["abyssPairing", hello.abyssPairing]);
+      // The layout being edited as it starts (meter 2.1.0 on).
+      if (hello.layout) out.push(["layout", { editing: true }]);
       // Its jitter too (meter 2.0.99 on).
       if ("ping" in hello) out.push(["ping", { ms: typeof hello.ping === "number" ? hello.ping : null, jitter: typeof hello.jitter === "number" ? hello.jitter : null }]);
       return out;

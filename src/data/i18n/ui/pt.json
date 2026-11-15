@@ -401,6 +401,9 @@
     },
     "showSuspendBtn": "Mostrar botão de pausar captura",
     "showLockBtn": "Mostrar botão de bloqueio (clique através)",
+    "editLayout": "Posicionar o medidor, os pins e os widgets",
+    "editLayoutBtn": "Editar layout",
+    "editLayoutUnsupported": "Esta área de trabalho posiciona as janelas do medidor sozinha, então o layout não pode ser editado aqui.",
     "showDockBtn": "Mostrar o botão do painel de plugins",
     "playerLimit": {
       "label": "Máx. de jogadores exibidos"
@@ -579,6 +582,7 @@
       "pressKeys": "Pressione as teclas...",
       "tooManyKeys": "No máximo 3 teclas",
       "plugins": "Mostrar/ocultar janelas de plugins",
+      "layout": "Editar layout",
       "hidePins": "Ocultar também os pinos de plugins",
       "notSet": "Não definido",
       "restoreDefaults": "Restaurar padrões",
@@ -664,6 +668,7 @@
       "roundDps": "13.412 aparece como 13k.",
       "showSuspendBtn": "Um botão no medidor que para de ler o tráfego do jogo até você apertar de novo.",
       "showLockBtn": "Um botão que faz o medidor ignorar o mouse, para os cliques irem ao jogo.",
+      "editLayout": "Desbloqueia de uma vez o medidor, o pin de FP e todos os widgets de plugins para arrastá-los ao lugar. Concluir mantém os novos lugares; Cancelar os devolve.",
       "showDockBtn": "Um botão no medidor que abre e fecha o painel de plugins.",
       "windowOpacity": "Quão transparente é o fundo do medidor. Barras e texto não mudam.",
       "titleOpacity": "O quanto a barra de título do medidor é transparente, separada do fundo abaixo. Até você mexer, ela segue o fundo.",
@@ -945,6 +950,7 @@
     "showControls": "Mostrar os controles",
     "popOut": "Abrir em janela própria",
     "pluginSettings": "Configurações de plugins",
+    "editLayout": "Editar layout",
     "hide": "Ocultar (o plugin continua rodando)",
     "close": "Ocultar o dock (os plugins continuam rodando)",
     "hideMeter": "Ocultar o medidor de DPS",
@@ -969,6 +975,15 @@
     "policy": "Política de privacidade",
     "continue": "Continuar"
   },
+  "layout": {
+    "title": "Editar layout",
+    "hint": "Arraste cada peça para o lugar. Solta perto de uma borda, ela se encaixa.",
+    "snap": "Encaixar",
+    "gridOff": "Grade: não",
+    "gridOn": "Grade: {px} px",
+    "cancel": "Cancelar",
+    "done": "Concluir"
+  },
   "netNotice": {
     "title": "Não é possível acessar os servidores do A2 Tools",
     "text": "Não foi possível baixar plugins, atualizações e timers de chefes, mesmo tentando de novo. Geralmente é a conexão com a internet: o app gratuito 1.1.1.1 da Cloudflare resolve para a maioria dos jogadores.",

@@ -50,6 +50,14 @@
           0 0 8px rgba(255, 120, 0, 0.55);
       }
       .pin.isDraining .arrow { border-bottom: 0; border-top: 9px solid currentColor; }
+      /* The layout being edited (layout.rs): outlined, and shown. */
+      body.layoutEditing {
+        box-sizing: border-box;
+        border: 2px dashed rgba(62, 232, 255, 0.9);
+        border-radius: 6px;
+        background: rgba(62, 232, 255, 0.12);
+      }
+      body.layoutEditing .pin { display: flex; }
     </style>
   </head>
   <body>

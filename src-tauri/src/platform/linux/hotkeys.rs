@@ -43,6 +43,7 @@ const RELOAD: &str = "reset";
 const TOGGLE: &str = "toggle";
 const LOCK: &str = "lock";
 const PLUGINS: &str = "plugins";
+const LAYOUT: &str = "layout";
 
 /// A binding's shortcut id and the description the desktop shows.
 fn shortcut_of(name: &str) -> Option<(&'static str, &'static str)> {
@@ -51,6 +52,7 @@ fn shortcut_of(name: &str) -> Option<(&'static str, &'static str)> {
         "toggle" => (TOGGLE, "Show or hide the meter"),
         "lock" => (LOCK, "Turn the click-through lock on or off"),
         "plugins" => (PLUGINS, "Bring back the open plugin windows"),
+        "layout" => (LAYOUT, "Edit the layout of the meter and plugin widgets"),
         _ => return None,
     })
 }

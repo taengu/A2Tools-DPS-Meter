@@ -62,6 +62,8 @@ mod npcap_setup;
 mod app;
 #[cfg(feature = "desktop")]
 mod fp_pin;
+#[cfg(feature = "desktop")]
+mod layout;
 
 #[cfg(feature = "desktop")]
 mod atomic_file;

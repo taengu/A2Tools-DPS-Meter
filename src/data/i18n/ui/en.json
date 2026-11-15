@@ -401,6 +401,9 @@
     },
     "showSuspendBtn": "Show pause capture button",
     "showLockBtn": "Show click-through lock button",
+    "editLayout": "Arrange the meter, pins and widgets",
+    "editLayoutBtn": "Edit layout",
+    "editLayoutUnsupported": "This desktop places the meter's windows itself, so the layout can't be edited here.",
     "showDockBtn": "Show plugin dock button",
     "playerLimit": {
       "label": "Max players shown"
@@ -587,6 +590,7 @@
       "pressKeys": "Press keys...",
       "tooManyKeys": "Up to 3 keys",
       "plugins": "Show/Hide plugin windows",
+      "layout": "Edit layout",
       "hidePins": "Hide plugin pins too",
       "notSet": "Not set",
       "restoreDefaults": "Restore defaults",
@@ -673,6 +677,7 @@
       "roundDps": "13,412 shows as 13k.",
       "showSuspendBtn": "A button on the meter that stops reading game traffic until you press it again.",
       "showLockBtn": "A button that makes the meter ignore the mouse, so clicks go through to the game.",
+      "editLayout": "Unlocks the meter, the FP pin and every plugin widget at once, to drag into place. Done keeps the new places; Cancel puts them back.",
       "showDockBtn": "A button on the meter that opens and closes the plugin dock.",
       "windowOpacity": "How see-through the meter's background is. Bars and text stay as they are.",
       "titleOpacity": "How see-through the meter's title bar is, apart from the background under it. Until you move it, it follows the background.",
@@ -945,6 +950,7 @@
     "showControls": "Show the controls",
     "popOut": "Open in its own window",
     "pluginSettings": "Plugin settings",
+    "editLayout": "Edit layout",
     "hide": "Hide (the plugin keeps running)",
     "close": "Hide the dock (the plugins keep running)",
     "hideMeter": "Hide the DPS meter",
@@ -969,6 +975,15 @@
     "policy": "Privacy policy",
     "continue": "Continue"
   },
+  "layout": {
+    "title": "Edit layout",
+    "hint": "Drag any piece into place. Dropped near an edge, it snaps to it.",
+    "snap": "Snap",
+    "gridOff": "Grid: off",
+    "gridOn": "Grid: {px} px",
+    "cancel": "Cancel",
+    "done": "Done"
+  },
   "netNotice": {
     "title": "Can't reach A2 Tools' servers",
     "text": "Plugins, updates and boss timers couldn't be downloaded, even after trying again. This is usually the internet connection: Cloudflare's free 1.1.1.1 app fixes it for most players.",

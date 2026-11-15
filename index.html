@@ -759,6 +759,12 @@
                       <span class="settingsToggleTrack" aria-hidden="true"></span>
                     </span>
                   </label>
+                  <div class="settingsRow layoutSetting">
+                    <div class="settingsLabel" data-i18n="settings.editLayout" title="Unlocks the meter, the FP pin and every plugin widget at once, to drag into place. Done keeps the new places; Cancel puts them back." data-i18n-title="settings.tips.editLayout">Arrange the meter, pins and widgets</div>
+                    <div class="settingsRowEnd">
+                      <button class="settingsAction editLayoutBtn" type="button" data-i18n="settings.editLayoutBtn">Edit layout</button>
+                    </div>
+                  </div>
                   <label class="settingsToggle lockSetting" style="display:none">
                     <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showLockBtn" title="A button that makes the meter ignore the mouse, so clicks go through to the game." data-i18n-title="settings.tips.showLockBtn">Show click-through lock button</span>
                     <span class="settingsToggleControl">
@@ -1085,6 +1091,14 @@
                       <div class="settingsLabel" data-i18n="settings.keybind.plugins">Show/Hide plugin windows</div>
                     </div>
                     <button class="keybindBtn pluginsKeybindBtn" type="button" data-keybind="plugins">
+                      <span class="keybindText">Not set</span>
+                    </button>
+                  </div>
+                  <div class="settingsRow settingsRowKeybind">
+                    <div class="settingsInfo">
+                      <div class="settingsLabel" data-i18n="settings.keybind.layout">Edit layout</div>
+                    </div>
+                    <button class="keybindBtn layoutKeybindBtn" type="button" data-keybind="layout">
                       <span class="keybindText">Not set</span>
                     </button>
                   </div>

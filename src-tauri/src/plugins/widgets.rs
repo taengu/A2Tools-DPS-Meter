@@ -49,6 +49,12 @@ fn place_key(id: &str, name: &str) -> String {
     format!("dpsMeter.pluginWidget.{id}.{name}")
 }
 
+/// A widget's size as its plugin last opened it (logical px) and when (unix
+/// seconds): `width,height,when`, for its stand-in while the layout is edited.
+fn size_key(id: &str, name: &str) -> String {
+    format!("dpsMeter.pluginWidgetSize.{id}.{name}")
+}
+
 fn is_locked(app: &tauri::AppHandle, id: &str) -> bool {
     app.try_state::<AppState>().and_then(|s| s.settings.get(&locked_key(id))).as_deref() == Some("true")
 }
@@ -136,7 +142,10 @@ fn areas() -> &'static Mutex<HashMap<String, Area>> {
 fn apply_lock(window: &tauri::WebviewWindow, locked: bool) {
     // A screenshot tool in front: clicks go through, whatever the lock.
     let locked = locked || crate::app::screenshot_tool_in_front();
-    let area = areas().lock().unwrap_or_else(|p| p.into_inner()).get(window.label()).cloned();
+    // The layout being edited: unlocked, all of it to grab.
+    let editing = crate::layout::editing();
+    let locked = locked && !editing;
+    let area = if editing { None } else { areas().lock().unwrap_or_else(|p| p.into_inner()).get(window.label()).cloned() };
     let applied = match (locked, &area) {
         (true, _) => crate::platform::window::widget_click_through(window, true, None),
         (false, Some((rects, scale))) => crate::platform::window::widget_click_through(window, true, Some((rects, *scale))),
@@ -200,6 +209,18 @@ pub async fn plugin_widget_open(
     }
     let size = |v: f64| if v.is_finite() { v.clamp(24.0, 800.0) } else { 64.0 };
     let (width, height) = (size(width), size(height));
+    // Its plugin's own now, no longer a stand-in.
+    stand_ins().lock().unwrap_or_else(|p| p.into_inner()).remove(&label(&id, &name));
+    if let Some(state) = app.try_state::<AppState>() {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        state.settings.set(&size_key(&id, &name), &format!("{},{},{now}", width.round(), height.round()));
+    }
+    open(&app, &id, &name, width, height)
+}
+
+/// Open widget `name` of plugin `id`, or show it again if it is open.
+fn open(app: &tauri::AppHandle, id: &str, name: &str, width: f64, height: f64) -> Result<(), String> {
+    let (app, id, name) = (app.clone(), id.to_string(), name.to_string());
     if let Some(widget) = app.get_webview_window(&label(&id, &name)) {
         closed().lock().unwrap_or_else(|p| p.into_inner()).remove(widget.label());
         crate::platform::window::set_size(&widget, tauri::LogicalSize::new(width, height).into());
@@ -559,8 +580,11 @@ pub fn plugin_widget_hello(app: tauri::AppHandle, window: tauri::WebviewWindow) 
     crate::platform::window::give_front_back(&window, before);
     let locked = is_locked(&app, &id);
     apply_lock(&window, locked);
+    let layout = crate::layout::editing();
     let language = app.try_state::<AppState>().and_then(|s| s.settings.get("dpsMeter.language")).unwrap_or_else(|| "en".into());
-    Ok(serde_json::json!({ "plugin": id, "name": name, "locked": locked, "language": language }))
+    let plugin_name = host(&app).ok().and_then(|h| h.with(&id, |l| l.manifest.name.clone())).unwrap_or_else(|| id.clone());
+    Ok(serde_json::json!({ "plugin": id, "name": name, "locked": locked, "language": language,
+                           "layout": layout, "pluginName": plugin_name }))
 }
 
 /// A widget's message to its plugin's main window, heard there as a
@@ -580,7 +604,7 @@ pub fn plugin_widget_post(app: tauri::AppHandle, window: tauri::WebviewWindow, d
 #[tauri::command]
 pub fn plugin_widget_drag(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
     let (id, _) = widget_of(&window)?;
-    if !is_locked(&app, &id) {
+    if !is_locked(&app, &id) || crate::layout::may_drag() {
         crate::platform::window::start_drag(&window);
     }
     Ok(())
@@ -594,6 +618,76 @@ pub fn any_unlocked_widget_shown(app: &tauri::AppHandle) -> bool {
             && w.is_visible().unwrap_or(false)
             && !crate::platform::window::is_hidden_in_place(&w)
     })
+}
+
+/// The stand-ins open while the layout is edited, by label, and whether
+/// each was made for it (rather than a closed widget shown again).
+fn stand_ins() -> &'static Mutex<HashMap<String, bool>> {
+    static STAND_INS: std::sync::OnceLock<Mutex<HashMap<String, bool>>> = std::sync::OnceLock::new();
+    STAND_INS.get_or_init(Mutex::default)
+}
+
+/// How recently a widget must have been opened by its plugin to get a
+/// stand-in: places are kept for good, and Event Timers' icons from before
+/// its anchor (one per boss) would have covered the screen.
+const STAND_IN_RECENT_SECS: u64 = 7 * 24 * 3600;
+
+/// While the layout is edited (crate::layout), every widget its plugin opened
+/// lately but not open now (one that shows only on an alert, as Dice Rolls'
+/// box), opened as it was last, outlined with its name, to place. Its plugin
+/// hears "layout" and may fill it; it opening the widget itself makes it its own.
+pub fn show_stand_ins(app: &tauri::AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else { return };
+    let off = super::disabled(app);
+    let Ok(host) = host(app) else { return };
+    let all = state.settings.get_all();
+    for key in all.keys() {
+        let Some((id, name)) = key.strip_prefix("dpsMeter.pluginWidget.").and_then(|r| r.split_once('.')) else { continue };
+        if !valid_id(id) || !valid_name(name) || off.iter().any(|o| o == id) || host.with(id, |_| ()).is_none() {
+            continue;
+        }
+        if require(app, id, "widgets").is_err() {
+            continue;
+        }
+        let widget_label = label(id, name);
+        let made = app.get_webview_window(&widget_label).is_none();
+        if !made && !is_closed(&widget_label) {
+            continue;
+        }
+        let Some((width, height, when)) = all.get(&size_key(id, name)).and_then(|v| {
+            let mut parts = v.split(',').map(str::trim);
+            Some((parts.next()?.parse::<f64>().ok()?, parts.next()?.parse::<f64>().ok()?, parts.next()?.parse::<u64>().ok()?))
+        }) else {
+            continue;
+        };
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        if now.saturating_sub(when) > STAND_IN_RECENT_SECS {
+            continue;
+        }
+        match open(app, id, name, width, height) {
+            Ok(()) => {
+                tracing::debug!("Layout: a stand-in for {widget_label}");
+                stand_ins().lock().unwrap_or_else(|p| p.into_inner()).insert(widget_label, made);
+            }
+            Err(e) => tracing::debug!("Layout: no stand-in for {widget_label}: {e}"),
+        }
+    }
+}
+
+/// Editing done: the stand-ins go, as their plugins left them (closed, or
+/// never open).
+pub fn hide_stand_ins(app: &tauri::AppHandle) {
+    let stand_ins = std::mem::take(&mut *stand_ins().lock().unwrap_or_else(|p| p.into_inner()));
+    for (widget_label, made) in stand_ins {
+        let Some(widget) = app.get_webview_window(&widget_label) else { continue };
+        if made {
+            areas().lock().unwrap_or_else(|p| p.into_inner()).remove(&widget_label);
+            let _ = widget.close();
+        } else {
+            closed().lock().unwrap_or_else(|p| p.into_inner()).insert(widget_label);
+            crate::platform::window::hide_in_place(&widget);
+        }
+    }
 }
 
 /// Close every widget of plugin `id`: its main window has gone.

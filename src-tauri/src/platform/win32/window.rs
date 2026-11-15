@@ -330,8 +330,14 @@ pub fn resizable_edges(_window: &tauri::WebviewWindow, _min: tauri::LogicalSize<
 
 pub fn release_size(_window: &tauri::WebviewWindow, _min: tauri::LogicalSize<f64>) {}
 
+/// Whether the primary mouse button is held: a window drag still going on
+/// (the layout editor snaps a piece once it is let go). Swapped buttons are
+/// the system's: the primary is then the right one.
 pub fn primary_button_down() -> Option<bool> {
-    None
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
+    let swapped = unsafe { GetSystemMetrics(SM_SWAPBUTTON) } != 0;
+    let key = if swapped { VK_RBUTTON } else { VK_LBUTTON };
+    Some(unsafe { GetAsyncKeyState(key.0 as i32) } as u16 & 0x8000 != 0)
 }
 
 pub fn compositor_resize_supported(_window: &tauri::WebviewWindow) -> bool {
@@ -593,4 +599,50 @@ pub fn lean_memory(webview: &tauri::Webview) {
 /// nothing, and it took a second to open the dock (2026-11-15).
 pub fn is_on_screen(window: &tauri::WebviewWindow) -> bool {
     shown(window)
+}
+
+/// Another program's window over most of this one (a third or more), by its
+/// title: the plugin dock is on top only while the game or the meter is in
+/// front, so with a browser in front on its screen it was open but out of
+/// sight, and the dock button's first click closed it (2026-11-15). Hidden
+/// (cloaked) windows and click-through overlays don't count.
+pub fn covered_by(window: &tauri::WebviewWindow) -> Option<String> {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
+    use windows::Win32::System::Threading::GetCurrentProcessId;
+    let hwnd = hwnd_of(window)?;
+    let mut rect = RECT::default();
+    unsafe { GetWindowRect(hwnd, &mut rect) }.ok()?;
+    let area = ((rect.right - rect.left) as i64 * (rect.bottom - rect.top) as i64).max(1);
+    let ours = unsafe { GetCurrentProcessId() };
+    let mut above = unsafe { GetWindow(hwnd, GW_HWNDPREV) };
+    while let Ok(other) = above {
+        above = unsafe { GetWindow(other, GW_HWNDPREV) };
+        if !unsafe { IsWindowVisible(other) }.as_bool() || unsafe { IsIconic(other) }.as_bool() {
+            continue;
+        }
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(other, Some(&mut pid)) };
+        let ex = unsafe { GetWindowLongW(other, GWL_EXSTYLE) } as u32;
+        if pid == ours || ex & WS_EX_TRANSPARENT.0 != 0 {
+            continue;
+        }
+        let mut cloaked = 0u32;
+        let _ = unsafe { DwmGetWindowAttribute(other, DWMWA_CLOAKED, &mut cloaked as *mut u32 as *mut _, 4) };
+        if cloaked != 0 {
+            continue;
+        }
+        let mut o = RECT::default();
+        if unsafe { GetWindowRect(other, &mut o) }.is_err() {
+            continue;
+        }
+        let across = (rect.right.min(o.right) - rect.left.max(o.left)).max(0) as i64;
+        let down = (rect.bottom.min(o.bottom) - rect.top.max(o.top)).max(0) as i64;
+        if across * down * 3 >= area {
+            let mut title = [0u16; 128];
+            let n = unsafe { GetWindowTextW(other, &mut title) }.max(0) as usize;
+            return Some(String::from_utf16_lossy(&title[..n]));
+        }
+    }
+    None
 }

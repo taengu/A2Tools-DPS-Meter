@@ -297,6 +297,11 @@
     window._dpsApp?.updateFlightPower?.(event.payload);
   });
 
+  // The layout editor started or stopped (layout.rs).
+  if (viewMode !== "settings") listen("layout-editing", (event) => {
+    window._dpsApp?.setLayoutEditing?.(!!event.payload);
+  });
+
   // Downloads from a2tools' CDN failing even after their tries: once a run.
   if (viewMode !== "settings") listen("cdn-unreachable", () => {
     window._dpsApp?.showNetNotice?.();
@@ -691,6 +696,11 @@
     setFpPin(on) {
       invoke("fp_pin_show", { on: !!on }).catch(() => {});
     },
+    // The layout editor (layout.rs): every piece unlocked to arrange. A
+    // promise, refused where the desktop places the windows itself.
+    editLayout() {
+      return invoke("layout_edit_start");
+    },
 
     // --- Window ---
     moveWindow() {
@@ -787,6 +797,13 @@
     setPluginWindowsHotkey(mods, vk) {
       this.setSetting("dpsMeter.pluginWindowsHotkey", this._buildHotkeyLabel(mods, vk));
     },
+    // The layout editor's (layout.rs): no default either.
+    getCurrentLayoutHotKey() {
+      return this.getSetting("dpsMeter.layoutHotkey") || "";
+    },
+    setLayoutHotkey(mods, vk) {
+      this.setSetting("dpsMeter.layoutHotkey", this._buildHotkeyLabel(mods, vk));
+    },
     // Every keybind back to its default (app.rs, HOTKEY_DEFAULTS).
     // Linux: the desktop's own shortcut settings (KDE, GNOME, or the portal's).
     openDesktopShortcuts() {
@@ -797,6 +814,7 @@
       this.setSetting("dpsMeter.toggleWindowHotkey", "Ctrl+Alt+Up");
       this.setSetting("dpsMeter.lockHotkey", "Ctrl+Alt+L");
       this.setSetting("dpsMeter.pluginWindowsHotkey", "");
+      this.setSetting("dpsMeter.layoutHotkey", "");
     },
     // Each key's registration: { <key>: "ok" | "taken" | "unset", and on
     // Linux "<key>.assigned": the key the desktop gave it }.

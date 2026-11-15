@@ -9,6 +9,34 @@
          transparent window. */
       html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
       iframe { display: block; width: 100%; height: 100%; border: 0; background: transparent; }
+      /* The layout being edited (layout.rs): an outline and the widget's name
+         over it, which takes the drag. */
+      .layoutFrame {
+        display: none;
+        position: fixed;
+        inset: 0;
+        box-sizing: border-box;
+        border: 2px dashed rgba(62, 232, 255, 0.9);
+        border-radius: 6px;
+        background: rgba(62, 232, 255, 0.12);
+        cursor: grab;
+        z-index: 1;
+      }
+      .layoutFrame span {
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        max-width: calc(100% - 4px);
+        padding: 1px 4px;
+        border-radius: 3px;
+        font: 600 10px/1.3 "Segoe UI", system-ui, sans-serif;
+        color: #fff;
+        background: rgba(10, 30, 40, 0.85);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      body.layoutEditing .layoutFrame { display: block; }
     </style>
   </head>
   <body>

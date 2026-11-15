@@ -120,7 +120,15 @@
 //                                              var(--a2-bg), var(--a2-panel); and selects, checkboxes, radios,
 //                                              sliders and scrollbars are styled to match unless the plugin styles them itself
 //   a2.on("compact", (on) => ...)              the window's fold button: show only the essentials
-//
+//   a2.on("visible", (shown) => ...)          whether the plugin's page is on view, at start and on change
+//                                              (meter 2.0.77 on): its window shown, or in the dock, the dock shown,
+//                                              its tab the open one (or stacked) and the dock not folded (2.1.0 on).
+//                                              The page keeps running either way; widgets stay up
+//   a2.on("layout", ({ editing }) => ...)      the player arranging the meter and every widget at once
+//                                              (Settings, Edit layout; meter 2.1.0 on), at start while on and
+//                                              on change. Every widget is unlocked and outlined meanwhile; a
+//                                              widget that shows only on an alert can open a stand-in to place
+////
 // Keep the page's background transparent: the window paints the panel at the
 // opacity the user picks.
 //   await a2.storage.get("state")              the plugin's own saved data
@@ -177,6 +185,8 @@
 //   a2.widget.post(data)                       to the plugin's page ("widget-message")
 //   a2.on("widget", (data) => ...)             what the plugin sent it
 //   a2.on("locked", (locked) => ...)           whether the widgets are locked, at start and on change
+//   a2.on("layout", ({ editing }) => ...)      the layout being edited (meter 2.1.0 on): the widget can
+//                                              be dragged whatever the lock, and is outlined with its name
 //
 //   a2.ready()                                 call once the handlers are set
 //
