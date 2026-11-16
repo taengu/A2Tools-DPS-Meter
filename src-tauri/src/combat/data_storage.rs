@@ -2467,6 +2467,7 @@ impl DataStorage {
                 class: profile.class.map(death_recap::class_key),
                 level: profile.level,
                 legion: profile.legion,
+                abyss_grade: profile.abyss_grade,
             };
             (killer == me, ally_killer, who)
         };

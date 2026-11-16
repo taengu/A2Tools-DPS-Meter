@@ -48,6 +48,10 @@ pub struct Profile {
     /// Their legion's name and server, when they are in one.
     pub legion: Option<String>,
     pub server_id: Option<u16>,
+    /// Their Abyss rank: 1 Supreme Commander, 2 Commander, 3 Marshal, 4
+    /// General, 5-9 5-Star to 1-Star Officer, 10-18 First- to Ninth-Class
+    /// Soldier, 19 Trainee (the game's SeasonRankingGrade, abyss groups).
+    pub abyss_grade: Option<u8>,
 }
 
 /// A player's profile from their record. `rest` is the record from just past
@@ -59,9 +63,9 @@ pub struct Profile {
 /// - The legion, in one: `<legion id u16> 00 00 00 00 <server u16> <len u8>
 ///   <utf8 name>`, about 100 bytes on (DISSONATA on 2304 for the same
 ///   Gladiator, as the kill record named it; 101 of 225 players had one).
-/// - The combat power is near the end: `.. f4 cb 1f <u32> <n u32>`, maybe
-///   one or four bytes, then the combat power (u64) and one or two last
-///   bytes.
+/// - The combat power is near the end: `.. f4 cb 1f <u32> <grade u32>`,
+///   maybe one or four bytes, then the combat power (u64) and one or two
+///   last bytes. The grade is the player's Abyss rank, 1-19 (`abyss_grade`).
 ///
 /// Read on 2026-10-28 from 512 records of 354 players: a Gladiator who
 /// killed the player read level 45, gear score 2783 and combat power 170,738,
@@ -86,7 +90,20 @@ pub fn profile(rest: &[u8]) -> Profile {
         combat_power: combat_power(rest),
         legion: legion.as_ref().map(|(name, _)| name.clone()),
         server_id: legion.map(|(_, server)| server),
+        abyss_grade: abyss_grade(rest),
     }
+}
+
+/// The Abyss rank, the u32 after `f4 cb 1f` and one u32 more: 1-19. It
+/// matched the Abyss ranking table's grade for 56 of 57 players seen the same
+/// day (2026-11-04; the one off read 20 minutes after an hourly table). A
+/// short record with no combat power holds a larger number there: none.
+fn abyss_grade(rest: &[u8]) -> Option<u8> {
+    let from = rest.len().saturating_sub(40);
+    let marker = rest[from..].windows(3).rposition(|w| w == [0xf4, 0xcb, 0x1f])?;
+    let tail = &rest[from + marker + 3..];
+    let grade = u32::from_le_bytes(tail.get(4..8)?.try_into().ok()?);
+    (1..=19).contains(&grade).then_some(grade as u8)
 }
 
 /// The legion's name and server: the first place in the record's first 200
@@ -177,6 +194,8 @@ pub struct Assist {
     pub level: Option<u32>,
     pub gear_score: Option<u32>,
     pub combat_power: Option<u64>,
+    /// Their Abyss rank, 1-19 (see `Profile::abyss_grade`).
+    pub abyss_grade: Option<u8>,
     pub damage: i64,
     pub hits: u32,
 }
@@ -192,6 +211,8 @@ pub struct KillerProfile {
     pub level: Option<u32>,
     pub gear_score: Option<u32>,
     pub combat_power: Option<u64>,
+    /// Their Abyss rank, 1-19 (see `Profile::abyss_grade`).
+    pub abyss_grade: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -259,6 +280,7 @@ impl DeathRecaps {
                 combat_power: profile.combat_power.or(known.combat_power),
                 legion: profile.legion.or_else(|| known.legion.clone()),
                 server_id: profile.server_id.or(known.server_id),
+                abyss_grade: profile.abyss_grade.or(known.abyss_grade),
             },
             None => profile,
         };
@@ -320,6 +342,7 @@ impl DeathRecaps {
                     level: profile.level,
                     gear_score: profile.gear_score,
                     combat_power: profile.combat_power,
+                    abyss_grade: profile.abyss_grade,
                     damage: theirs.iter().map(|h| h.damage).sum(),
                     hits: theirs.len() as u32,
                 })
@@ -352,6 +375,7 @@ impl DeathRecaps {
                 level: profile.level,
                 gear_score: profile.gear_score,
                 combat_power: profile.combat_power,
+                abyss_grade: profile.abyss_grade,
             },
             damage,
             hits: fight.len() as u32,
@@ -419,6 +443,18 @@ mod tests {
         rest.extend(hex("21 f4 cb 1f"));
         rest.extend(hex(tail));
         rest
+    }
+
+    #[test]
+    fn a_record_gives_the_players_abyss_rank() {
+        // BadDoctor, a First-Class Soldier (10) in the Abyss table of 2026-11-04.
+        let p = profile(&ending("ed 03 00 00 0a 00 00 00 13 ab 02 00 00 00 00 00 00"));
+        assert_eq!(p.abyss_grade, Some(10));
+        assert_eq!(p.combat_power, Some(174_867));
+        // A Trainee.
+        assert_eq!(profile(&ending("3f 05 00 00 13 00 00 00 13 ab 02 00 00 00 00 00 00")).abyss_grade, Some(19));
+        // A short record: a larger number in its place, no rank.
+        assert_eq!(profile(&ending("ed 03 00 00 fa 17 00 00 01 02")).abyss_grade, None);
     }
 
     #[test]

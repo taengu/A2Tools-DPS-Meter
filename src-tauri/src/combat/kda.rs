@@ -54,6 +54,8 @@ pub struct Victim {
     pub class: Option<&'static str>,
     pub level: Option<u32>,
     pub legion: Option<String>,
+    /// Their Abyss rank, 1-19 (see `death_recap::Profile::abyss_grade`).
+    pub abyss_grade: Option<u8>,
 }
 
 /// One kill, assist or death, as plugins get it.
@@ -198,7 +200,7 @@ mod tests {
     #[test]
     fn a_record_naming_you_is_a_kill() {
         let mut kda = Kda::default();
-        let who = Victim { name: Some("Enemy".into()), server_id: Some(2004), class: Some("ranger"), level: Some(45), legion: None };
+        let who = Victim { name: Some("Enemy".into()), server_id: Some(2004), class: Some("ranger"), level: Some(45), legion: None, abyss_grade: Some(12) };
         assert_eq!(kda.player_died(7, true, false, 1_000, who.clone()), Some(Kind::Kill));
         let (seq, events) = kda.since(0).unwrap();
         assert_eq!(seq, 1);

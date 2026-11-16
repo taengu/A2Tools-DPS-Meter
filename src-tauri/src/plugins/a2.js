@@ -40,10 +40,13 @@
 //                                              "feed:boss-timers", meter 2.0.65 on)
 //   a2.on("deathRecap", (r) => ...)            a player killed you (permission "events:death-recap", meter
 //                                              2.0.81 on): r = { at, killer: { name, serverId, legion,
-//                                              class ("gladiator", ...), level, gearScore, combatPower },
+//                                              class ("gladiator", ...), level, gearScore, combatPower,
+//                                              abyssGrade (meter 2.1.0 on: the Abyss rank, 1 Supreme
+//                                              Commander, 2 Commander, 3 Marshal, 4 General, 5-9 5-Star to
+//                                              1-Star Officer, 10-18 First- to Ninth-Class Soldier, 19 Trainee) },
 //                                              damage, hits, durationMs, dps, skills: [{ id, name, damage,
 //                                              hits }], assists: [{ name, legion, serverId, class, level, gearScore,
-//                                              combatPower, damage, hits }] (the others who damaged you
+//                                              combatPower, abyssGrade, damage, hits }] (the others who damaged you
 //                                              in the fight, your party never) }, null where the game
 //                                              did not say. Once each, kept like a decoder's events
 //   a2.on("lootRoll", (e) => ...)              Dice Roll loot (permission "events:loot-rolls", meter
@@ -86,7 +89,9 @@
 //                                              a player killed you ("death"), once each, kept like a
 //                                              decoder's events; the event's `at` (unix ms) says when
 //                                              and `seq` (from 1) numbers it, two in the same ms differ by it
-//                                              (permission "events:kda", meter 2.0.94 on). No names. Also
+//                                              (permission "events:kda", meter 2.0.94 on). A kill or assist
+//                                              has `victim`: { name, serverId, class, level, legion, abyssGrade
+//                                              (2.1.0 on, as deathRecap's) }, null where not known. Also
 //                                              "points" with `amount`: Abyss Points just gained, and
 //                                              "zone" with `abyss` true/false: the Abyss entered or
 //                                              left (the first map load of a meter started there too).
