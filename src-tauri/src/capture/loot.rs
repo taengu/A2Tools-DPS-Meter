@@ -69,9 +69,10 @@ pub enum Gather {
     /// The node was taken: someone else is gathering it.
     #[serde(rename_all = "camelCase")]
     Refused { node: u32 },
-    /// The gather's result.
+    /// The gather's result: `status` 0 base quality, 1 upgraded (a Fresh
+    /// item, or Mela x3), 2 failed (count 0).
     #[serde(rename_all = "camelCase")]
-    Done { node: u32, item: u32, count: u32, bonus: u32, extra_item: u32, extra_count: u32 },
+    Done { node: u32, status: u8, item: u32, count: u32, bonus: u32, extra_item: u32, extra_count: u32 },
 }
 
 /// One item entry, as plugins get it: `gained` when known (a new item's
@@ -256,7 +257,8 @@ pub fn gather(packet: &[u8]) -> Option<Gather> {
         };
     }
     let b = body(packet, [0x33, 0x8D])?;
-    if b.get(..2)? != [0x00, 0x3a] {
+    let status = *b.first()?;
+    if status > 2 || *b.get(1)? != 0x3a {
         return None;
     }
     let node = read_varint(b, 2);
@@ -265,6 +267,7 @@ pub fn gather(packet: &[u8]) -> Option<Gather> {
     (100_000_000..1_000_000_000).contains(&item).then_some(())?;
     Some(Gather::Done {
         node: node.value as u32,
+        status,
         item,
         count: u32_at(b, at + 4)?,
         bonus: u32_at(b, at + 8)?,
@@ -452,12 +455,17 @@ mod tests {
         let done = hex("1d 338d003abf8401d915662401000000010000000000000000000000");
         assert_eq!(
             gather(&done),
-            Some(Gather::Done { node: 16_959, item: 610_670_041, count: 1, bonus: 1, extra_item: 0, extra_count: 0 })
+            Some(Gather::Done { node: 16_959, status: 0, item: 610_670_041, count: 1, bonus: 1, extra_item: 0, extra_count: 0 })
         );
         let crystal = hex("1d 338d003ab98801da1566240100000001000000abc0671e01000000");
         assert_eq!(
             gather(&crystal),
-            Some(Gather::Done { node: 17_465, item: 610_670_042, count: 1, bonus: 1, extra_item: 510_116_011, extra_count: 1 })
+            Some(Gather::Done { node: 17_465, status: 0, item: 610_670_042, count: 1, bonus: 1, extra_item: 510_116_011, extra_count: 1 })
         );
+        // Mela upgraded (x3), and a failed Targena (2026-11-17).
+        let mela = hex("1d 338d013adcc602ed3c662403000000000000000000000000000000");
+        assert!(matches!(gather(&mela), Some(Gather::Done { status: 1, item: 610_680_045, count: 3, .. })));
+        let failed = hex("1d 338d023a81c502da15662400000000000000000000000000000000");
+        assert!(matches!(gather(&failed), Some(Gather::Done { status: 2, count: 0, .. })));
     }
 }

@@ -4196,6 +4196,8 @@ pub fn run() {
             #[cfg(feature = "online")]
             crate::supply_report::spawn(app.handle().clone());
             #[cfg(feature = "online")]
+            crate::gather_report::spawn(app.handle().clone());
+            #[cfg(feature = "online")]
             crate::ranking_report::spawn(app.handle().clone());
             #[cfg(feature = "online")]
             crate::party_presence::spawn(app.handle().clone());

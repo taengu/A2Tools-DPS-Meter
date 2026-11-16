@@ -67,9 +67,11 @@
 //                                              known, else null) }], atPlace } for items you pick up, are
 //                                              given or use up; or { kind: "gather", at, gather, atPlace },
 //                                              gather = { type: "started", node, n } | { type: "refused",
-//                                              node } | { type: "done", node, item, count, bonus (extra
-//                                              copies), extraItem, extraCount (the random add-on, 0 when
-//                                              none) }; or { kind: "drops", at, drops: [{ source (the entity
+//                                              node } | { type: "done", node, status (0 base quality, 1
+//                                              upgraded: a Fresh item or Mela x3, 2 failed; meter 2.1.0,
+//                                              older meters send base results only), item, count, bonus
+//                                              (extra copies), extraItem, extraCount (the random add-on, 0
+//                                              when none) }; or { kind: "drops", at, drops: [{ source (the entity
 //                                              it fell from), mob (its NPC code, when known), item, count,
 //                                              owner ("you" | "party" | "other": in a party each member gets
 //                                              drops of their own) }], atPlace }; or { kind: "kill", at,

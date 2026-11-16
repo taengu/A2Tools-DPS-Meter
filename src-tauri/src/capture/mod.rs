@@ -9,6 +9,7 @@ pub mod matchup;
 pub mod rankings;
 pub mod flight_power;
 pub mod loot;
+pub mod gathering;
 pub mod loot_rolls;
 pub mod reward_cards;
 pub mod field_bosses;

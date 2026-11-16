@@ -560,6 +560,8 @@ pub struct DataStorage {
     loot_rolls: Mutex<crate::capture::loot_rolls::LootRolls>,
     /// Items gained and gathers (`capture::loot`), for plugins.
     loot: Mutex<crate::capture::loot::Loot>,
+    /// Gathering skills and finished gathers, for the shared gathering stats.
+    gathering: Mutex<crate::capture::gathering::Tracker>,
     /// The Black Cloud Merchant's stock as read (`capture::black_market`),
     /// for plugins.
     black_markets: Mutex<crate::capture::black_market::BlackMarkets>,
@@ -964,6 +966,7 @@ impl DataStorage {
             death_recaps: Mutex::new(DeathRecaps::default()),
             loot_rolls: Mutex::new(Default::default()),
             loot: Mutex::new(Default::default()),
+            gathering: Mutex::new(Default::default()),
             black_markets: Mutex::new(Default::default()),
             flight_powers: Mutex::new(Default::default()),
             kda: Mutex::new(Kda::default()),
@@ -2569,7 +2572,32 @@ impl DataStorage {
     /// A gather (`31 8D`, `33 8D`), kept for plugins.
     pub fn note_gather(&self, gather: crate::capture::loot::Gather) {
         let place = self.loot_place();
-        self.loot.lock().gather(crate::clock::now_ms(), gather, place);
+        let now = crate::clock::now_ms();
+        if let crate::capture::loot::Gather::Done { node, status, item, count, bonus, extra_item, .. } = gather {
+            self.gathering.lock().done(now, node, status, item, count, bonus, extra_item);
+        }
+        self.loot.lock().gather(now, gather, place);
+    }
+
+    pub fn note_gather_skills(&self, change: crate::capture::gathering::SkillChange) {
+        self.gathering.lock().skill_change(change);
+    }
+
+    pub fn note_gather_start(&self, start: crate::capture::gathering::StartOutcome) {
+        self.gathering.lock().started(crate::clock::now_ms(), start);
+    }
+
+    /// The gathers waiting to be shared: how many, and the oldest's time (unix s).
+    pub fn gathers_waiting(&self) -> Option<(usize, i64)> {
+        self.gathering.lock().waiting()
+    }
+
+    pub fn take_gathers(&self) -> Vec<crate::capture::gathering::Gathered> {
+        self.gathering.lock().take()
+    }
+
+    pub fn put_back_gathers(&self, gathers: Vec<crate::capture::gathering::Gathered>) {
+        self.gathering.lock().put_back(gathers);
     }
 
     /// The loot events read since `seq`, and the count to ask with next

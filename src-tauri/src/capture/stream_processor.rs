@@ -360,6 +360,13 @@ impl StreamProcessor {
         if let Some(roll) = crate::capture::loot_rolls::parse(packet) {
             self.data_storage.note_loot_roll(roll);
         }
+        // Gathering skills, and what a gather's start decided, for the
+        // shared gathering stats.
+        if let Some(change) = crate::capture::gathering::skills(packet) {
+            self.data_storage.note_gather_skills(change);
+        } else if let Some(start) = crate::capture::gathering::start(packet) {
+            self.data_storage.note_gather_start(start);
+        }
         // Items gained (pickups, rewards), gathers and drops, for drop rates.
         if let Some(entries) = crate::capture::loot::item_entries(packet) {
             self.data_storage.note_items(&entries);
