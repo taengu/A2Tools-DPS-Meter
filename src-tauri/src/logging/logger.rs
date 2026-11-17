@@ -255,7 +255,11 @@ pub fn set_packet_log_enabled(enabled: bool, log_dir: &std::path::Path) {
     let prev = PACKET_LOG_ENABLED.swap(enabled, Ordering::SeqCst);
     if enabled && !prev {
         // Before opening a new one, so the new capture is never the thing pruned.
-        prune_packet_logs(log_dir, KEEP_PACKET_FILES.saturating_sub(1));
+        // A dev build keeps every capture: the developer's own are evidence
+        // (2026-11-17: a morning of labeled gathers went with the 5-file limit).
+        if !cfg!(debug_assertions) {
+            prune_packet_logs(log_dir, KEEP_PACKET_FILES.saturating_sub(1));
+        }
         if let Some((writer, path)) = open_packet_file(log_dir) {
             {
                 let mut guard = PACKET_LOGGER.lock();
