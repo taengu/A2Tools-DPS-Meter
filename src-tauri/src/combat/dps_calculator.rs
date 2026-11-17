@@ -1834,6 +1834,23 @@ impl DpsCalculator {
                 if !filter.contains(&uid) { continue; }
             }
             for (&(skill_code, is_hot), hd) in skills {
+                // Only the heals inside this fight's window count: healing is
+                // kept for the whole session, so the totals used to include
+                // every heal since the last reset (777 ticks for both bosses of
+                // the 2026-10-02 capture). Their times, from the fight's first
+                // hit as damage's are, feed HEAL's HPS chart and cast lanes.
+                //
+                // A skill with no heal in the window gets no row at all. Its
+                // empty row used to stay, and a row is what makes a healer one
+                // of the fight's players (`snapshot_boss_fights_inner`): a
+                // two-player Krao Cave kill was saved with 115 players, 113 of
+                // them seen healing in the open world earlier that evening
+                // (1,204 heal rows, nearly all zero; 2026-11-17).
+                let (from, to) = (target_data.first_damage_time, target_data.last_damage_time);
+                let mut ticks = hd.ticks.iter().filter(|(t, _)| *t >= from && *t <= to).peekable();
+                if ticks.peek().is_none() {
+                    continue;
+                }
                 let mut skill_name = self.skill_lookup.lookup_skill_name(skill_code);
                 if is_hot && !skill_name.is_empty() {
                     skill_name = format!("{} - HoT", skill_name);
@@ -1871,14 +1888,8 @@ impl DpsCalculator {
                     hit_timestamps: Vec::new(),
                     specs: Vec::new(),
                 });
-                // Only the heals inside this fight's window count: healing is
-                // kept for the whole session, so the totals used to include
-                // every heal since the last reset (777 ticks for both bosses of
-                // the 2026-10-02 capture). Their times, from the fight's first
-                // hit as damage's are, feed HEAL's HPS chart and cast lanes.
-                let (from, to) = (target_data.first_damage_time, target_data.last_damage_time);
                 let mut healed: i64 = 0;
-                for &(t, amount) in hd.ticks.iter().filter(|(t, _)| *t >= from && *t <= to) {
+                for &(t, amount) in ticks {
                     healed += amount;
                     entry.time += 1;
                     entry.hit_timestamps.push(t - from);
@@ -2582,6 +2593,38 @@ mod tests {
         assert_eq!(calc.get_dps().map[&4227].nickname, "4227");
         storage.append_nickname_authoritative(4227, "Ab");
         assert_eq!(calc.get_dps().map[&4227].nickname, "Ab");
+    }
+
+    /// Healing is kept for the whole session, a fight's record only has what
+    /// fell inside it. A stranger who healed before the pull has no heal row
+    /// in the fight, and so is not one of its players; a party member who
+    /// only healed during it still is (a Cleric who never hit the boss).
+    #[test]
+    fn a_healer_from_before_the_pull_is_not_one_of_the_fights_players() {
+        let storage = Arc::new(DataStorage::new());
+        storage.set_local_player_id(Some(2259));
+        // In town, long before: a stranger's heal, and one of your own.
+        storage.append_heal(7_000, 17010000, 900, false, 10_000);
+        storage.append_heal(2259, 11010000, 300, true, 12_000);
+        // The pull: you hit the boss for half a minute, the Cleric heals twice.
+        for at in [100_000, 110_000, 130_000] {
+            storage.append_damage(hit(2259, 44_090, at));
+        }
+        storage.append_heal(2260, 17010000, 1_200, false, 105_000);
+        storage.append_heal(2260, 17010000, 800, false, 120_000);
+        // And a heal after the last hit, which is not the fight's either.
+        storage.append_heal(7_001, 17010000, 500, false, 140_000);
+        let mut calc = boss_meter(&storage);
+
+        let details = calc.get_target_details(44_090, None);
+        let healers: Vec<(i32, i32, i32)> = details.heal_skills.iter().map(|s| (s.actor_id, s.dmg, s.time)).collect();
+        assert_eq!(healers, vec![(2260, 2_000, 2)], "only the heals inside the fight have a row");
+        assert_eq!(details.heal_skills[0].hit_timestamps, vec![5_000, 20_000]);
+
+        let record = calc.snapshot_boss_fights_force().pop().expect("the boss fight");
+        let mut players: Vec<i32> = record.actors.iter().map(|a| a.actor_id).collect();
+        players.sort();
+        assert_eq!(players, vec![2259, 2260], "you and the Cleric, not the healers of before and after");
     }
 
     #[test]
