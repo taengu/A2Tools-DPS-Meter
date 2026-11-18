@@ -630,13 +630,13 @@
       "failed": "Anmeldung fehlgeschlagen: {error}",
       "supporter": "Unterstützer",
       "guestUpload": "Bosskämpfe ohne Konto hochladen",
-      "guestUploadHint": "Wenn ein Bosskampf endet, wird er öffentlich und ohne Konto auf a2tools.app hochgeladen. Andere Spieler bleiben maskiert. Meldest du dich später an, gehören die von diesem PC hochgeladenen Kämpfe dir.",
+      "guestUploadHint": "Wenn ein Bosskampf endet, wird er öffentlich und ohne Konto auf a2tools.app hochgeladen. Andere Spieler bleiben maskiert. Gruppenmitglieder, die auf a2tools.app genannt werden wollen, erscheinen mit vollem Namen. Meldest du dich später an, gehören die von diesem PC hochgeladenen Kämpfe dir.",
       "guestClaimHint": "Von diesem PC hochgeladene Kämpfe werden für dich aufbewahrt. Melde dich hier an, um sie zu übernehmen, oder hol dir einen Code, um sie von einem anderen Gerät aus zu beanspruchen.",
       "guestClaimButton": "Code anfordern",
       "guestClaimCode": "Gib {code} auf {url} ein, während du angemeldet bist. Der Code läuft in 15 Minuten ab.",
       "claimed": "{count} von diesem PC hochgeladene Kämpfe gehören jetzt dir.",
       "autoUpload": "Bosskämpfe automatisch hochladen",
-      "autoUploadHint": "Wenn ein Bosskampf endet, wird er mit der auf a2tools.app gewählten Sichtbarkeit in dein Konto hochgeladen. Andere Spieler bleiben maskiert. Trainingspuppen werden nie hochgeladen."
+      "autoUploadHint": "Wenn ein Bosskampf endet, wird er mit der auf a2tools.app gewählten Sichtbarkeit in dein Konto hochgeladen. Andere Spieler bleiben maskiert. Gruppenmitglieder, die auf a2tools.app genannt werden wollen, erscheinen mit vollem Namen. Trainingspuppen werden nie hochgeladen."
     },
     "sendLogs": {
       "hint": "Sendet dein Debug-Log und deine neuesten Paket-Logs (insgesamt 3 Dateien) für einen Fehlerbericht an den Entwickler.",

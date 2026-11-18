@@ -56,6 +56,113 @@ Every slice is checked, whichever meter cut it:
 A `garbled`, `short` or `disputed` log stays viewable and shareable but is not ranked or
 counted. Neither is a log from a meter version that has not passed the conformance check.
 
+### When an upload is refused
+
+| Answer | Meaning | What to do |
+|---|---|---|
+| 422 `not_blinded` | A name was found in clear in the slice | Blind as `evidence_slice.rs` does. If you can't explain it, keep the slice and tell us: it can be ours (a packet misread as a name) |
+| `open_world` | A field or world boss (`dungeonId` 0) | Not accepted; don't retry |
+| `training_dummy` | A training dummy | Not accepted; don't retry |
+| `implausible` | Numbers no real fight has | Check the slice; tell us if it was a real fight |
+| `too_large` | Slice over 16 MiB gzipped | Trim the prelude; tell us |
+| `derive_failed` | The log service could not derive a boss fight | Keep the slice and tell us |
+| 429 `rate_limited` | Too many uploads this hour | Wait, then retry |
+| 503 `unavailable` / `queue_failed` | Busy | Retry with backoff |
+| 401 | Token revoked or wrong | Sign in again |
+
+We keep refused uploads for 30 days, so we can look at them. A 400, 401, 429, or a 503 that was not
+queued leaves no record on our side, so log those on yours.
+
+## Player accounts and names
+
+### How names are shown
+
+- The slice carries no names (see above). What a log shows comes from the upload's `names`
+  (actor id as a string, to the name your meter showed), for **the actors of that fight only**.
+- The site shows the uploader, `uploaderActorId`, in full and masks everyone else: the first two
+  characters, up to four stars, the last character (`Se****e`). This is done on the server, so a
+  client can't skip it. Names you send already masked are fine; masking a masked name changes
+  nothing.
+- `uploaderActorId` must be the uploading player's actor id in that fight. A wrong one shows
+  someone else's name in full.
+
+### Signing a player in (their name in full)
+
+A player's name shows in full when your meter uploads with **that player's own** A2Tools account
+token. This is the device flow (RFC 8628), with no client secret:
+
+1. `POST /api/device/code` with `{"client": "<your client id>", "device_label": "<your meter> on
+   <OS>"}`. Don't put the PC's name in the label. The answer has `user_code`, `device_code`,
+   `verification_uri`, `verification_uri_complete`, `expires_in` (600 s) and `interval` (5 s).
+2. Open `verification_uri_complete` in the browser (check it is https on a2tools.app first), or show
+   the player `user_code` to enter at `verification_uri`.
+3. Poll `POST /api/device/token` with `{"device_code": "..."}` every `interval` seconds until
+   `expires_in` runs out:
+   - 428 or `authorization_pending`: keep polling.
+   - `slow_down`: add 5 s to the interval.
+   - `expired_token` or `access_denied`: stop, and offer to start again.
+   - 200 with an `access_token`: done. A 200 with an empty `access_token` is not an approval.
+4. Send `Authorization: Bearer <token>` on uploads. Tokens don't expire; a 401 means it was
+   revoked, so drop it and offer sign-in again.
+
+**One token per player, never shared.** A meter that signs in once and uploads everyone's fights
+with that token puts them all on one account, under one name.
+
+Store tokens in the OS's secure store (DPAPI, Keychain, Secret Service) or a file only the user can
+read, never in plain settings, logs or crash reports.
+
+### Uploading without an account (guests)
+
+- `POST /api/guest` (optional body `{"deviceLabel": "..."}`) returns a guest token that owns the
+  logs it uploads. At most two are made a day per network; expect 429.
+- Guest logs are public and show the uploader as "Guest upload". **Mask every name before you
+  send it, the uploader's too**, the same way the site masks (above). Masking on our side changes
+  what is shown, not what was sent, so a full name must not leave the PC without an account.
+- The guest token is the only proof the logs are the player's. Store it like an account token.
+- `DELETE /api/guest/logs` with the guest token deletes everything that guest uploaded (a "stop
+  sharing" button). Retry until 200 or 401.
+
+### Claiming guest logs (and the uploader's name)
+
+When the player signs in, their guest logs move to their account. To show their name on those
+logs again, **keep the real uploader name for each guest upload locally**: the log id (from the
+upload's answer), the uploader's actor id, and the name. Send them as
+`"names": [{"log": "<log id>", "actorId": 5001, "name": "<real name>"}]` (at most 2,000). The site
+takes a name only if it masks to what the log already shows: it can put the original name back,
+never choose another. Never send a masked name as a real one.
+
+Three ways to claim:
+
+- **Signing in on the same PC:** send `"guestToken"` and `"names"` with `POST /api/device/token`
+  (the answer then has `claimed`), or after sign-in, `POST /api/guest/merge` with the account's
+  Bearer token and `{"guestToken": "...", "names": [...]}`.
+- **From another PC:** `POST /api/guest/claim-code` with the guest's Bearer token, and
+  `{"names": [...]}` as the body. The player types the code at a2tools.app/claim within 15
+  minutes. The names are kept with the code only until it is used or runs out.
+- Drop the guest token only after merge answers 2xx or 404; retry anything else, or the guest's
+  logs are left behind.
+
+A reinstall that wipes your app data, or a new PC, loses the guest token and the names. Nothing in
+an uploaded fight says who uploaded it, so those logs can't be claimed after that.
+
+### Party naming (opt-in)
+
+A player can choose, on a2tools.app/logs/mine#party-names, to be shown in full and ranked in the
+logs **their party members** upload. Your meter needs nothing extra for it, only what an upload
+needs anyway:
+
+- **The right `uploaderActorId`.** The site links a character to its account from that player's
+  own signed-in party uploads, and only when the actor the log service detects as the slice's own
+  player (the one the derive leaves unmasked) is the `uploaderActorId` you sent. A wrong one links
+  nobody; it never names someone else.
+- **The party roster and self-identity packets in the slice** (`02 97` and `33 36`, kept as
+  `evidence_slice.rs` keeps them). The roster's per-character id is what the site matches; a solo
+  fight has none, so it links nobody.
+- Nothing in `names`: an opted-in party member's name comes from **their** account, never from
+  the uploader's `names`. Keep masking everyone else as above.
+
+Turning it off takes them off the boards at once and masks stored logs again within hours.
+
 ## The conformance check
 
 `a2t-derive` (in this repository, `src-tauri/tools/a2t_derive.rs`) replays a packet capture

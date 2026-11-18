@@ -630,13 +630,13 @@
       "failed": "Échec de la connexion : {error}",
       "supporter": "Soutien",
       "guestUpload": "Envoyer les combats de boss sans compte",
-      "guestUploadHint": "À la fin d'un combat de boss, il est envoyé sur a2tools.app, public, sans compte. Les autres joueurs restent masqués. Connecte-toi plus tard et les combats envoyés depuis ce PC deviennent les tiens.",
+      "guestUploadHint": "À la fin d'un combat de boss, il est envoyé sur a2tools.app, public, sans compte. Les autres joueurs restent masqués. Les membres du groupe qui ont choisi d'être nommés sur a2tools.app apparaissent en entier. Connecte-toi plus tard et les combats envoyés depuis ce PC deviennent les tiens.",
       "guestClaimHint": "Les combats envoyés depuis ce PC sont gardés pour toi. Connecte-toi ici pour qu'ils deviennent les tiens, ou obtiens un code pour les récupérer depuis un autre appareil.",
       "guestClaimButton": "Obtenir un code",
       "guestClaimCode": "Saisis {code} sur {url} en étant connecté. Le code expire dans 15 minutes.",
       "claimed": "{count} combats envoyés depuis ce PC sont maintenant à toi.",
       "autoUpload": "Envoyer automatiquement les combats de boss",
-      "autoUploadHint": "À la fin d'un combat de boss, il est envoyé sur votre compte avec la visibilité choisie sur a2tools.app. Les autres joueurs restent masqués. Les mannequins d'entraînement ne sont jamais envoyés."
+      "autoUploadHint": "À la fin d'un combat de boss, il est envoyé sur votre compte avec la visibilité choisie sur a2tools.app. Les autres joueurs restent masqués. Les membres du groupe qui ont choisi d'être nommés sur a2tools.app apparaissent en entier. Les mannequins d'entraînement ne sont jamais envoyés."
     },
     "sendLogs": {
       "hint": "Envoie ton journal de débogage et tes derniers journaux de paquets (3 fichiers en tout) au développeur, pour un rapport de bug.",

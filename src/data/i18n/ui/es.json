@@ -630,13 +630,13 @@
       "failed": "Error al iniciar sesión: {error}",
       "supporter": "Mecenas",
       "guestUpload": "Subir combates de jefe sin cuenta",
-      "guestUploadHint": "Al terminar un combate de jefe se sube a a2tools.app, público, sin cuenta. Los demás jugadores siguen ocultos. Si inicias sesión más tarde, los combates subidos desde este PC pasan a ser tuyos.",
+      "guestUploadHint": "Al terminar un combate de jefe se sube a a2tools.app, público, sin cuenta. Los demás jugadores siguen ocultos. Los miembros del grupo que eligieron mostrarse en a2tools.app aparecen con su nombre completo. Si inicias sesión más tarde, los combates subidos desde este PC pasan a ser tuyos.",
       "guestClaimHint": "Los combates subidos desde este PC se guardan para ti. Inicia sesión aquí para que sean tuyos, o consigue un código para reclamarlos desde otro dispositivo.",
       "guestClaimButton": "Obtener un código",
       "guestClaimCode": "Introduce {code} en {url} con la sesión iniciada. El código caduca en 15 minutos.",
       "claimed": "{count} combates subidos desde este PC ahora son tuyos.",
       "autoUpload": "Subir combates de jefe automáticamente",
-      "autoUploadHint": "Cuando termina un combate de jefe, se sube a tu cuenta con la visibilidad que elegiste en a2tools.app. Los demás jugadores quedan ocultos. Los muñecos de entrenamiento nunca se suben."
+      "autoUploadHint": "Cuando termina un combate de jefe, se sube a tu cuenta con la visibilidad que elegiste en a2tools.app. Los demás jugadores quedan ocultos. Los miembros del grupo que eligieron mostrarse en a2tools.app aparecen con su nombre completo. Los muñecos de entrenamiento nunca se suben."
     },
     "sendLogs": {
       "hint": "Envía tu registro de depuración y tus registros de paquetes más recientes (3 archivos en total) al desarrollador, para un informe de errores.",
