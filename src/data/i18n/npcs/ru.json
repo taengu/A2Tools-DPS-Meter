@@ -12943,6 +12943,94 @@
     "name": "Fanatical Aullaeu Executioner",
     "isBoss": false
   },
+  "2301025": {
+    "name": "Дракан последователей Рудры",
+    "isBoss": false
+  },
+  "2301026": {
+    "name": "Зверь последователей Рудры",
+    "isBoss": false
+  },
+  "2301027": {
+    "name": "Боевой маг последователей Рудры",
+    "isBoss": false
+  },
+  "2301028": {
+    "name": "Офицер последователей Рудры",
+    "isBoss": false
+  },
+  "2301029": {
+    "name": "Солдат-разведчик последователей Рудры",
+    "isBoss": false
+  },
+  "2301030": {
+    "name": "Раху разрыва",
+    "isBoss": true,
+    "category": "Священные земли",
+    "dungeonId": 600081,
+    "tier": "Лёгкий"
+  },
+  "2301031": {
+    "name": "Крылья Бездны Кету",
+    "isBoss": true,
+    "category": "Священные земли",
+    "dungeonId": 600081,
+    "tier": "Лёгкий"
+  },
+  "2301032": {
+    "name": "Центральное ядро синтеза пропасти",
+    "isBoss": true,
+    "category": "Священные земли",
+    "dungeonId": 600081,
+    "tier": "Лёгкий"
+  },
+  "2301033": {
+    "name": "Вспомогательное ядро синтеза пропасти",
+    "isBoss": false
+  },
+  "2301034": {
+    "name": "Лазер",
+    "isBoss": false
+  },
+  "2301035": {
+    "name": "Лазер",
+    "isBoss": false
+  },
+  "2301036": {
+    "name": "Вспомогательное ядро синтеза пропасти",
+    "isBoss": false
+  },
+  "2301037": {
+    "name": "Вспомогательное ядро синтеза пропасти",
+    "isBoss": false
+  },
+  "2301038": {
+    "name": "Рудра веков",
+    "isBoss": true,
+    "category": "Священные земли",
+    "dungeonId": 600081,
+    "tier": "Лёгкий"
+  },
+  "2301042": {
+    "name": "Вооруженный солдат драканов Бездны",
+    "isBoss": false
+  },
+  "2301043": {
+    "name": "Зверь Бездны",
+    "isBoss": false
+  },
+  "2301044": {
+    "name": "Главный маг драканов Бездны",
+    "isBoss": false
+  },
+  "2301045": {
+    "name": "Командир драканов Бездны",
+    "isBoss": false
+  },
+  "2301046": {
+    "name": "Главный разведчик драканов Бездны",
+    "isBoss": false
+  },
   "2301050": {
     "name": "Мутировавший элитный командир",
     "isBoss": false
@@ -38530,6 +38618,458 @@
   },
   "2703029": {
     "name": "Mine Shaman",
+    "isBoss": false
+  },
+  "2900208": {
+    "name": "Хьюго (образец)",
+    "isBoss": false
+  },
+  "2900209": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900210": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900211": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900212": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900213": {
+    "name": "Кромед (образец)",
+    "isBoss": false
+  },
+  "2900214": {
+    "name": "Хадала",
+    "isBoss": false
+  },
+  "2900215": {
+    "name": "Герод (образец)",
+    "isBoss": false
+  },
+  "2900216": {
+    "name": "Ульгорн (образец)",
+    "isBoss": false
+  },
+  "2900217": {
+    "name": "Лутерс",
+    "isBoss": false
+  },
+  "2900218": {
+    "name": "Клорис (образец)",
+    "isBoss": false
+  },
+  "2900219": {
+    "name": "Леда (образец)",
+    "isBoss": false
+  },
+  "2900220": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900221": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900222": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900223": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900224": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900225": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900226": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900227": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900228": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900229": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900230": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900231": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900232": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900233": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900234": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900235": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900236": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900237": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900238": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900239": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900240": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900241": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900242": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900243": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900244": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900245": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900246": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900247": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900248": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900249": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900250": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900251": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900252": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900253": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900254": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900255": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900256": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900257": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900258": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900259": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900262": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900265": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900266": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900267": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900268": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900269": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900270": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900271": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900272": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900273": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900274": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900275": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900276": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900277": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900278": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900279": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900280": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900281": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900282": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900283": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900292": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900293": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900294": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900295": {
+    "name": "Немон",
+    "isBoss": false
+  },
+  "2900296": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900297": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900298": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900299": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900300": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900301": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900302": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900303": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900304": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900305": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900306": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900307": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900308": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900309": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900310": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900311": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900312": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900313": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900314": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900315": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900316": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900317": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900318": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900319": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900320": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900321": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900322": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900323": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900324": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900325": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900326": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900327": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900328": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900329": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900330": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900331": {
+    "name": "NPC (образец)",
+    "isBoss": false
+  },
+  "2900332": {
+    "name": "NPC (образец)",
     "isBoss": false
   },
   "2910001": {

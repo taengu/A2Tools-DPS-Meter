@@ -12943,6 +12943,94 @@
     "name": "Fanatical Aullaeu Executioner",
     "isBoss": false
   },
+  "2301025": {
+    "name": "Drakan (Ludraanhänger)",
+    "isBoss": false
+  },
+  "2301026": {
+    "name": "Bestie (Ludraanhänger)",
+    "isBoss": false
+  },
+  "2301027": {
+    "name": "Kampfzauberer (Ludraanhänger)",
+    "isBoss": false
+  },
+  "2301028": {
+    "name": "Offizier (Ludraanhänger)",
+    "isBoss": false
+  },
+  "2301029": {
+    "name": "Aufklärer (Ludraanhänger)",
+    "isBoss": false
+  },
+  "2301030": {
+    "name": "Rahu der Isolation",
+    "isBoss": true,
+    "category": "Weihestätte",
+    "dungeonId": 600081,
+    "tier": "Leicht"
+  },
+  "2301031": {
+    "name": "Abgrundsflügel Ketu",
+    "isBoss": true,
+    "category": "Weihestätte",
+    "dungeonId": 600081,
+    "tier": "Leicht"
+  },
+  "2301032": {
+    "name": "Zentraler Fusionsreaktor (Abgrund)",
+    "isBoss": true,
+    "category": "Weihestätte",
+    "dungeonId": 600081,
+    "tier": "Leicht"
+  },
+  "2301033": {
+    "name": "Zusatzfusionsreaktor (Abgrund)",
+    "isBoss": false
+  },
+  "2301034": {
+    "name": "Laser",
+    "isBoss": false
+  },
+  "2301035": {
+    "name": "Laser",
+    "isBoss": false
+  },
+  "2301036": {
+    "name": "Zusatzfusionsreaktor (Abgrund)",
+    "isBoss": false
+  },
+  "2301037": {
+    "name": "Zusatzfusionsreaktor (Abgrund)",
+    "isBoss": false
+  },
+  "2301038": {
+    "name": "Ludra der Ewigkeit",
+    "isBoss": true,
+    "category": "Weihestätte",
+    "dungeonId": 600081,
+    "tier": "Leicht"
+  },
+  "2301042": {
+    "name": "Bewaffneter Soldat (Drakan) (Abgrund)",
+    "isBoss": false
+  },
+  "2301043": {
+    "name": "Bestie (Abgrund)",
+    "isBoss": false
+  },
+  "2301044": {
+    "name": "Zaubervogt (Drakan) (Abgrund)",
+    "isBoss": false
+  },
+  "2301045": {
+    "name": "Kommandeur (Drakan) (Abgrund)",
+    "isBoss": false
+  },
+  "2301046": {
+    "name": "Drakan Spähvogt (Abgrund)",
+    "isBoss": false
+  },
   "2301050": {
     "name": "Mutierter Elitekommandant",
     "isBoss": false
@@ -38530,6 +38618,458 @@
   },
   "2703029": {
     "name": "Mine Shaman",
+    "isBoss": false
+  },
+  "2900208": {
+    "name": "Hugo (Exemplar)",
+    "isBoss": false
+  },
+  "2900209": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900210": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900211": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900212": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900213": {
+    "name": "Kromede (Exemplar)",
+    "isBoss": false
+  },
+  "2900214": {
+    "name": "Hadala",
+    "isBoss": false
+  },
+  "2900215": {
+    "name": "Gerod (Exemplar)",
+    "isBoss": false
+  },
+  "2900216": {
+    "name": "Ulgorn (Exemplar)",
+    "isBoss": false
+  },
+  "2900217": {
+    "name": "Luteros",
+    "isBoss": false
+  },
+  "2900218": {
+    "name": "Chloris (Exemplar)",
+    "isBoss": false
+  },
+  "2900219": {
+    "name": "Reda (Exemplar)",
+    "isBoss": false
+  },
+  "2900220": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900221": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900222": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900223": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900224": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900225": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900226": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900227": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900228": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900229": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900230": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900231": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900232": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900233": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900234": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900235": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900236": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900237": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900238": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900239": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900240": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900241": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900242": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900243": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900244": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900245": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900246": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900247": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900248": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900249": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900250": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900251": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900252": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900253": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900254": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900255": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900256": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900257": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900258": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900259": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900262": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900265": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900266": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900267": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900268": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900269": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900270": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900271": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900272": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900273": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900274": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900275": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900276": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900277": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900278": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900279": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900280": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900281": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900282": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900283": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900292": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900293": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900294": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900295": {
+    "name": "Nemon",
+    "isBoss": false
+  },
+  "2900296": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900297": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900298": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900299": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900300": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900301": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900302": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900303": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900304": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900305": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900306": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900307": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900308": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900309": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900310": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900311": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900312": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900313": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900314": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900315": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900316": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900317": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900318": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900319": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900320": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900321": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900322": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900323": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900324": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900325": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900326": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900327": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900328": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900329": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900330": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900331": {
+    "name": "NPC (Exemplar)",
+    "isBoss": false
+  },
+  "2900332": {
+    "name": "NPC (Exemplar)",
     "isBoss": false
   },
   "2910001": {

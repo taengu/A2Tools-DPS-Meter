@@ -114,6 +114,11 @@ for r in dungeons:
     if m and str(r["ID"]["Value"]) not in bosses["tiers"]:
         bosses["tiers"][str(r["ID"]["Value"])] = int(m.group(1))
 bosses["tiers"] = by_id(bosses["tiers"])
+# Raids: every Dungeon row of DungeonType Raid (Ludra's Easy came 2026-11-18).
+for r in dungeons:
+    if r["DungeonType"] == "EDungeonType::Raid" and r["ID"]["Value"] not in bosses["raids"]:
+        bosses["raids"].append(r["ID"]["Value"])
+bosses["raids"].sort()
 
 # --- NPCs -------------------------------------------------------------------
 npc_files = {lang: load(I18N / "npcs" / f"{lang}.json") for lang in LANGS}
@@ -139,13 +144,20 @@ def link(name):
         for dname, r in dungeon_by_name.items():
             if dname.startswith(m.group(1)) and dname.endswith(f"_G_{int(m.group(2)):02d}"):
                 return r["ID"]["Value"], "Transcendence", f"Stage {int(m.group(2))}"
+    # A mode named after the dungeon (M_PD_ReforgedAbyss_Easy_...: Ludra's
+    # Easy, 2026-11-18); a raid's bosses are Sanctuary bosses, as the listed are.
+    m = re.match(r"M_PD_([A-Za-z]+)_(Easy|Normal|Hard)_", name)
+    if m and f"{m.group(1)}_{m.group(2)}" in dungeon_by_name:
+        r = dungeon_by_name[f"{m.group(1)}_{m.group(2)}"]
+        return r["ID"]["Value"], "Sanctuary" if r["DungeonType"] == "EDungeonType::Raid" else "Dungeon", None
     m = re.match(r"M_PD_([A-Za-z]+)_.*?(_Hard|_hard|_T_01)?$", name)
     if m:
         suffix = {"_Hard": "Hard", "_hard": "Hard", "_T_01": "T_01"}.get(m.group(2) or "", "Normal")
         prefix = m.group(1)
         for key in (f"{prefix}_{suffix}", f"{prefix}_{suffix}".replace("Fire_T_01", "Fire_Temple_T_01")):
             if key in dungeon_by_name:
-                return dungeon_by_name[key]["ID"]["Value"], "Dungeon", None
+                r = dungeon_by_name[key]
+                return r["ID"]["Value"], "Sanctuary" if r["DungeonType"] == "EDungeonType::Raid" else "Dungeon", None
         if prefix == "Fire" and suffix == "T_01" and "Fire_Temple_T_01" in dungeon_by_name:
             return dungeon_by_name["Fire_Temple_T_01"]["ID"]["Value"], "Dungeon", None
     return None
@@ -173,7 +185,7 @@ for r in table("NpcData"):
     added_npcs += 1
     if where:
         linked += 1
-        if r.get("Grade") == 2 and r.get("bNamed") and where[1] == "Dungeon" and r["ID"]["Value"] not in bosses["finalBosses"]:
+        if r.get("Grade") == 2 and r.get("bNamed") and where[1] in ("Dungeon", "Sanctuary") and r["ID"]["Value"] not in bosses["finalBosses"]:
             bosses["finalBosses"].append(r["ID"]["Value"])
 for lang, (d, nl, tr) in npc_files.items():
     save(I18N / "npcs" / f"{lang}.json", by_id(d), nl, tr)
