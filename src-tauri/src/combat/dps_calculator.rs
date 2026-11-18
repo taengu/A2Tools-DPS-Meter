@@ -1823,6 +1823,8 @@ impl DpsCalculator {
         // else's heals (the saved fight's players come from these too).
         let own_only = (self.data_storage.train_limit_on() && self.data_storage.is_dummy(target_id))
             .then(|| self.data_storage.local_player_id().map(|id| id as i32));
+        // The fight's window, which the heals counted must fall in.
+        let (from, to) = (target_data.first_damage_time, target_data.last_damage_time);
         for (&actor_id, skills) in &self.data_storage.get_heal_snapshot() {
             let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
             if raw_uid <= 0 { continue; }
@@ -1846,7 +1848,6 @@ impl DpsCalculator {
                 // two-player Krao Cave kill was saved with 115 players, 113 of
                 // them seen healing in the open world earlier that evening
                 // (1,204 heal rows, nearly all zero; 2026-11-17).
-                let (from, to) = (target_data.first_damage_time, target_data.last_damage_time);
                 let mut ticks = hd.ticks.iter().filter(|(t, _)| *t >= from && *t <= to).peekable();
                 if ticks.peek().is_none() {
                     continue;
