@@ -2971,10 +2971,27 @@ class DpsApp {
     this.setAccountState(label);
   }
 
+  // Party naming (a2tools.app): shown signed in, when the site says this
+  // account can use it; its state is the site's, asked each time.
+  paintPartyNames(signedIn) {
+    if (!this.partyNamesRow) return;
+    if (!signedIn) {
+      this.partyNamesRow.style.display = "none";
+      return;
+    }
+    window.javaBridge?.partyNames?.().then((enabled) => {
+      this.partyNamesRow.style.display = enabled === null || enabled === undefined ? "none" : "";
+      if (this.partyNamesCheckbox) this.partyNamesCheckbox.checked = !!enabled;
+    }).catch(() => {
+      this.partyNamesRow.style.display = "none";
+    });
+  }
+
   // Signed out: uploading without an account instead of to one, and, once
   // this PC has guest fights, how to claim them. Signed in: the account's.
   paintGuest(signedIn) {
     document.querySelector(".autoUploadRow")?.style.setProperty("display", signedIn ? "" : "none");
+    this.paintPartyNames(signedIn);
     for (const row of document.querySelectorAll(".guestUploadRow")) row.style.setProperty("display", signedIn ? "none" : "");
     document.querySelector(".privacySignedIn")?.style.setProperty("display", signedIn ? "" : "none");
     if (!this.guestClaimRow) return;
@@ -3040,6 +3057,8 @@ class DpsApp {
     this.playerNamesBoldCheckbox = document.querySelector(".playerNamesBoldCheckbox");
     this.showSupporterColorsCheckbox = document.querySelector(".showSupporterColorsCheckbox");
     this.autoUploadCheckbox = document.querySelector(".autoUploadCheckbox");
+    this.partyNamesRow = document.querySelector(".partyNamesRow");
+    this.partyNamesCheckbox = document.querySelector(".partyNamesCheckbox");
     this.guestUploadCheckbox = document.querySelector(".guestUploadCheckbox");
     this.guestClaimRow = document.querySelector(".guestClaimRow");
     this.guestClaimText = document.querySelector(".guestClaimText");
@@ -3622,6 +3641,27 @@ class DpsApp {
         this.safeGetSetting(this.storageKeys.autoUpload) === "true";
       this.autoUploadCheckbox.addEventListener("change", (event) => {
         this.safeSetSetting(this.storageKeys.autoUpload, String(!!event.target?.checked));
+      });
+    }
+
+    if (this.partyNamesCheckbox) {
+      this.partyNamesCheckbox.addEventListener("change", (event) => {
+        const box = event.target;
+        const wanted = !!box?.checked;
+        box.disabled = true;
+        window.javaBridge?.partyNames?.(wanted).then((enabled) => {
+          if (enabled === null || enabled === undefined) {
+            box.checked = !wanted;
+            this.partyNamesRow.style.display = "none";
+          } else {
+            box.checked = !!enabled;
+          }
+        }).catch(() => {
+          // Not changed on the site (offline, a hiccup): as it was.
+          box.checked = !wanted;
+        }).finally(() => {
+          box.disabled = false;
+        });
       });
     }
 

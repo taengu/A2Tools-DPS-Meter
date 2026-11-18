@@ -636,7 +636,9 @@
       "guestClaimCode": "Gib {code} auf {url} ein, während du angemeldet bist. Der Code läuft in 15 Minuten ab.",
       "claimed": "{count} von diesem PC hochgeladene Kämpfe gehören jetzt dir.",
       "autoUpload": "Bosskämpfe automatisch hochladen",
-      "autoUploadHint": "Wenn ein Bosskampf endet, wird er mit der auf a2tools.app gewählten Sichtbarkeit in dein Konto hochgeladen. Andere Spieler bleiben maskiert. Gruppenmitglieder, die auf a2tools.app genannt werden wollen, erscheinen mit vollem Namen. Trainingspuppen werden nie hochgeladen."
+      "autoUploadHint": "Wenn ein Bosskampf endet, wird er mit der auf a2tools.app gewählten Sichtbarkeit in dein Konto hochgeladen. Andere Spieler bleiben maskiert. Gruppenmitglieder, die auf a2tools.app genannt werden wollen, erscheinen mit vollem Namen. Trainingspuppen werden nie hochgeladen.",
+      "partyNames": "Meinen Namen in Logs meiner Gruppe zeigen",
+      "partyNamesHint": "Der Name deines Charakters erscheint vollständig und zählt in den Bestenlisten, in Logs, die deine Gruppenmitglieder hochladen. An: Dein Charakter wird bei deinem nächsten angemeldeten Gruppen-Upload verknüpft, dann werden die letzten 30 Tage durchsucht. Aus: Du verschwindest sofort aus den Bestenlisten, gespeicherte Logs werden innerhalb weniger Stunden wieder maskiert."
     },
     "sendLogs": {
       "hint": "Sendet dein Debug-Log und deine neuesten Paket-Logs (insgesamt 3 Dateien) für einen Fehlerbericht an den Entwickler.",

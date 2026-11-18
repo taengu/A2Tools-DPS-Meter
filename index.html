@@ -1192,6 +1192,13 @@
                 <h2 class="settingsSectionTitle" data-i18n="privacy.title">Privacy</h2>
                 <p class="settingsHint privacyIntro" data-i18n="privacy.intro">What this meter shares with a2tools.app. Each one is your choice.</p>
                 <div class="settingsGroupBody privacyGroup">
+                  <label class="settingsToggle partyNamesRow" style="display:none" title="Your character's name shows in full, and counts on the leaderboards, in logs your party members upload. On: your character is linked from your next signed-in party upload, then the last 30 days are looked through. Off: you leave the leaderboards at once, and stored logs are masked again within a few hours." data-i18n-title="settings.account.partyNamesHint">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.account.partyNames">Show my name in my party's logs</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="partyNamesCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
                   <label class="settingsToggle guestUploadRow" style="display:none" title="When a boss fight ends it joins a2tools.app's public logs and leaderboards. Every name is hidden, yours too. No account needed." data-i18n-title="privacy.shareHint" data-i18n-title="settings.account.guestUploadHint">
                     <span class="settingsToggleLabel settingsLabel" data-i18n="privacy.share">Share boss fights anonymously</span>
                     <span class="settingsToggleControl">

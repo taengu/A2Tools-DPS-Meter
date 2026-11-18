@@ -636,7 +636,9 @@
       "guestClaimCode": "Digite {code} em {url} com a sessão iniciada. O código expira em 15 minutos.",
       "claimed": "{count} lutas enviadas deste PC agora são suas.",
       "autoUpload": "Enviar lutas contra chefes automaticamente",
-      "autoUploadHint": "Quando uma luta contra chefe termina, ela é enviada para sua conta com a visibilidade escolhida em a2tools.app. Os outros jogadores ficam mascarados. Membros do grupo que escolheram ser nomeados no a2tools.app aparecem com o nome completo. Bonecos de treino nunca são enviados."
+      "autoUploadHint": "Quando uma luta contra chefe termina, ela é enviada para sua conta com a visibilidade escolhida em a2tools.app. Os outros jogadores ficam mascarados. Membros do grupo que escolheram ser nomeados no a2tools.app aparecem com o nome completo. Bonecos de treino nunca são enviados.",
+      "partyNames": "Mostrar meu nome nos registros do meu grupo",
+      "partyNamesHint": "O nome do seu personagem aparece completo, e conta nos rankings, nos registros que os membros do seu grupo enviam. Ligado: seu personagem é vinculado no seu próximo envio de grupo com login, e os últimos 30 dias são verificados. Desligado: você sai dos rankings na hora, e os registros salvos voltam a ser ocultados em poucas horas."
     },
     "sendLogs": {
       "hint": "Envia seu log de depuração e seus logs de pacotes mais recentes (3 arquivos no total) ao desenvolvedor, para um relatório de bug.",

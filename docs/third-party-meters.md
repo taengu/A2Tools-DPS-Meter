@@ -163,6 +163,16 @@ needs anyway:
 
 Turning it off takes them off the boards at once and masks stored logs again within hours.
 
+A meter can offer the setting itself, for a signed-in player (guest tokens can't use it):
+
+- `GET /api/account/party-names` answers `{"enabled": true|false}`.
+- `PUT /api/account/party-names` with `{"enabled": true|false}` sets it and answers the same; it's
+  idempotent, and it's the same setting as the page.
+- Send the player's account token (`Authorization: Bearer ...`, scope `profile`, which device
+  tokens have). 401 `invalid_token`: revoked, sign in again. 403 `insufficient_scope`,
+  `not_an_account` or `account_banned`: don't show the setting. 400 `invalid_request`: the body
+  isn't `{"enabled": bool}`. 503: try later. Answers are `Cache-Control: no-store`.
+
 ## The conformance check
 
 `a2t-derive` (in this repository, `src-tauri/tools/a2t_derive.rs`) replays a packet capture

@@ -636,7 +636,9 @@
       "guestClaimCode": "Introduce {code} en {url} con la sesión iniciada. El código caduca en 15 minutos.",
       "claimed": "{count} combates subidos desde este PC ahora son tuyos.",
       "autoUpload": "Subir combates de jefe automáticamente",
-      "autoUploadHint": "Cuando termina un combate de jefe, se sube a tu cuenta con la visibilidad que elegiste en a2tools.app. Los demás jugadores quedan ocultos. Los miembros del grupo que eligieron mostrarse en a2tools.app aparecen con su nombre completo. Los muñecos de entrenamiento nunca se suben."
+      "autoUploadHint": "Cuando termina un combate de jefe, se sube a tu cuenta con la visibilidad que elegiste en a2tools.app. Los demás jugadores quedan ocultos. Los miembros del grupo que eligieron mostrarse en a2tools.app aparecen con su nombre completo. Los muñecos de entrenamiento nunca se suben.",
+      "partyNames": "Mostrar mi nombre en los registros de mi grupo",
+      "partyNamesHint": "El nombre de tu personaje aparece completo, y cuenta en las clasificaciones, en los registros que suben los miembros de tu grupo. Activado: tu personaje se vincula en tu próxima subida de grupo con sesión iniciada y luego se revisan los últimos 30 días. Desactivado: sales de las clasificaciones al instante y los registros guardados se vuelven a ocultar en unas horas."
     },
     "sendLogs": {
       "hint": "Envía tu registro de depuración y tus registros de paquetes más recientes (3 archivos en total) al desarrollador, para un informe de errores.",

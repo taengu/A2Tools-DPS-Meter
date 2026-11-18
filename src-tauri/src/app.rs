@@ -859,6 +859,15 @@ async fn account_status(
 }
 
 #[cfg(feature = "online")]
+/// Party naming on a2tools.app: named in full, and ranked, in the logs party
+/// members upload. `enabled` sets it; without, only asks. None when this
+/// account can't use it (shown only signed in).
+#[tauri::command]
+async fn account_party_names(state: tauri::State<'_, AppState>, enabled: Option<bool>) -> Result<Option<bool>, String> {
+    crate::account::party_names(&state.http, &state.app_data_dir, enabled).await
+}
+
+#[cfg(feature = "online")]
 /// "Stop sharing" (the sharing notice, 2.0.80 on): no more uploads without an
 /// account, and the fights this PC already uploaded that way deleted from
 /// a2tools.app, in the background.
@@ -2135,6 +2144,13 @@ async fn account_status() -> Result<Option<serde_json::Value>, String> {
 #[tauri::command]
 fn account_status_cached() -> Option<Option<serde_json::Value>> {
     None
+}
+
+#[cfg(not(feature = "online"))]
+#[tauri::command]
+async fn account_party_names(enabled: Option<bool>) -> Result<Option<bool>, String> {
+    let _ = enabled;
+    Err(NOT_IN_THIS_BUILD.into())
 }
 
 #[cfg(not(feature = "online"))]
@@ -4873,6 +4889,7 @@ pub fn run() {
             share_status,
             account_status,
             account_status_cached,
+            account_party_names,
             discord_activity_available,
             stream_overlay_status,
             stream_overlay_configure,

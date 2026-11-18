@@ -960,6 +960,12 @@
       return invoke("guest_claim_code");
     },
 
+    // Party naming on a2tools.app: true/false, or null when this account
+    // can't use it. With `enabled`, sets it first.
+    partyNames(enabled) {
+      return invoke("account_party_names", { enabled: enabled ?? null });
+    },
+
     discordActivityAvailable() {
       return invoke("discord_activity_available");
     },

@@ -636,7 +636,9 @@
       "guestClaimCode": "Saisis {code} sur {url} en étant connecté. Le code expire dans 15 minutes.",
       "claimed": "{count} combats envoyés depuis ce PC sont maintenant à toi.",
       "autoUpload": "Envoyer automatiquement les combats de boss",
-      "autoUploadHint": "À la fin d'un combat de boss, il est envoyé sur votre compte avec la visibilité choisie sur a2tools.app. Les autres joueurs restent masqués. Les membres du groupe qui ont choisi d'être nommés sur a2tools.app apparaissent en entier. Les mannequins d'entraînement ne sont jamais envoyés."
+      "autoUploadHint": "À la fin d'un combat de boss, il est envoyé sur votre compte avec la visibilité choisie sur a2tools.app. Les autres joueurs restent masqués. Les membres du groupe qui ont choisi d'être nommés sur a2tools.app apparaissent en entier. Les mannequins d'entraînement ne sont jamais envoyés.",
+      "partyNames": "Afficher mon nom dans les journaux de mon groupe",
+      "partyNamesHint": "Le nom de ton personnage apparaît en entier, et compte dans les classements, dans les journaux envoyés par les membres de ton groupe. Activé : ton personnage est lié lors de ton prochain envoi de groupe connecté, puis les 30 derniers jours sont parcourus. Désactivé : tu quittes les classements aussitôt et les journaux enregistrés sont de nouveau masqués en quelques heures."
     },
     "sendLogs": {
       "hint": "Envoie ton journal de débogage et tes derniers journaux de paquets (3 fichiers en tout) au développeur, pour un rapport de bug.",

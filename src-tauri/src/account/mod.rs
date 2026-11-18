@@ -309,6 +309,41 @@ pub async fn whoami(client: &reqwest::Client, app_data_dir: &Path) -> AccountSta
     }
 }
 
+/// Party naming (a2tools.app/logs/mine#party-names): whether the account is
+/// named in full, and ranked, in the logs its party members upload. `set`
+/// turns it on or off; None only asks. `Ok(None)` when this token can't use it
+/// (a guest token, a banned account): the setting isn't shown then.
+pub async fn party_names(client: &reqwest::Client, app_data_dir: &Path, set: Option<bool>) -> Result<Option<bool>, String> {
+    let secret::Stored::Token(token) = secret::load_stored(app_data_dir) else { return Ok(None) };
+    let url = format!("{}/api/account/party-names", base_url());
+    let request = match set {
+        Some(enabled) => client
+            .put(&url)
+            .header("content-type", "application/json")
+            .body(serde_json::json!({ "enabled": enabled }).to_string()),
+        None => client.get(&url),
+    };
+    let response = request
+        .timeout(REQUEST_TIMEOUT)
+        .header("authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .map_err(|_| "Could not reach a2tools.app.".to_string())?;
+    match response.status().as_u16() {
+        200 => {}
+        // Revoked: the next account check signs out (`whoami`).
+        401 | 403 => return Ok(None),
+        status => return Err(format!("a2tools.app could not change the setting ({status}).")),
+    }
+    let body: serde_json::Value = response
+        .text()
+        .await
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .ok_or_else(|| "Unexpected reply from a2tools.app.".to_string())?;
+    body["enabled"].as_bool().map(Some).ok_or_else(|| "Unexpected reply from a2tools.app.".to_string())
+}
+
 /// A name for this install, so the approval page says what is being approved.
 /// How a meter names itself to a2tools.app (an account's list of devices, a
 /// guest): by its system only. It said the PC's name, which can be a
