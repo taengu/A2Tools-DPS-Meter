@@ -367,7 +367,13 @@ pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     if super::focus::hyprland_places_windows()
         && let Some((x, y)) = super::focus::place_of(window)
     {
-        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+        // Under XWayland the meter moves its own windows; on native Wayland
+        // only Hyprland can (`set_position` does nothing there).
+        if super::focus::hyprland_native() {
+            super::focus::hyprland_move(window, x, y);
+        } else {
+            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+        }
     }
     let _ = window.set_always_on_top(true);
     reapply_click_through(window);

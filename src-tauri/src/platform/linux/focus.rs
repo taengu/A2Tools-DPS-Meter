@@ -352,12 +352,69 @@ pub fn save_place(window: &tauri::WebviewWindow) {
     let (Ok(title), Ok(at), Ok(size)) = (window.title(), window.outer_position(), window.outer_size()) else {
         return;
     };
+    // On native Wayland a window can't read where it is (GTK says 0,0):
+    // Hyprland is asked (a CachyOS player's alerts and update window came
+    // back mid-screen since 2.0.90, 2026-11-17).
+    let at = match hyprland_native() {
+        true => match hyprland_client(&title) {
+            Some((_, x, y)) => tauri::PhysicalPosition { x, y },
+            None => return,
+        },
+        false => at,
+    };
     // A window mapped but not placed yet has no size (and sits at 0,0): kept,
     // that place would move it to the corner on the show.
     if size.width == 0 || size.height == 0 {
         return;
     }
     save_place_at(&title, (at.x, at.y, size.width as i32, size.height as i32));
+}
+
+/// Hyprland with the meter on native Wayland: a window can neither read nor
+/// set its own place there (`set_position` does nothing), so `hyprctl` is
+/// asked for one and told the other.
+pub fn hyprland_native() -> bool {
+    super::process::is_hyprland() && !places_own_windows()
+}
+
+/// The meter's window titled `title` as Hyprland lists it: its address and
+/// where it is.
+fn hyprland_client(title: &str) -> Option<(String, i32, i32)> {
+    let out = std::process::Command::new("hyprctl").args(["clients", "-j"]).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let clients: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    hyprland_find(&clients, std::process::id(), title)
+}
+
+/// `hyprland_client` over `hyprctl clients -j`'s list.
+fn hyprland_find(clients: &serde_json::Value, pid: u32, title: &str) -> Option<(String, i32, i32)> {
+    let client = clients
+        .as_array()?
+        .iter()
+        .find(|c| c["pid"].as_u64() == Some(u64::from(pid)) && c["title"].as_str() == Some(title))?;
+    let at = client["at"].as_array()?;
+    let n = |v: Option<&serde_json::Value>| v.and_then(serde_json::Value::as_i64).and_then(|v| i32::try_from(v).ok());
+    Some((client["address"].as_str()?.to_string(), n(at.first())?, n(at.get(1))?))
+}
+
+/// Put a window shown again back at `(x, y)` through Hyprland, once it is
+/// mapped (it centres a window as it maps it): tried a few times, as the
+/// map takes a frame or more.
+pub fn hyprland_move(window: &tauri::WebviewWindow, x: i32, y: i32) {
+    let Ok(title) = window.title() else { return };
+    std::thread::spawn(move || {
+        for wait in [50, 150, 300] {
+            std::thread::sleep(std::time::Duration::from_millis(wait));
+            let Some((address, at_x, at_y)) = hyprland_client(&title) else { continue };
+            if (at_x, at_y) == (x, y) {
+                return;
+            }
+            let target = format!("exact {x} {y},address:{address}");
+            let _ = std::process::Command::new("hyprctl").args(["dispatch", "movewindowpixel", &target]).output();
+        }
+    });
 }
 
 /// `save_place` without the window, for the store alone.
@@ -656,6 +713,18 @@ mod tests {
         assert_eq!(place_of_title("A2Tools DPS Meter"), Some((400, 300)));
         // A window the store never heard of is left where the compositor put it.
         assert_eq!(place_of_title("Settings"), None);
+    }
+
+    #[test]
+    fn hyprland_lists_the_meters_own_window_by_pid_and_title() {
+        let clients = serde_json::json!([
+            { "address": "0x55aa", "pid": 7, "title": "Event Timers", "at": [1200, 40] },
+            { "address": "0x66bb", "pid": 42, "title": "Event Timers", "at": [2560, 80] },
+            { "address": "0x77cc", "pid": 42, "title": "A2Tools DPS Meter", "at": [10, -5] },
+        ]);
+        assert_eq!(hyprland_find(&clients, 42, "Event Timers"), Some(("0x66bb".into(), 2560, 80)));
+        assert_eq!(hyprland_find(&clients, 42, "A2Tools DPS Meter"), Some(("0x77cc".into(), 10, -5)));
+        assert_eq!(hyprland_find(&clients, 42, "Settings"), None);
     }
 
     #[test]
