@@ -411,10 +411,30 @@ pub fn hyprland_move(window: &tauri::WebviewWindow, x: i32, y: i32) {
             if (at_x, at_y) == (x, y) {
                 return;
             }
-            let target = format!("exact {x} {y},address:{address}");
-            let _ = std::process::Command::new("hyprctl").args(["dispatch", "movewindowpixel", &target]).output();
+            hyprland_dispatch_move(&address, x, y);
         }
     });
+}
+
+/// Move the window at `address` to `(x, y)`. Hyprland 0.57 reads a dispatch
+/// as Lua (`hl.dsp.window.move`, x and y absolute) and refuses the older
+/// `movewindowpixel exact`; before 0.57 it is the other way round. hyprctl
+/// answers "ok" to the one it took.
+fn hyprland_dispatch_move(address: &str, x: i32, y: i32) {
+    let run = |args: &[&str]| {
+        std::process::Command::new("hyprctl")
+            .args(args)
+            .output()
+            .is_ok_and(|out| out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "ok")
+    };
+    if !run(&["dispatch", &hyprland_lua_move(address, x, y)]) {
+        run(&["dispatch", "movewindowpixel", &format!("exact {x} {y},address:{address}")]);
+    }
+}
+
+/// `hyprland_dispatch_move`'s Lua (0.57 on).
+fn hyprland_lua_move(address: &str, x: i32, y: i32) -> String {
+    format!("hl.dsp.window.move({{ x = {x}, y = {y}, window = \"address:{address}\" }})")
 }
 
 /// `save_place` without the window, for the store alone.
@@ -725,6 +745,11 @@ mod tests {
         assert_eq!(hyprland_find(&clients, 42, "Event Timers"), Some(("0x66bb".into(), 2560, 80)));
         assert_eq!(hyprland_find(&clients, 42, "A2Tools DPS Meter"), Some(("0x77cc".into(), 10, -5)));
         assert_eq!(hyprland_find(&clients, 42, "Settings"), None);
+        // As Hyprland 0.57.2 took it (CachyOS VM, 2026-11-19).
+        assert_eq!(
+            hyprland_lua_move("0x55c9185331c0", 300, -12),
+            r#"hl.dsp.window.move({ x = 300, y = -12, window = "address:0x55c9185331c0" })"#
+        );
     }
 
     #[test]
