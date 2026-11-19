@@ -328,7 +328,7 @@
   invoke("meter_shown").then((shown) => showMeterState(shown !== false)).catch(() => {});
   listen("meter-shown", (event) => showMeterState(event.payload !== false));
   meterBtn.addEventListener("click", () => {
-    invoke("set_meter_shown", { shown: meterBtn.getAttribute("aria-pressed") !== "true" }).catch(() => {});
+    invoke("set_meter_shown", { shown: meterBtn.getAttribute("aria-pressed") !== "true", toggle: true }).catch(() => {});
   });
   // Settings, on its Plugins page.
   document.querySelector(".pluginSettings").addEventListener("click", () => {
