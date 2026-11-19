@@ -8,7 +8,7 @@ Real-time DPS meter overlay for AION 2. Captures game network packets to display
 
 The **[AION 2 DPS Meter website, a2tools.app](https://a2tools.app)** has the download, shared fight logs, leaderboards and class stats.
 
-**[Download Latest Release](https://github.com/taengu/A2Tools-DPS-Meter/releases)** | **[A2Tools.app](https://a2tools.app)**
+**[Download Latest Release](https://github.com/taengu/A2Tools-DPS-Meter/releases)** | **[A2Tools.app](https://a2tools.app)** | [Code signing policy](#code-signing-policy)
 
 [한국어](README_KO.md) | [简体中文](README_ZH.md) | [繁體中文](README_ZH-TW.md)
 
@@ -146,6 +146,20 @@ Say thanks and fund new cool projects & features!
 - **BTC**: `1GexKhgVZPYRqpfCKydXLoNUXRRRUoAUwT`
 - **ETH**: `0x38F0bc371A563A24eCa6034cFf77eB6173c7e3e7`
 - **USDC**: `0xA9571Fc95666350f6DFFB8Fb80ee27eE7db46b56`
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+The Windows installer and the program inside it are signed. They are built from this repository's source by GitHub Actions on GitHub-hosted runners ([windows-release.yml](.github/workflows/windows-release.yml)), from a release tag, and only that build is submitted for signing ([what is signed](.signpath/artifact-configuration.xml)). Nothing built elsewhere is signed.
+
+Team roles:
+
+- Authors (commit without further review): [taengu](https://github.com/taengu)
+- Reviewers (review outside contributions, such as pull requests): [taengu](https://github.com/taengu)
+- Approvers (approve each signing request): [taengu](https://github.com/taengu)
+
+Privacy: the meter sends some data to a2tools.app, each part described in the [privacy policy](docs/PRIVACY.md) with the setting that turns it off (Settings → Privacy).
 
 ## License
 

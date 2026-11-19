@@ -1,0 +1,126 @@
+name: Windows installer
+
+# Builds the Windows installer (MSI) on a GitHub-hosted runner and has it
+# code-signed by SignPath (free open-source signing, certificate by SignPath
+# Foundation). Runs on its own when a release tag (v*) is pushed, alongside
+# the Linux packages, and by hand (`gh workflow run windows-release.yml -f
+# ref=v2.1.1`).
+#
+# SignPath signs only what a build like this one produced: it checks with
+# GitHub that the artifact came from this repository's workflow, on
+# GitHub-hosted runners. So the release MSI is built here, never on a
+# developer's PC. The signed MSI is kept as the "msi-signed" download, which
+# release-template/publish.sh puts on the CDN with the Linux packages.
+#
+# What gets signed is set by .signpath/artifact-configuration.xml: the
+# meter's program inside the MSI, then the MSI itself.
+#
+# Needs, in the repository's settings:
+#   secret   SIGNPATH_API_TOKEN            a SignPath CI user's API token
+#   variable SIGNPATH_ORGANIZATION_ID      the SignPath organization's id
+#   variable SIGNPATH_PROJECT_SLUG         the SignPath project
+#   variable SIGNPATH_SIGNING_POLICY_SLUG  "test-signing" until the production
+#                                          certificate is in, then
+#                                          "release-signing"
+on:
+  # A pushed tag is checked out as itself (inputs.ref is empty then).
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or branch to build (a release tag for a release)"
+        required: false
+        default: main
+
+# Nothing here writes to the repository (security audit M13). SignPath reads
+# the unsigned artifact back from this run (actions: read).
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  msi:
+    name: Build and sign the MSI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: src-tauri
+          key: msi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 20
+          cache: npm
+      # Files a clean checkout lacks (gitignored mirrors of src/data), as in
+      # the Linux packages' build.
+      - name: Frontend data
+        shell: bash
+        run: |
+          mkdir -p public/i18n public/data public/src/data
+          cp -r src/data/i18n/* public/i18n/
+          cp src/data/skill_icons.json src/data/dot_skill_ids.json public/data/
+          cp src/data/skill_icons.json src/data/dot_skill_ids.json public/src/data/
+      - name: Build
+        shell: bash
+        run: |
+          npm ci
+          npx tauri build --bundles msi
+          npm run rename-msi
+          ls -la src-tauri/target/release/bundle/msi/
+      # The same check a release made by hand had (release-publish-process):
+      # the page's files are all in the build, every language among them.
+      - name: The build has the whole frontend
+        shell: bash
+        run: |
+          built=$(find dist -type f | wc -l)
+          echo "dist: $built files"
+          test "$built" -ge 300
+          for lang in en ko zh-Hans zh-Hant ja de fr es pt ru; do
+            test -s "dist/i18n/ui/$lang.json"
+          done
+      - name: Upload the unsigned MSI
+        id: unsigned
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: msi-unsigned
+          path: src-tauri/target/release/bundle/msi/A2Tools-DPS-Meter_*_x64_en-US.msi
+          if-no-files-found: error
+      - name: Sign with SignPath
+        uses: signpath/github-action-submit-signing-request@4a84eb4ad763290f059275786f2deed97c2c672b # v3.1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+      # Signed, the program inside too. Under the test certificate Windows
+      # doesn't trust the signer yet (status UnknownError), so only an
+      # unsigned file fails here; the signer is printed for the log.
+      - name: The MSI and its program are signed
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem signed -Recurse -Filter "A2Tools-DPS-Meter_*_x64_en-US.msi" | Select-Object -First 1
+          if (-not $msi) { throw "no signed MSI came back" }
+          $out = Join-Path $env:RUNNER_TEMP "msi-x"
+          Start-Process msiexec -ArgumentList "/a `"$($msi.FullName)`" /qn TARGETDIR=`"$out`"" -Wait
+          $exe = Get-ChildItem $out -Recurse -Filter "a2tools-dps-meter.exe" | Select-Object -First 1
+          if (-not $exe) { throw "the program is not in the signed MSI" }
+          foreach ($file in @($msi, $exe)) {
+            $sig = Get-AuthenticodeSignature $file.FullName
+            "{0}: {1}, signed by {2}" -f $file.Name, $sig.Status, $sig.SignerCertificate.Subject
+            if ($sig.Status -eq "NotSigned" -or -not $sig.SignerCertificate) { throw "$($file.Name) is not signed" }
+          }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: msi-signed
+          path: signed/**/A2Tools-DPS-Meter_*_x64_en-US.msi
+          if-no-files-found: error
