@@ -478,5 +478,46 @@ That is Hyprland's Lua configuration. If you use `hyprland.conf` instead, set th
 | The meter goes behind the game | Run the game borderless or windowed. On GNOME, see [automatic pinning through XWayland and the native Wayland workaround](#gnome-keep-the-meter-above-other-windows). On Wayland an app cannot force itself on top of a fullscreen game. On KDE Plasma, KWin can count a borderless game as fullscreen anyway. From 2.0.54 the meter adds a window rule for itself the first time it starts on KDE (**Layer** forced to **Overlay**, listed in System Settings → Window Management → Window Rules as "A2Tools DPS Meter above fullscreen games"); restart the meter once if it is still behind. On older versions, or if you removed that rule, add it yourself: a rule for window class `a2tools-dps-meter` with **Layer** set to **Overlay**, forced. Thanks to Seralth for this. |
 | After a WebKitGTK update the meter's window draws only in pieces, or only while you hover or drag it | WebKitGTK 2.54 no longer draws the transparent overlay fully without its DMA-BUF renderer, which older versions of the meter turned off. Update the meter, or start an older version with `WEBKIT_DISABLE_DMABUF_RENDERER=0 WEBKIT_DMABUF_RENDERER_FORCE_SHM=1 a2tools-dps-meter`. |
 | On a tiling desktop the meter is tiled beside the game, or its tooltips appear in the wrong place | See [Tiling desktops](#tiling-desktops-hyprland-sway-i3). |
+| Steam Deck or Steam Machine: the meter worked, and now `distrobox enter --root a2tools` stops with `unable to start container` and `creating resolv.conf … no such file or directory` | The box's container, not the meter: see [SteamOS: the box won't start](#steamos-the-box-wont-start). |
+
+### SteamOS: the box won't start
+
+On a Steam Deck or Steam Machine the meter runs in a distrobox (see [its install steps](#steam-deck-and-steam-machine-steamos)). If it ran before and now stops before it opens, with an error like this:
+
+```
+Error: unable to start container "…": creating resolv.conf for container …: open /run/containers/storage/overlay-containers/…/userdata/resolv.conf: no such file or directory
+```
+
+the box's container is out of step with its own records. That can happen after a SteamOS update or an unclean shutdown. The meter's settings and fight history are not in the box (they are in your home folder), so none of this touches them. In Konsole, try these in order, and stop as soon as the meter starts again with `distrobox enter --root a2tools -- a2tools-dps-meter`:
+
+1. Have podman bring its records up to date:
+
+    ```bash
+    sudo podman system migrate
+    ```
+
+2. Stop the box, so the next start sets it up afresh:
+
+    ```bash
+    sudo podman stop a2tools
+    ```
+
+3. Check that the storage setting from [install step 3](#steam-deck-and-steam-machine-steamos) is still there:
+
+    ```bash
+    cat /etc/containers/storage.conf
+    ```
+
+    It should include `graphroot = "/home/.a2tools-containers"`. If it doesn't, run that step's `sudo tee` command again.
+
+4. Rebuild the box, which keeps your settings and fights:
+
+    ```bash
+    distrobox rm --root --force a2tools
+    ```
+
+    Then follow install steps 4 and 5 again: create the box, download the meter, install it.
+
+Still failing? Send us the output of `sudo podman ps -a` and `cat /etc/containers/storage.conf`.
 
 Stuck on something not listed? Send what you have so far, logs included.
