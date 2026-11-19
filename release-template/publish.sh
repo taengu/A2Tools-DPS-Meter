@@ -54,7 +54,45 @@ for a in arch-package deb-rpm-packages rpm-repo; do
   timeout 300 gh run download "$RUN" -R "$REPO" -n "$a" -D "dl/$a"
 done
 echo "downloaded the Linux packages"
-cp "$ROOT/src-tauri/target/release/bundle/msi/A2Tools-DPS-Meter_${V}_x64_en-US.msi" .
+# The Windows installer: the MSI CI built and SignPath signed
+# (.github/workflows/windows-release.yml, started by the same tag push), never
+# a local build: SignPath signs only what CI built. LOCAL_MSI=1 publishes the
+# local, unsigned build instead (a release made before signing was set up).
+if [ "${LOCAL_MSI:-}" = 1 ]; then
+  echo "LOCAL_MSI=1: publishing the local, UNSIGNED MSI"
+  cp "$ROOT/src-tauri/target/release/bundle/msi/A2Tools-DPS-Meter_${V}_x64_en-US.msi" .
+else
+  WIN="${WIN_RUN:-}"
+  for i in $(seq 1 20); do
+    [ -n "$WIN" ] && break
+    WIN=$(gh_ run list --workflow windows-release.yml --limit 20 --json databaseId,headBranch \
+      --jq "[.[] | select(.headBranch == \"v$V\")][0].databaseId // empty" 2>/dev/null || true)
+    [ -n "$WIN" ] && break
+    echo "no Windows installer run for v$V yet (check $i)"; sleep 6
+  done
+  [ -n "$WIN" ] || { echo "no Windows installer run for v$V (LOCAL_MSI=1 publishes the local unsigned MSI)"; exit 1; }
+  echo "Windows run $WIN"
+  last_change=$SECONDS; last_s=""
+  while :; do
+    s=$(gh_ run view "$WIN" --json status,conclusion \
+      --jq '"\(.status) \(if (.conclusion // "") == "" then "none" else .conclusion end)"' 2>/dev/null || echo "? ?")
+    [ "$s" != "$last_s" ] && { echo "windows: $s ($((SECONDS / 60)) min)"; last_s=$s; last_change=$SECONDS; }
+    set -- $s
+    [ "$1" = completed ] && break
+    # Building takes about 15 minutes; signing waits for an approver.
+    if [ $((SECONDS - last_change)) -gt 2700 ]; then
+      echo "windows: no change in 45 minutes; stopping (gh run view $WIN)"; exit 1
+    fi
+    sleep 20
+  done
+  [ "$2" = success ] || { echo "Windows run did not pass ($2); not publishing"; exit 1; }
+  timeout 300 gh run download "$WIN" -R "$REPO" -n msi-signed -D dl/msi-signed
+  find dl/msi-signed -name "A2Tools-DPS-Meter_${V}_x64_en-US.msi" -exec cp {} . \;
+  [ -f "A2Tools-DPS-Meter_${V}_x64_en-US.msi" ] || { echo "the signed MSI for $V is not in the run's msi-signed"; exit 1; }
+  status=$(powershell -NoProfile -Command "(Get-AuthenticodeSignature '$(cygpath -w "$PWD/A2Tools-DPS-Meter_${V}_x64_en-US.msi")').Status")
+  echo "MSI signature: $status"
+  [ "$(echo "$status" | tr -d '\r')" != NotSigned ] || { echo "the MSI is not signed: not publishing"; exit 1; }
+fi
 cp dl/arch-package/*.zst dl/deb-rpm-packages/* . && cp -r dl/rpm-repo/rpm . && cp "$ROOT/packaging/linux/a2tools.repo" .
 # Since 2.0.87 the repository's rpm is signed (and repomd.xml with it): that
 # signed rpm is the one published at every address, the hash's too.
