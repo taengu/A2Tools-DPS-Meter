@@ -32,6 +32,7 @@ fn record_spanning(start_ms: i64, duration_ms: i64) -> FightRecord {
         start_time_ms: start_ms,
         duration_ms,
         total_damage: 192_065_363,
+        world_boss_observed_damage: None,
         jobs: vec![],
         job_ids: vec![],
         details: TargetDetailsResponse {

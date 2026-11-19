@@ -232,6 +232,7 @@
     },
     "fightTimeline": "Cronología del combate",
     "replay": {
+      "noOthersTiming": "La repetición excluye a los demás porque no se registraron los momentos de sus golpes. Finaliza la repetición para ver el total observado.",
       "label": "Repetición",
       "title": "Repetición",
       "play": "Reproducir repetición",
@@ -976,7 +977,8 @@
     "never": "El nombre de tu PC y el nombre completo de tu personaje nunca se envían.",
     "policy": "Política de privacidad",
     "continue": "Continuar"
-  },
+  },
+
   "layout": {
     "title": "Editar diseño",
     "hint": "Arrastra cada pieza a su sitio. Si la sueltas cerca de un borde, se ajusta a él.",

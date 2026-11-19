@@ -232,6 +232,7 @@
     },
     "fightTimeline": "Linha do tempo da luta",
     "replay": {
+      "noOthersTiming": "O replay exclui os outros porque os momentos dos seus golpes não foram registrados. Encerre o replay para ver o total observado.",
       "label": "Replay",
       "title": "Replay",
       "play": "Reproduzir replay",
@@ -976,7 +977,8 @@
     "never": "O nome do seu PC e o nome completo do seu personagem nunca são enviados.",
     "policy": "Política de privacidade",
     "continue": "Continuar"
-  },
+  },
+
   "layout": {
     "title": "Editar layout",
     "hint": "Arraste cada peça para o lugar. Solta perto de uma borda, ela se encaixa.",

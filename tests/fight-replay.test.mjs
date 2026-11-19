@@ -35,6 +35,20 @@ const record = ({ heals = true } = {}) => ({
 
 const sum = (rows, key) => rows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
 
+test("Others has no invented replay timing and returns only at the full-fight endpoint", () => {
+  const rec = { ...record(), worldBossObservedDamage: 10_000 };
+  const before = JSON.stringify(rec);
+  const model = buildReplayModel(rec);
+  const partial = cutReplayAt(model, 5_000);
+  assert.equal(partial.worldBossObservedDamage, null);
+  assert.equal(partial.totalDamage, 1_050, "partial totals still come only from recorded hits");
+  const full = cutReplayAt(model, 10_000);
+  assert.equal(full.worldBossObservedDamage, 10_000);
+  assert.equal(full.totalDamage, 2_000, "the estimate remains separate from raw replay totals");
+  assert.equal(JSON.stringify(rec), before);
+  assert.equal(cutReplayAt(model, 5_000).worldBossObservedDamage, null, "seeking back clears it again");
+});
+
 test("the end of a replay is the whole fight", () => {
   const rec = record();
   const model = buildReplayModel(rec);

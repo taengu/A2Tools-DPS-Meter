@@ -232,6 +232,7 @@
     },
     "fightTimeline": "Chronologie du combat",
     "replay": {
+      "noOthersTiming": "La relecture exclut les autres joueurs, car les instants de leurs coups n’ont pas été enregistrés. Quittez la relecture pour voir le total observé.",
       "label": "Relecture",
       "title": "Relecture",
       "play": "Lancer la relecture",
@@ -976,7 +977,8 @@
     "never": "Le nom de votre PC et le nom complet de votre personnage ne sont jamais envoyés.",
     "policy": "Politique de confidentialité",
     "continue": "Continuer"
-  },
+  },
+
   "layout": {
     "title": "Modifier la disposition",
     "hint": "Fais glisser chaque élément en place. Lâché près d'un bord, il s'y aimante.",

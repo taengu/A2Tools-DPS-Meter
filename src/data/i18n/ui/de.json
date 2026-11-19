@@ -232,6 +232,7 @@
     },
     "fightTimeline": "Kampfverlauf",
     "replay": {
+      "noOthersTiming": "Andere sind im Replay nicht enthalten, da ihre Trefferzeiten fehlen. Beende das Replay, um die beobachtete Gesamtsumme zu sehen.",
       "label": "Wiedergabe",
       "title": "Wiedergabe",
       "play": "Wiedergabe abspielen",
@@ -976,7 +977,8 @@
     "never": "Der Name deines PCs und der volle Name deines Charakters werden nie gesendet.",
     "policy": "Datenschutzerklärung",
     "continue": "Weiter"
-  },
+  },
+
   "layout": {
     "title": "Layout bearbeiten",
     "hint": "Ziehe jedes Teil an seinen Platz. Nahe einer Kante rastet es dort ein.",
