@@ -82,6 +82,17 @@ killed them), and the Supply Request boards after each reset
 (`src-tauri/src/boss_report.rs`, `src-tauri/src/supply_report.rs`). **Nothing
 about your character** is in these reports.
 
+Under the same setting (since 2.1.0), the meter shares your gathers, so
+A2Tools can check the game's listed gathering chances against many players':
+your server, and for each gather its time (to the second), the item, the
+result (quality, count, extra copies, any add-on item), whether it was
+upgraded, a critical or Lady Luck, and the levels of the gathering skills you
+had learned. They go in batches, once 50 are waiting or the oldest has waited 15 minutes
+(`src-tauri/src/gather_report.rs`). Not your character's name, nor where you
+gathered; but **these are your own gathers and skill levels**, and the site
+could link a batch to your other reports from the same address. Turn the
+setting off to stop them.
+
 **Logs for the developer, when you send them.** *Settings → Advanced → Send Logs
 to Dev* sends your debug log and your most recent packet logs (see below),
 listing each file and its size before it asks. Only the developer can open them,

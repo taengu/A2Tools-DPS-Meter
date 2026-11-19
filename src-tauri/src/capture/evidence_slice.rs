@@ -234,7 +234,9 @@ const EVENT_OPCODES: &[[u8; 2]] = &[[0x04, 0x38], [0x05, 0x38], [0x1B, 0x92]];
 /// small negative time reads as a two-letter name (`02 77 49` is "wI"), and
 /// the service refused some 26,000 uploads of 2.0.98 and 2.0.99 as not
 /// blinded (2026-11-14 to 19).
-const TEXTLESS_OPCODES: &[[u8; 2]] = &[[0x00, 0x61]];
+/// Each with its record's length after the length header (`00 61`: opcode,
+/// content u32, state u8, two i64 times; 23 in every capture of 2026-11).
+const TEXTLESS_OPCODES: &[([u8; 2], usize)] = &[([0x00, 0x61], 23)];
 
 /// Buff changes (`2b 38`), kept from the lead-in on but not in the prelude.
 /// A change renews an instance the add (`2a 38`, kept) began, so the lead-in's
@@ -757,11 +759,15 @@ impl Blinder {
     }
 }
 
-/// A packet of `TEXTLESS_OPCODES`.
+/// A packet of `TEXTLESS_OPCODES`, at its record's exact length: a longer
+/// packet with the same opcode gets every name pass (security check of
+/// 2.1.0: an opcode alone let any length through unscanned).
 fn is_textless(packet: &[u8]) -> bool {
     let header = super::stream_processor::read_varint(packet, 0);
     let o = header.length.max(0) as usize;
-    header.length > 0 && packet.len() >= o + 2 && TEXTLESS_OPCODES.contains(&[packet[o], packet[o + 1]])
+    header.length > 0
+        && packet.len() >= o + 2
+        && TEXTLESS_OPCODES.iter().any(|(op, len)| *op == [packet[o], packet[o + 1]] && packet.len() == o + len)
 }
 
 /// Damage, damage over time and HP updates are ids and numbers only: no
@@ -2485,6 +2491,21 @@ mod tests {
         let time = i64::from_le_bytes(kept[8..16].try_into().unwrap());
         let deadline = i64::from_le_bytes(kept[16..24].try_into().unwrap());
         assert_eq!((time, deadline - time), (1_791_570_413_009 - start, 3_600_000));
+    }
+
+    /// Only a dungeon state of its exact length skips the name passes.
+    #[test]
+    fn only_a_whole_dungeon_state_is_textless() {
+        let mut state = vec![0x18, 0x00, 0x61];
+        state.extend(600_071u32.to_le_bytes());
+        state.push(2);
+        state.extend((-450_000i64).to_le_bytes());
+        state.extend(150_000i64.to_le_bytes());
+        assert!(is_textless(&state));
+        let mut longer = state.clone();
+        longer.extend(b"\x06Jinwoo");
+        assert!(!is_textless(&longer));
+        assert!(!is_textless(&state[..state.len() - 1]));
     }
 
     #[test]
