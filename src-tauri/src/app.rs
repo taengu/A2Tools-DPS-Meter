@@ -234,6 +234,24 @@ fn hides_with_meter(app: &tauri::AppHandle, label: &str, meter: bool) -> bool {
     (meter && (TOOL_WINDOWS.contains(&label) || label.starts_with("details-"))) || crate::plugins::hides_unfocused(app, label)
 }
 
+/// Widgets can be held before the next focus tick. The focus loop takes
+/// their labels into its usual restore set.
+fn newly_focus_hidden_widgets() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static PENDING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = std::sync::OnceLock::new();
+    PENDING.get_or_init(Default::default)
+}
+
+pub(crate) fn widget_needs_focus_hold(app: &tauri::AppHandle, label: &str) -> bool {
+    !crate::layout::editing() && crate::plugins::hides_unfocused(app, label) && !platform::window::front_is_ours_or_game()
+}
+
+pub(crate) fn hold_widget_for_focus(window: &tauri::WebviewWindow) {
+    if window.is_visible().unwrap_or(false) && !platform::window::is_hidden_in_place(window) {
+        platform::window::hide_in_place(window);
+    }
+    newly_focus_hidden_widgets().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string());
+}
+
 /// Hide those of `hides_with_meter` that are up, noting each.
 fn hide_with_meter(app: &tauri::AppHandle, meter: bool, hidden: &mut std::collections::HashSet<String>) {
     for (label, window) in app.webview_windows() {
@@ -256,6 +274,15 @@ fn show_with_meter(app: &tauri::AppHandle, hidden: &mut std::collections::HashSe
         // A widget its plugin closed meanwhile stays hidden.
         if crate::plugins::widgets::is_closed(&label) {
             continue;
+        }
+        if let Some((id, _)) = crate::plugins::widgets::parse_label(&label) {
+            if crate::plugins::game_hides(app, &id) {
+                crate::plugins::hold_for_game(&window);
+                continue;
+            }
+            if crate::plugins::hold_for_hotkey(&window) {
+                continue;
+            }
         }
         if !platform::window::reveal_in_place(&window) {
             platform::window::show_on_top_without_focus(&window);
@@ -4573,6 +4600,8 @@ pub fn run() {
                         let meter_auto_hide = tick_count > 20
                             && state.settings.get("dpsMeter.autoHideMeter")
                                 .unwrap_or_default() == "true";
+                        let pending = std::mem::take(&mut *newly_focus_hidden_widgets().lock().unwrap_or_else(|p| p.into_inner()));
+                        hidden_with_meter.extend(pending);
                         // Plugins set to hide go too, with or without the meter.
                         let others_auto_hide = meter_auto_hide
                             || (tick_count > 20 && crate::plugins::any_hide_unfocused(&handle));
@@ -4630,8 +4659,11 @@ pub fn run() {
                                 others_delay += 1;
                                 hide_with_meter(&handle, meter_auto_hide && others_delay >= 3, &mut hidden_with_meter);
                             }
-                        } else if !hidden_with_meter.is_empty() {
-                            // Auto-hide turned off meanwhile: back.
+                        } else if !hidden_with_meter.is_empty()
+                            && (tick_count > 20 || platform::window::front_is_ours_or_game() || !crate::plugins::any_hide_unfocused(&handle))
+                        {
+                            // Auto-hide turned off, or a widget can show before
+                            // the startup grace period finishes.
                             show_with_meter(&handle, &mut hidden_with_meter);
                         }
 
