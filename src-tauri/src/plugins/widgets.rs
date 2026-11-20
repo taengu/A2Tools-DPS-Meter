@@ -285,7 +285,7 @@ fn open(app: &tauri::AppHandle, id: &str, name: &str, width: f64, height: f64) -
         // as asked either way.
         .resizable(cfg!(target_os = "linux"))
         .focused(false)
-        .visible(!starts_focus_hidden)
+        .visible(!starts_focus_hidden || crate::platform::window::HIDE_AFTER_BUILD)
         // Never takes focus, from the start: clicks and drags still reach it.
         // Focusable, tao turns a GTK window's focus back on after its first
         // draw, and KWin gave a new icon the front at its alert (Hirai,
