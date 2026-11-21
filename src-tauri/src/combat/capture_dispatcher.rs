@@ -388,7 +388,13 @@ impl CaptureDispatcher {
             // carrying the game's signature rate takes the lock (a server
             // switch), its packets so far read first (see PORT_MOVE_QUIET_MS).
             if let Some(port) = current_port {
-                if cap.src_port == port {
+                // Only the game's own connections keep the port live. Under
+                // ExitLag the locked port is its local relay, which carries
+                // other programs' TLS too: that kept it "live" after the game
+                // moved to the Abyss's server through another relay port, so
+                // the move was never followed and nothing was read there
+                // (2026-11-22). A connection left out as TLS doesn't count.
+                if cap.src_port == port && connections.admit(&cap) {
                     self.port_detector.mark_from_port();
                     waiting.clear();
                 }
