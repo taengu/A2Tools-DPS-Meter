@@ -66,6 +66,8 @@ mod app;
 mod fp_pin;
 #[cfg(feature = "desktop")]
 mod layout;
+#[cfg(feature = "desktop")]
+mod window_diagnostics;
 
 #[cfg(feature = "desktop")]
 mod atomic_file;

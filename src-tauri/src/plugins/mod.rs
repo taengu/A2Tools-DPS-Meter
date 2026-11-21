@@ -1860,9 +1860,13 @@ const POSITION_PREFIX: &str = "dpsMeter.pluginWindow.";
 /// Where to put a plugin window: where it was left, if that is still on a
 /// screen (a monitor unplugged or rearranged since leaves it out of reach).
 fn saved_position(app: &tauri::AppHandle, window: &tauri::WebviewWindow, id: &str) -> Option<(i32, i32)> {
-    let value = app.try_state::<AppState>()?.settings.get(&format!("{POSITION_PREFIX}{id}"))?;
-    let (x, y) = value.split_once(',')?;
-    let (x, y) = (x.trim().parse().ok()?, y.trim().parse().ok()?);
+    let own = app.try_state::<AppState>()?.settings.get(&format!("{POSITION_PREFIX}{id}")).and_then(|value| {
+        let (x, y) = value.split_once(',')?;
+        Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+    });
+    // Through XWayland on KDE, a place of its own that is 0,0 gives way to
+    // KWin's (`own_place_or_kwins`).
+    let (x, y) = crate::app::own_place_or_kwins(app, window.label(), own)?;
     let width = window.outer_size().map(|size| size.width).unwrap_or(240);
     let screens: Vec<_> = window
         .available_monitors()

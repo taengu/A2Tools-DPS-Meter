@@ -252,6 +252,14 @@ function gone(w) {
 }
 if (workspace.windowRemoved) workspace.windowRemoved.connect(gone);
 else if (workspace.clientRemoved) workspace.clientRemoved.connect(gone);
+// The window active as the script loads (the game, at a meter started with
+// it in front): the one to hand the focus back to. lastOther was set only
+// when the active window changed, so a meter window the meter showed on its
+// own at start (the dock) had nothing to give the focus back to and kept it,
+// the game losing the keyboard (2026-11-21, the VM).
+var startActive = workspace.activeWindow || workspace.activeClient;
+current = startActive || null;
+if (startActive && !mine(startActive)) lastOther = startActive;
 followAnchor(mainAnchor);
 if (workspace.windowActivated) {
     workspace.windowActivated.connect(onActivated);
@@ -597,6 +605,7 @@ impl Focus {
     fn geometry(&self, caption: String, x: String, y: String, width: String, height: String) {
         // On X11 the meter saves its own windows' places as they move.
         if places_own_windows() {
+            tracing::debug!(target: "windows", "KWin: \"{caption}\" now at {x},{y} {width}x{height} (not kept: the meter places its own)");
             return;
         }
         let Some(places) = PLACES.get() else { return };
@@ -605,6 +614,7 @@ impl Focus {
             && w > 0
             && h > 0
         {
+            tracing::debug!(target: "windows", "KWin: \"{caption}\" kept at {x},{y} {w}x{h}");
             (places.save)(&caption, (x, y, w, h));
         }
     }
@@ -621,11 +631,16 @@ impl Focus {
     /// to leave it where KWin put it. The overlay's height is the one it had
     /// there, for the edge it keeps; it sizes itself.
     fn placement(&self, caption: String) -> String {
-        PLACES
+        let answer = PLACES
             .get()
             .and_then(|places| (places.load)(&caption))
             .map(|(x, y, w, h)| format!("{x},{y},{w},{h}"))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        match answer.as_str() {
+            "" => tracing::debug!(target: "windows", "KWin asks where \"{caption}\" goes: no kept place, left where KWin put it"),
+            at => tracing::debug!(target: "windows", "KWin asks where \"{caption}\" goes: {at}"),
+        }
+        answer
     }
 
     /// The edge the overlay keeps (Settings → Meter stays fixed at), and

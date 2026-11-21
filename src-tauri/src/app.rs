@@ -293,6 +293,43 @@ fn save_window_place(app: &tauri::AppHandle, title: &str, (x, y, w, h): (i32, i3
     state.settings.set(&format!("window.{label}.placed"), &format!("{x},{y},{w},{h}"));
 }
 
+/// Where window `label` goes when the meter places its own windows (X11, or
+/// a Wayland session through XWayland), given the place it saved itself.
+/// On KDE's native Wayland no app can read where its windows are (GTK says
+/// 0,0), so the places the meter saved there are 0,0, and KWin kept the real
+/// ones (`window.<label>.placed`, #76). Run through XWayland (2.1.1 on KWin
+/// 6.8.3, or `A2TOOLS_XWAYLAND=1`), every window came up at 0,0, the plugin
+/// widgets over the overlay taking its clicks (Hirai, MattTheHuman,
+/// 2026-11-21): a place of its own that is 0,0 or missing gives way to KWin's.
+/// Elsewhere the place given is kept as it is.
+pub(crate) fn own_place_or_kwins(app: &tauri::AppHandle, label: &str, own: Option<(i32, i32)>) -> Option<(i32, i32)> {
+    if !platform::window::places_own_windows() {
+        return own;
+    }
+    match own {
+        Some(at) if at != (0, 0) => Some(at),
+        _ => {
+            let kept = kwin_kept_place(app, label).filter(|&at| at != (0, 0));
+            match kept {
+                Some((x, y)) => tracing::debug!(target: "windows", "{label}: KWin's kept place {x},{y} instead of {own:?}"),
+                // No real place anywhere: KWin places it, as a new window,
+                // rather than at 0,0 with all the others, over the overlay
+                // (an invisible widget there took the overlay's clicks
+                // until its page said which parts it draws).
+                None => tracing::debug!(target: "windows", "{label}: no place kept ({own:?}): left to KWin"),
+            }
+            kept
+        }
+    }
+}
+
+/// The place KWin kept for window `label` (`save_window_place`), if any.
+fn kwin_kept_place(app: &tauri::AppHandle, label: &str) -> Option<(i32, i32)> {
+    let value = app.try_state::<AppState>()?.settings.get(&format!("window.{label}.placed"))?;
+    let mut n = value.split(',').filter_map(|v| v.trim().parse::<i32>().ok());
+    Some((n.next()?, n.next()?))
+}
+
 /// Where a window belongs, for the window manager to put it (#76). The
 /// overlay sizes itself to its content, so it gets its place, and its height
 /// there only for the edge it keeps (Settings → Meter stays fixed at): with
@@ -304,7 +341,8 @@ fn load_window_place(app: &tauri::AppHandle, title: &str) -> Option<(i32, i32, i
     // (platform::linux::focus, X11_IN_WAYLAND).
     if platform::window::places_own_windows() {
         let (id, name) = crate::plugins::widgets::parse_label(&label)?;
-        return crate::plugins::widgets::saved_place(app, &id, &name).map(|(x, y)| (x, y, 0, 0));
+        let own = crate::plugins::widgets::saved_place(app, &id, &name);
+        return own_place_or_kwins(app, &label, own).map(|(x, y)| (x, y, 0, 0));
     }
     let state = app.try_state::<AppState>()?;
     let placed = |label: &str| {
@@ -1485,9 +1523,14 @@ fn set_language(app: tauri::AppHandle, state: tauri::State<'_, AppState>, langua
 }
 
 #[tauri::command]
-fn set_debug_logging(state: tauri::State<'_, AppState>, enabled: bool) {
+fn set_debug_logging(app: tauri::AppHandle, state: tauri::State<'_, AppState>, enabled: bool) {
     logging::logger::set_debug_enabled(enabled, &state.app_data_dir);
     state.settings.set("dpsMeter.debugLoggingEnabled", if enabled { "true" } else { "false" });
+    // The windows as they are now, so a log started to catch a window
+    // problem has their state from the start.
+    if enabled {
+        crate::window_diagnostics::log_snapshot(&app, "debug logging turned on");
+    }
 }
 
 /// Settings' "Run as administrator": on restarts the meter elevated (false
@@ -1529,8 +1572,11 @@ fn dev_logs_preview(state: tauri::State<'_, AppState>) -> Vec<serde_json::Value>
 /// logging). Returns the report code the player passes on.
 #[tauri::command]
 async fn send_logs_to_dev(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<share::dev_logs::SendResult, String> {
+    // The windows as they are while the player sends, in the log it sends.
+    crate::window_diagnostics::log_snapshot(&app, "Send Logs to Dev");
     share::dev_logs::send(&state.http, &state.app_data_dir).await
 }
 
@@ -2826,7 +2872,8 @@ fn restore_window_geometry(app: &tauri::AppHandle, window: &tauri::WebviewWindow
     let Some(state) = app.try_state::<AppState>() else { return false };
     let get = |k: &str| state.settings.get(&format!("window.{}.{}", label, k))
         .and_then(|v| v.trim().parse::<i32>().ok());
-    let (Some(x), Some(y)) = (get("x"), get("y")) else { return false };
+    let own = get("x").zip(get("y"));
+    let Some((x, y)) = own_place_or_kwins(app, window.label(), own) else { return false };
     if x <= -10000 || y <= -10000 {
         return false;
     }
@@ -4122,9 +4169,24 @@ pub fn run() {
                 data_storage.set_train_limit_ms(ms);
             }
 
-            // Load logging settings from saved state
-            if settings.get("dpsMeter.debugLoggingEnabled").as_deref() == Some("true") {
+            // Load logging settings from saved state. A2TOOLS_DEBUG_LOG=1 turns
+            // debug logging on from the start without Settings, for a meter
+            // that takes no clicks (it can't be ticked there then), and
+            // writes the window snapshot every two minutes as well, so the
+            // log has the windows as they were when it went wrong.
+            let debug_by_env = crate::window_diagnostics::debug_log_requested();
+            if debug_by_env || settings.get("dpsMeter.debugLoggingEnabled").as_deref() == Some("true") {
                 logging::logger::set_debug_enabled(true, &app_data_dir);
+                // The windows once they are up and placed.
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    crate::window_diagnostics::log_snapshot(&handle, "5 s after start");
+                    while debug_by_env {
+                        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+                        crate::window_diagnostics::log_snapshot(&handle, "every 2 min (A2TOOLS_DEBUG_LOG=1)");
+                    }
+                });
             }
             if settings.get("dpsMeter.saveRawPackets").as_deref() == Some("true") {
                 logging::logger::set_packet_log_enabled(true, &app_data_dir);
@@ -4267,12 +4329,12 @@ pub fn run() {
             // Restore saved window position and ensure always-on-top
             if let Some(window) = app.get_webview_window("main") {
                 let state_ref = app.state::<AppState>();
-                if let (Some(x), Some(y)) = (state_ref.settings.get("window.x"), state_ref.settings.get("window.y")) {
-                    if let (Ok(x), Ok(y)) = (x.parse::<i32>(), y.parse::<i32>()) {
-                        // Don't restore minimized positions (Windows uses -32000,-32000)
-                        if x > -10000 && y > -10000 {
-                            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
-                        }
+                let own = state_ref.settings.get("window.x").zip(state_ref.settings.get("window.y"))
+                    .and_then(|(x, y)| Some((x.parse::<i32>().ok()?, y.parse::<i32>().ok()?)));
+                if let Some((x, y)) = own_place_or_kwins(app.handle(), "main", own) {
+                    // Don't restore minimized positions (Windows uses -32000,-32000)
+                    if x > -10000 && y > -10000 {
+                        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
                     }
                 }
                 let _ = window.set_always_on_top(true);

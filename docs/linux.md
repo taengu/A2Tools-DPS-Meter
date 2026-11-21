@@ -441,6 +441,15 @@ Along with them, tell us:
 
 The logs contain character names, yours and those of players near you, so send them only to us: on [Discord](https://discord.gg/Aion2Global) or in a [GitHub issue](https://github.com/taengu/A2Tools-DPS-Meter/issues).
 
+### When the problem is a window
+
+For a meter that takes no clicks, windows in the wrong place, a flicker, or a window behind the game, no packet log is needed:
+
+1. In the meter, open **Settings**. Under **Diagnostics**, tick **Enable debug logging** (from 2.1.3 this also writes down every window's state as it is then). If the meter takes no clicks, start it from a terminal with `A2TOOLS_DEBUG_LOG=1 a2tools-dps-meter` instead: that turns debug logging on without Settings, and writes every window's state every two minutes.
+2. Make the problem happen, and leave it showing.
+3. While it shows, open **Settings → Advanced → Send Logs to Dev**: the meter writes every window's state once more and sends the log. If the meter takes no clicks, wait two minutes and send `~/.local/share/com.a2tools.dps-meter/debug.log` yourself instead.
+4. Tell us the report code it gives (if you used Send Logs), what you saw, your desktop (KDE Plasma, GNOME or other) with its version, and whether you start the meter with `GDK_BACKEND` or `A2TOOLS_XWAYLAND` set.
+
 ## Tiling desktops (Hyprland, Sway, i3)
 
 A tiling window manager tiles every new window unless told otherwise, which breaks an overlay: the meter is squeezed beside the game, and the tooltips on its damage bars appear in the wrong place. Give the meter's window (class `a2tools-dps-meter`) a rule that makes it float, keeps it on every workspace, and turns off blur and borders.
@@ -478,8 +487,27 @@ That is Hyprland's Lua configuration. If you use `hyprland.conf` instead, set th
 | The meter goes behind the game | Run the game borderless or windowed. On GNOME, see [automatic pinning through XWayland and the native Wayland workaround](#gnome-keep-the-meter-above-other-windows). On Wayland an app cannot force itself on top of a fullscreen game. On KDE Plasma, KWin can count a borderless game as fullscreen anyway. From 2.0.54 the meter adds a window rule for itself the first time it starts on KDE (**Layer** forced to **Overlay**, listed in System Settings → Window Management → Window Rules as "A2Tools DPS Meter above fullscreen games"); restart the meter once if it is still behind. On older versions, or if you removed that rule, add it yourself: a rule for window class `a2tools-dps-meter` with **Layer** set to **Overlay**, forced. Thanks to Seralth for this. |
 | After a WebKitGTK update the meter's window draws only in pieces, or only while you hover or drag it | WebKitGTK 2.54 no longer draws the transparent overlay fully without its DMA-BUF renderer, which older versions of the meter turned off. Update the meter, or start an older version with `WEBKIT_DISABLE_DMABUF_RENDERER=0 WEBKIT_DMABUF_RENDERER_FORCE_SHM=1 a2tools-dps-meter`. |
 | On a tiling desktop the meter is tiled beside the game, or its tooltips appear in the wrong place | See [Tiling desktops](#tiling-desktops-hyprland-sway-i3). |
-| KDE Plasma 6.8.3: the meter flickers when you move the mouse over it, parts of it vanishing for a moment | KWin 6.8.3 can show a window's previous frame for a moment after it changes ([KDE bug 528950](https://bugs.kde.org/show_bug.cgi?id=528950)). Running the meter through XWayland avoids it: start it with `A2TOOLS_XWAYLAND=1 a2tools-dps-meter` (2.1.2 and later) or `GDK_BACKEND=x11 a2tools-dps-meter`; in the KDE menu, right-click A2Tools DPS Meter, Edit Application, and add the variable to its environment variables. Through XWayland the meter keeps its own window places, so the first time its windows may open in the top left: drag them back once. If the meter then takes no clicks, remove the variable and tell us. (2.1.1 switched to XWayland by itself; 2.1.2 went back to native Wayland, because for some players the meter took no clicks there.) |
+| KDE Plasma 6.8.3: the meter flickers when you move the mouse over it, parts of it vanishing or old text showing through for a moment | A KWin 6.8.3 problem ([KDE bug 528950](https://bugs.kde.org/show_bug.cgi?id=528950)), not the meter's: see [KDE Plasma 6.8.3: the meter flickers](#kde-plasma-683-the-meter-flickers). |
 | Steam Deck or Steam Machine: the meter worked, and now `distrobox enter --root a2tools` stops with `unable to start container` and `creating resolv.conf … no such file or directory` | The box's container, not the meter: see [SteamOS: the box won't start](#steamos-the-box-wont-start). |
+
+### KDE Plasma 6.8.3: the meter flickers
+
+Since Plasma 6.8.3, KWin can show a window's previous frame for a moment after it changes ([KDE bug 528950](https://bugs.kde.org/show_bug.cgi?id=528950)): the meter flickers as its tooltips open under the mouse, and plugin icons can show old text through new. 2.0.99 does it too; it is KWin, not the meter. KDE has not fixed it yet. These KWin settings may avoid it while keeping native Wayland. Try them **one at a time**, in this order, and tell us which one helped:
+
+1. `KWIN_DRM_NO_TRIPLE_BUFFERING=1`
+2. `KWIN_DISABLE_UDMABUF_IMPORT=1`
+3. `KWIN_USE_BUFFER_AGE=0`
+
+To try one, put it in a file KDE reads when your desktop starts, then **log out and back in**:
+
+```bash
+mkdir -p ~/.config/plasma-workspace/env
+echo 'export KWIN_DRM_NO_TRIPLE_BUFFERING=1' > ~/.config/plasma-workspace/env/a2tools-kwin.sh
+```
+
+For the next one, run the `echo` line again with it instead (the file then holds only that one), and log out and back in. To undo: `rm ~/.config/plasma-workspace/env/a2tools-kwin.sh`, then log out and back in. These settings apply to your whole desktop, not just the meter: if anything else feels less smooth, undo them.
+
+If none helps, running the meter through XWayland avoids the flicker: start it with `A2TOOLS_XWAYLAND=1 a2tools-dps-meter` (or add the variable in the KDE menu: right-click A2Tools DPS Meter, Edit Application, environment variables). From 2.1.3 its windows open where they were; on 2.1.2 they could open in the top left and take the overlay's clicks. Through XWayland the meter loses what native Wayland gives it on KDE, so it stays a last resort.
 
 ### SteamOS: the box won't start
 

@@ -201,3 +201,13 @@ pub fn is_on_screen(window: &tauri::WebviewWindow) -> bool {
 pub fn covered_by(_window: &tauri::WebviewWindow) -> Option<String> {
     None
 }
+
+/// For the debug log's window snapshot: nothing platform-specific here.
+pub fn environment() -> String {
+    "unsupported platform".into()
+}
+
+/// For the debug log's window snapshot: nothing platform-specific here.
+pub fn diagnostics(_window: &tauri::WebviewWindow) -> String {
+    String::new()
+}
