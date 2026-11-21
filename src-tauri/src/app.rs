@@ -293,6 +293,38 @@ fn save_window_place(app: &tauri::AppHandle, title: &str, (x, y, w, h): (i32, i3
     state.settings.set(&format!("window.{label}.placed"), &format!("{x},{y},{w},{h}"));
 }
 
+/// Where window `label` goes when the meter places its own windows (X11, or
+/// a Wayland session through XWayland), given the place it saved itself.
+/// On KDE's native Wayland no app can read where its windows are (GTK says
+/// 0,0), so the places the meter saved there are 0,0, and KWin kept the real
+/// ones (`window.<label>.placed`, #76). Run through XWayland (2.1.1 on KWin
+/// 6.8.3, or `A2TOOLS_XWAYLAND=1`), every window came up at 0,0, the plugin
+/// widgets over the overlay taking its clicks (Hirai, MattTheHuman,
+/// 2026-11-21): a place of its own that is 0,0 or missing gives way to KWin's.
+/// Elsewhere the place given is kept as it is.
+pub(crate) fn own_place_or_kwins(app: &tauri::AppHandle, label: &str, own: Option<(i32, i32)>) -> Option<(i32, i32)> {
+    if !platform::window::places_own_windows() {
+        return own;
+    }
+    match own {
+        Some(at) if at != (0, 0) => Some(at),
+        _ => {
+            let kept = kwin_kept_place(app, label);
+            if let Some((x, y)) = kept {
+                tracing::debug!(target: "windows", "{label}: KWin's kept place {x},{y} instead of {own:?}");
+            }
+            kept.or(own)
+        }
+    }
+}
+
+/// The place KWin kept for window `label` (`save_window_place`), if any.
+fn kwin_kept_place(app: &tauri::AppHandle, label: &str) -> Option<(i32, i32)> {
+    let value = app.try_state::<AppState>()?.settings.get(&format!("window.{label}.placed"))?;
+    let mut n = value.split(',').filter_map(|v| v.trim().parse::<i32>().ok());
+    Some((n.next()?, n.next()?))
+}
+
 /// Where a window belongs, for the window manager to put it (#76). The
 /// overlay sizes itself to its content, so it gets its place, and its height
 /// there only for the edge it keeps (Settings → Meter stays fixed at): with
@@ -304,7 +336,8 @@ fn load_window_place(app: &tauri::AppHandle, title: &str) -> Option<(i32, i32, i
     // (platform::linux::focus, X11_IN_WAYLAND).
     if platform::window::places_own_windows() {
         let (id, name) = crate::plugins::widgets::parse_label(&label)?;
-        return crate::plugins::widgets::saved_place(app, &id, &name).map(|(x, y)| (x, y, 0, 0));
+        let own = crate::plugins::widgets::saved_place(app, &id, &name);
+        return own_place_or_kwins(app, &label, own).map(|(x, y)| (x, y, 0, 0));
     }
     let state = app.try_state::<AppState>()?;
     let placed = |label: &str| {
@@ -2834,7 +2867,8 @@ fn restore_window_geometry(app: &tauri::AppHandle, window: &tauri::WebviewWindow
     let Some(state) = app.try_state::<AppState>() else { return false };
     let get = |k: &str| state.settings.get(&format!("window.{}.{}", label, k))
         .and_then(|v| v.trim().parse::<i32>().ok());
-    let (Some(x), Some(y)) = (get("x"), get("y")) else { return false };
+    let own = get("x").zip(get("y"));
+    let Some((x, y)) = own_place_or_kwins(app, window.label(), own) else { return false };
     if x <= -10000 || y <= -10000 {
         return false;
     }
@@ -4290,12 +4324,12 @@ pub fn run() {
             // Restore saved window position and ensure always-on-top
             if let Some(window) = app.get_webview_window("main") {
                 let state_ref = app.state::<AppState>();
-                if let (Some(x), Some(y)) = (state_ref.settings.get("window.x"), state_ref.settings.get("window.y")) {
-                    if let (Ok(x), Ok(y)) = (x.parse::<i32>(), y.parse::<i32>()) {
-                        // Don't restore minimized positions (Windows uses -32000,-32000)
-                        if x > -10000 && y > -10000 {
-                            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
-                        }
+                let own = state_ref.settings.get("window.x").zip(state_ref.settings.get("window.y"))
+                    .and_then(|(x, y)| Some((x.parse::<i32>().ok()?, y.parse::<i32>().ok()?)));
+                if let Some((x, y)) = own_place_or_kwins(app.handle(), "main", own) {
+                    // Don't restore minimized positions (Windows uses -32000,-32000)
+                    if x > -10000 && y > -10000 {
+                        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
                     }
                 }
                 let _ = window.set_always_on_top(true);
