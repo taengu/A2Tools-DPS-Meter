@@ -392,7 +392,7 @@
     "roundDps": "DPS 以千為單位顯示 (13k)",
     "showDpsSuffix": "DPS 後顯示 /s",
     "autoHideMeter": "AION2 不在前景時隱藏",
-    "hideWhenGameClosed": "AION2 關閉時隱藏",
+    "hideWhenGameClosed": "AION2 關閉時隱藏計量器",
     "closeWithGame": "AION2 關閉時一併關閉計量器",
     "hideWhenSolo": "僅在隊伍中顯示",
     "hideOutOfCombat": {

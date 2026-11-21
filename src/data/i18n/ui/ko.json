@@ -392,7 +392,7 @@
     "roundDps": "DPS를 천 단위로 줄이기 (13k)",
     "showDpsSuffix": "DPS에 /s 붙이기",
     "autoHideMeter": "AION2가 활성 창이 아닐 때 숨기기",
-    "hideWhenGameClosed": "AION2가 꺼져 있으면 숨기기",
+    "hideWhenGameClosed": "AION2가 꺼져 있으면 미터 숨기기",
     "closeWithGame": "AION2를 종료하면 미터도 종료",
     "hideWhenSolo": "파티 중에만 표시",
     "hideOutOfCombat": {

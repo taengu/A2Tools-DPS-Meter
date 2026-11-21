@@ -392,7 +392,7 @@
     "roundDps": "Abreviar DPS em milhares (13k)",
     "showDpsSuffix": "Adicionar /s ao DPS",
     "autoHideMeter": "Ocultar quando o AION2 não estiver em foco",
-    "hideWhenGameClosed": "Ocultar enquanto o AION2 estiver fechado",
+    "hideWhenGameClosed": "Ocultar o medidor enquanto o AION2 estiver fechado",
     "closeWithGame": "Fechar o medidor quando o AION2 fechar",
     "hideWhenSolo": "Mostrar só em grupo",
     "hideOutOfCombat": {
