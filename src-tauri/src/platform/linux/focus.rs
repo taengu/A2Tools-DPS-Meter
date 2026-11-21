@@ -397,7 +397,7 @@ fn own_clients(clients: &serde_json::Value, pid: u32) -> Vec<Client> {
         .into_iter()
         .flatten()
         .filter(|c| c["pid"].as_u64() == Some(u64::from(pid)))
-        .filter(|c| c["mapped"].as_bool() != Some(false) && c["hidden"].as_bool() != Some(true))
+        .filter(|c| c["mapped"].as_bool() != Some(false) && c["hidden"].as_bool() != Some(true) && !tiled(c))
         .filter_map(|c| {
             Some(Client {
                 address: c["address"].as_str()?.to_string(),
@@ -482,12 +482,20 @@ fn hyprland_client(title: &str) -> Option<(String, i32, i32)> {
     hyprland_find(&clients, std::process::id(), title)
 }
 
-/// `hyprland_client` over `hyprctl clients -j`'s list.
+/// A window Hyprland tiles (the player's rules say so: a dock wanted as a
+/// normal window, 2026-11-22) is placed by Hyprland alone: the meter neither
+/// moves it nor keeps its place.
+fn tiled(client: &serde_json::Value) -> bool {
+    client["floating"].as_bool() == Some(false)
+}
+
+/// `hyprland_client` over `hyprctl clients -j`'s list. None for a tiled window.
 fn hyprland_find(clients: &serde_json::Value, pid: u32, title: &str) -> Option<(String, i32, i32)> {
     let client = clients
         .as_array()?
         .iter()
-        .find(|c| c["pid"].as_u64() == Some(u64::from(pid)) && c["title"].as_str() == Some(title))?;
+        .find(|c| c["pid"].as_u64() == Some(u64::from(pid)) && c["title"].as_str() == Some(title))
+        .filter(|c| !tiled(c))?;
     let at = client["at"].as_array()?;
     let n = |v: Option<&serde_json::Value>| v.and_then(serde_json::Value::as_i64).and_then(|v| i32::try_from(v).ok());
     Some((client["address"].as_str()?.to_string(), n(at.first())?, n(at.get(1))?))
@@ -877,7 +885,11 @@ mod tests {
             { "address": "0x1", "pid": 42, "title": "A2Tools DPS Meter", "at": [120, 80], "size": [398, 55], "mapped": true, "hidden": false },
             { "address": "0x2", "pid": 42, "title": "A2Tools Plugins", "at": [900, 300], "size": [600, 500], "mapped": false, "hidden": false },
             { "address": "0x3", "pid": 7, "title": "AION2", "at": [0, 0], "size": [2560, 1440], "mapped": true, "hidden": false },
+            // Tiled by the player's rules: Hyprland's to place, not the meter's.
+            { "address": "0x4", "pid": 42, "title": "A2Tools Plugins (plugin)", "at": [0, 0], "size": [1280, 1440], "mapped": true, "hidden": false, "floating": false },
         ]);
+        assert_eq!(hyprland_find(&clients, 42, "A2Tools Plugins (plugin)"), None);
+        assert_eq!(hyprland_find(&clients, 42, "A2Tools DPS Meter"), Some(("0x1".to_string(), 120, 80)));
         assert_eq!(own_clients(&clients, 42), vec![Client {
             address: "0x1".into(), title: "A2Tools DPS Meter".into(), at: (120, 80), size: (398, 55),
         }]);
