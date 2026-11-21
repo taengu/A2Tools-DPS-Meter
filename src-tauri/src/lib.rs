@@ -68,6 +68,8 @@ mod fp_pin;
 mod layout;
 #[cfg(feature = "desktop")]
 mod window_diagnostics;
+#[cfg(feature = "desktop")]
+mod server_clock;
 
 #[cfg(feature = "desktop")]
 mod atomic_file;

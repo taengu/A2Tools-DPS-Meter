@@ -70,6 +70,13 @@ const RESEND_SAME_MS: i64 = 5 * 60_000;
 /// A map read longer ago than this is not sent (waiting for the server).
 const MAX_AGE_MS: i64 = 10 * 60_000;
 
+/// When a report was read, in the site's time: the PC's clock corrected to
+/// real time (crate::server_clock), as the site checks it against its own
+/// clock. 0 stays 0 (a report built only to compare with the last one sent).
+fn observed_at(local_ms: i64) -> i64 {
+    if local_ms == 0 { 0 } else { (local_ms + crate::server_clock::offset_ms()) / 1000 }
+}
+
 /// The report the site's /api/boss-timers/report reads (format 1).
 pub fn report(server_id: u16, map: &BossMap, now_ms: i64) -> serde_json::Value {
     let secs = |ms: i64| (ms > 0).then_some(ms / 1000);
@@ -88,7 +95,7 @@ pub fn report(server_id: u16, map: &BossMap, now_ms: i64) -> serde_json::Value {
         "format": 1,
         "server": server_id,
         "map": map.map_id,
-        "observedAt": now_ms / 1000,
+        "observedAt": observed_at(now_ms),
         "bosses": bosses,
     })
 }
@@ -111,7 +118,7 @@ pub fn artifacts_report(server_id: u16, state: &ArtifactState, seen_ms: i64) -> 
     json!({
         "format": 1,
         "server": server_id,
-        "observedAt": seen_ms / 1000,
+        "observedAt": observed_at(seen_ms),
         "wars": wars,
         "artifacts": artifacts,
     })
@@ -165,7 +172,7 @@ pub fn event_request(server_id: u16, event: &BossEvent) -> Option<(&'static str,
 /// NPC code, with its artifact, and what was seen: up or dead at a time, or
 /// its HP.
 fn cores_body(server_id: u16, cores: Vec<serde_json::Value>, now_ms: i64) -> serde_json::Value {
-    json!({ "format": 1, "server": server_id, "observedAt": now_ms / 1000, "cores": cores })
+    json!({ "format": 1, "server": server_id, "observedAt": observed_at(now_ms), "cores": cores })
 }
 
 /// The orb kills waiting for the faction that took their corridor

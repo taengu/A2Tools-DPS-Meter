@@ -57,7 +57,7 @@
   current.listen("plugin-event", (event) => {
     const payload = event.payload || {};
     if (payload.plugin !== id || typeof payload.event !== "string") return;
-    if (payload.event === "widget" || payload.event === "locked" || payload.event === "language") {
+    if (payload.event === "widget" || payload.event === "locked" || payload.event === "language" || payload.event === "clock") {
       deliver(payload.event, payload.data);
     }
     // The layout being edited (layout.rs): outlined, and its widget told.
@@ -89,6 +89,7 @@
     deliver("language", hello.language || "en");
     deliver("locked", !!hello.locked);
     if (hello.layout) deliver("layout", { editing: true });
+    if (hello.clock) deliver("clock", hello.clock);
     frame = document.createElement("iframe");
     frame.setAttribute("sandbox", "allow-scripts");
     // Copying text on a click (Event Timers' double right-click on an icon);

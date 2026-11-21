@@ -593,7 +593,8 @@ pub fn plugin_widget_hello(app: tauri::AppHandle, window: tauri::WebviewWindow) 
     let language = app.try_state::<AppState>().and_then(|s| s.settings.get("dpsMeter.language")).unwrap_or_else(|| "en".into());
     let plugin_name = host(&app).ok().and_then(|h| h.with(&id, |l| l.manifest.name.clone())).unwrap_or_else(|| id.clone());
     Ok(serde_json::json!({ "plugin": id, "name": name, "locked": locked, "language": language,
-                           "layout": layout, "pluginName": plugin_name }))
+                           "layout": layout, "pluginName": plugin_name,
+                           "clock": crate::server_clock::event() }))
 }
 
 /// A widget's message to its plugin's main window, heard there as a

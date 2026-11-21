@@ -131,6 +131,17 @@
 //                                              (meter 2.0.77 on): its window shown, or in the dock, the dock shown,
 //                                              its tab the open one (or stacked) and the dock not folded (2.1.0 on).
 //                                              The page keeps running either way; widgets stay up
+//   a2.on("clock", ({ offset, known }) => ...)  how far the PC's clock is from real time (meter 2.1.4
+//                                              on): offset = real minus local in ms, from the CDN's clock
+//                                              as the meter reads the boss timer feed (a2.bossTimers), and
+//                                              following the PC's clock when it changes; told at start and
+//                                              when it moves more than 250 ms. known: false until the
+//                                              feed has been read (offset 0 then). No permission.
+//   a2.clockOffset()                           that offset now (0 until known, and on older meters)
+//   a2.now()                                   Date.now() corrected to real time: use it for anything
+//                                              compared with the game server's times (a boss's next
+//                                              spawn, a schedule); keep Date.now() for elapsed time.
+//                                              Older meters: (a2.now?.() ?? Date.now())
 //   a2.on("layout", ({ editing }) => ...)      the player arranging the meter and every widget at once
 //                                              (Settings, Edit layout; meter 2.1.0 on), at start while on and
 //                                              on change. Every widget is unlocked and outlined meanwhile; a
@@ -252,6 +263,8 @@
   };
 
   const handlers = {};
+  // Server minus local clock in ms, from the "clock" event (meter 2.1.4 on).
+  let clockOffset = 0;
   const pending = new Map();
   let seq = 0;
   const call = (name, args) =>
@@ -273,6 +286,7 @@
     }
     if (msg.event) {
       if (msg.event === "theme") setTheme(msg.data);
+      if (msg.event === "clock") clockOffset = Number(msg.data?.offset) || 0;
       for (const fn of handlers[msg.event] || []) {
         try {
           fn(msg.data, { character: msg.character ?? null, at: msg.at ?? null });
@@ -290,6 +304,8 @@
       get: (key) => call("storage.get", [key]).then((v) => (v == null ? null : JSON.parse(v))),
       set: (key, value) => call("storage.set", [key, JSON.stringify(value)]),
     }),
+    clockOffset: () => clockOffset,
+    now: () => Date.now() + clockOffset,
     notify: (text) => call("notify", [String(text)]),
     bossTimers: (server) => call("bossTimers", [Number(server)]),
     // Meter 2.0.72 on: the server's Abyss siege (artifact holders, cores).

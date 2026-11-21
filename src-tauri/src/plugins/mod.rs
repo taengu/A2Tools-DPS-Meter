@@ -2444,6 +2444,8 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow, plugin:
             .and_then(|_| crate::pairings::for_server(pairing_server(&app))),
         "jitter": app.try_state::<AppState>().map(|s| ping_event(&s.ping_tracker)["jitter"].clone()).unwrap_or(Value::Null),
         "layout": crate::layout::editing(),
+        // Server minus local clock, ms (meter 2.1.4 on).
+        "clock": crate::server_clock::event(),
     }))
 }
 
@@ -2665,7 +2667,12 @@ async fn feed_file(app: &tauri::AppHandle, feed: &'static str, server: u32) -> R
     let url = format!("https://cdn.a2tools.app/feeds/{feed}/{server}.json");
     // Tried again on a poor connection (`crate::cdn`).
     let value = crate::cdn::retry(|| async {
+        let (sent, started) = (crate::clock::now_ms(), Instant::now());
         let res = state.http.get(&url).timeout(Duration::from_secs(15)).send().await.map_err(|e| e.to_string())?;
+        // The CDN's clock, for countdowns against the game's times on a PC
+        // whose clock is off (crate::server_clock): no request of its own.
+        let date = res.headers().get(reqwest::header::DATE).and_then(|d| d.to_str().ok());
+        crate::server_clock::note_answer(app, date, sent, crate::clock::now_ms(), started.elapsed());
         match res.status() {
             s if s == reqwest::StatusCode::NOT_FOUND => Ok(None),
             s if s.is_success() => Ok(Some(serde_json::from_str::<Value>(&res.text().await.map_err(|e| e.to_string())?).map_err(|e| e.to_string())?)),

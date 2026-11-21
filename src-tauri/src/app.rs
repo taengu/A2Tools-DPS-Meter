@@ -4845,6 +4845,10 @@ pub fn run() {
             #[cfg(feature = "online")]
             crate::pairings::spawn(app.state::<AppState>().http.clone());
 
+            // The PC's clock being changed under the meter: the offset to
+            // real time (crate::server_clock) follows at once.
+            crate::server_clock::spawn(app.handle().clone());
+
             // Supporter roster: fetched, never queried. See `crate::supporters`
             // — asking the server "is this player a supporter?" would hand it a
             // list of who you play with, every fight, for a cosmetic. The

@@ -227,6 +227,8 @@
       if (hello.abyssPairing) out.push(["abyssPairing", hello.abyssPairing]);
       // The layout being edited as it starts (meter 2.1.0 on).
       if (hello.layout) out.push(["layout", { editing: true }]);
+      // Server minus local clock, for a2.now() (meter 2.1.4 on).
+      if (hello.clock) out.push(["clock", hello.clock]);
       // Its jitter too (meter 2.0.99 on).
       if ("ping" in hello) out.push(["ping", { ms: typeof hello.ping === "number" ? hello.ping : null, jitter: typeof hello.jitter === "number" ? hello.jitter : null }]);
       return out;
