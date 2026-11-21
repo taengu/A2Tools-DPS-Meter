@@ -309,11 +309,16 @@ pub(crate) fn own_place_or_kwins(app: &tauri::AppHandle, label: &str, own: Optio
     match own {
         Some(at) if at != (0, 0) => Some(at),
         _ => {
-            let kept = kwin_kept_place(app, label);
-            if let Some((x, y)) = kept {
-                tracing::debug!(target: "windows", "{label}: KWin's kept place {x},{y} instead of {own:?}");
+            let kept = kwin_kept_place(app, label).filter(|&at| at != (0, 0));
+            match kept {
+                Some((x, y)) => tracing::debug!(target: "windows", "{label}: KWin's kept place {x},{y} instead of {own:?}"),
+                // No real place anywhere: KWin places it, as a new window,
+                // rather than at 0,0 with all the others, over the overlay
+                // (an invisible widget there took the overlay's clicks
+                // until its page said which parts it draws).
+                None => tracing::debug!(target: "windows", "{label}: no place kept ({own:?}): left to KWin"),
             }
-            kept.or(own)
+            kept
         }
     }
 }
