@@ -252,6 +252,14 @@ function gone(w) {
 }
 if (workspace.windowRemoved) workspace.windowRemoved.connect(gone);
 else if (workspace.clientRemoved) workspace.clientRemoved.connect(gone);
+// The window active as the script loads (the game, at a meter started with
+// it in front): the one to hand the focus back to. lastOther was set only
+// when the active window changed, so a meter window the meter showed on its
+// own at start (the dock) had nothing to give the focus back to and kept it,
+// the game losing the keyboard (2026-11-21, the VM).
+var startActive = workspace.activeWindow || workspace.activeClient;
+current = startActive || null;
+if (startActive && !mine(startActive)) lastOther = startActive;
 followAnchor(mainAnchor);
 if (workspace.windowActivated) {
     workspace.windowActivated.connect(onActivated);
