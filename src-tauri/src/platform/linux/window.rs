@@ -410,6 +410,11 @@ pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     // it again as it was mapped (`hide_in_place`, which kept the place).
     if super::focus::hyprland_places_windows()
         && let Some((x, y)) = super::focus::place_of(window)
+        && (super::focus::hyprland_place_on_screen((x, y)) || {
+            // Off every monitor: left where Hyprland put it (the middle).
+            tracing::debug!(target: "windows", "{}: its place {x},{y} is off every monitor: left where Hyprland put it", window.label());
+            false
+        })
     {
         // Under XWayland the meter moves its own windows; on native Wayland
         // only Hyprland can (`set_position` does nothing there).
