@@ -265,7 +265,15 @@ fn build(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
         .decorations(false)
         .always_on_top(true)
         .resizable(true)
-        .visible(visible || crate::platform::window::HIDE_AFTER_BUILD)
+        // Built hidden where it can be (and visible where a window must be:
+        // HIDE_AFTER_BUILD), then shown as the meter shows a window on its
+        // own. Built visible, KWin on native Wayland took it for a window the
+        // player opened and gave it the focus: the game lost the keyboard at
+        // every start with a plugin docked and showing (2026-11-21, the VM:
+        // the dock active, the game's window losing focus as the meter
+        // started). This is the passive start: a player opening the dock
+        // builds it hidden and shows it in `open`.
+        .visible(crate::platform::window::HIDE_AFTER_BUILD)
         .focused(false)
         // Transparent, so the panel's opacity slider shows the game through it.
         .transparent(true)
@@ -273,11 +281,13 @@ fn build(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
     crate::platform::window::joined(&window, crate::platform::ProcessGroup::Plugins);
-    if !visible && crate::platform::window::HIDE_AFTER_BUILD {
-        crate::platform::window::hide_without_focus(&window);
-    }
     if let Some((x, y)) = super::saved_position(app, &window, PLACE_ID) {
         let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+    if visible {
+        crate::platform::window::show_on_top_without_focus(&window);
+    } else if crate::platform::window::HIDE_AFTER_BUILD {
+        crate::platform::window::hide_without_focus(&window);
     }
     Ok(())
 }
