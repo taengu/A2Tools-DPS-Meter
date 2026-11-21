@@ -267,6 +267,14 @@ fn input_region(window: &tauri::WebviewWindow, ignore: bool, keep: Option<Keep>)
     apply_input_region(window, ignore, keep)
 }
 
+/// The window's last asked input region set again (everywhere if it never
+/// asked).
+fn restore_input_region(window: &tauri::WebviewWindow) -> bool {
+    let asked = click_through_asked().lock().unwrap_or_else(|p| p.into_inner()).get(window.label()).cloned();
+    let (ignore, keep) = asked.unwrap_or((false, None));
+    apply_input_region(window, ignore, keep)
+}
+
 /// For the debug log: what an input region lets the mouse do.
 fn describe_input(ignore: bool, keep: &Option<Keep>, concealed: bool) -> String {
     if concealed {
@@ -392,8 +400,14 @@ pub fn bring_forward(window: &tauri::WebviewWindow) {
 /// once the window is back.
 pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     use gtk::prelude::*;
-    if is_hidden_in_place(window) {
-        tracing::debug!(target: "windows", "{}: shown while concealed: it stays concealed, taking no clicks", window.label());
+    // A window `hide_in_place` concealed is still mapped, invisible and
+    // taking no clicks: shown this way rather than by `reveal_in_place`, it
+    // kept that mark, and every click-through after made it take no clicks
+    // again (likely Hirai's meter that took no clicks under XWayland on KDE,
+    // locked or not, 2.1.1). It is revealed first.
+    if let Some(skipped_taskbar) = take_concealed(window) {
+        tracing::debug!(target: "windows", "{}: shown while concealed: revealed first", window.label());
+        unconceal(window, skipped_taskbar);
     }
     tracing::debug!(target: "windows", "{}: shown (on top, without focus)", window.label());
     if let Ok(title) = window.title() {
@@ -525,7 +539,9 @@ pub fn hide_in_place(window: &tauri::WebviewWindow) {
     };
     tracing::debug!(target: "windows", "{}: concealed in place (transparent, mapped)", window.label());
     hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string(), skipped_taskbar);
-    click_through_except(window, true, None);
+    // No clicks while concealed, without taking that as what the window asks
+    // for: asked so, it took no clicks once shown again too.
+    apply_input_region(window, true, None);
     let _ = window.set_skip_taskbar(true);
 }
 
@@ -535,9 +551,10 @@ fn take_concealed(window: &tauri::WebviewWindow) -> Option<bool> {
     hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).remove(window.label())
 }
 
-/// A concealed window visible again, taking clicks.
+/// A concealed window visible again, with the click-through it asked for
+/// before (its lock, or a widget's drawn parts), not clicks everywhere.
 fn unconceal(window: &tauri::WebviewWindow, skipped_taskbar: bool) {
-    click_through_except(window, false, None);
+    restore_input_region(window);
     // Back as it was: a widget went into the taskbar and Alt+Tab once shown
     // again, and Alt+Tab then gave it the focus, the game's cursor gone and
     // its clicks not going through (Hirai, KDE, 2026-10-31).
