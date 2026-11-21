@@ -12,6 +12,12 @@
 
 use tauri::Manager;
 
+/// Debug logging asked for at start (`A2TOOLS_DEBUG_LOG=1`), without
+/// Settings: for a meter that takes no clicks. It is not saved.
+pub fn debug_log_requested() -> bool {
+    std::env::var("A2TOOLS_DEBUG_LOG").is_ok_and(|v| v.trim() == "1")
+}
+
 /// Log the snapshot, saying what asked for it.
 pub fn log_snapshot(app: &tauri::AppHandle, why: &str) {
     if !crate::logging::logger::is_debug_enabled() {

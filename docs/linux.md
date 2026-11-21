@@ -445,10 +445,10 @@ The logs contain character names, yours and those of players near you, so send t
 
 For a meter that takes no clicks, windows in the wrong place, a flicker, or a window behind the game, no packet log is needed:
 
-1. In the meter, open **Settings**. Under **Diagnostics**, tick **Enable debug logging** (from 2.1.3 this also writes down every window's state as it is then).
+1. In the meter, open **Settings**. Under **Diagnostics**, tick **Enable debug logging** (from 2.1.3 this also writes down every window's state as it is then). If the meter takes no clicks, start it from a terminal with `A2TOOLS_DEBUG_LOG=1 a2tools-dps-meter` instead: that turns debug logging on without Settings, and writes every window's state every two minutes.
 2. Make the problem happen, and leave it showing.
-3. While it shows, open **Settings → Advanced → Send Logs to Dev**: the meter writes every window's state once more and sends the log. If the meter takes no clicks at all, send `~/.local/share/com.a2tools.dps-meter/debug.log` yourself instead.
-4. Tell us the report code it gives, what you saw, your desktop (KDE Plasma, GNOME or other) with its version, and whether you start the meter with `GDK_BACKEND` or `A2TOOLS_XWAYLAND` set.
+3. While it shows, open **Settings → Advanced → Send Logs to Dev**: the meter writes every window's state once more and sends the log. If the meter takes no clicks, wait two minutes and send `~/.local/share/com.a2tools.dps-meter/debug.log` yourself instead.
+4. Tell us the report code it gives (if you used Send Logs), what you saw, your desktop (KDE Plasma, GNOME or other) with its version, and whether you start the meter with `GDK_BACKEND` or `A2TOOLS_XWAYLAND` set.
 
 ## Tiling desktops (Hyprland, Sway, i3)
 

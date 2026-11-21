@@ -4130,14 +4130,23 @@ pub fn run() {
                 data_storage.set_train_limit_ms(ms);
             }
 
-            // Load logging settings from saved state
-            if settings.get("dpsMeter.debugLoggingEnabled").as_deref() == Some("true") {
+            // Load logging settings from saved state. A2TOOLS_DEBUG_LOG=1 turns
+            // debug logging on from the start without Settings, for a meter
+            // that takes no clicks (it can't be ticked there then), and
+            // writes the window snapshot every two minutes as well, so the
+            // log has the windows as they were when it went wrong.
+            let debug_by_env = crate::window_diagnostics::debug_log_requested();
+            if debug_by_env || settings.get("dpsMeter.debugLoggingEnabled").as_deref() == Some("true") {
                 logging::logger::set_debug_enabled(true, &app_data_dir);
                 // The windows once they are up and placed.
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                     crate::window_diagnostics::log_snapshot(&handle, "5 s after start");
+                    while debug_by_env {
+                        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+                        crate::window_diagnostics::log_snapshot(&handle, "every 2 min (A2TOOLS_DEBUG_LOG=1)");
+                    }
                 });
             }
             if settings.get("dpsMeter.saveRawPackets").as_deref() == Some("true") {
