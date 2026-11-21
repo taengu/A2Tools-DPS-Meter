@@ -42,10 +42,13 @@ pkgver() {
   cd "$(_root)"
   local version
   version=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
+  # pkgver allows no "-": a test build's 2.1.5-hypr1 is 2.1.5.hypr1, which
+  # pacman sorts below the release 2.1.5.
+  local pkg=${version//-/.}
   if git tag --points-at HEAD | grep -qx "v$version"; then
-    printf '%s' "$version"
+    printf '%s' "$pkg"
   else
-    printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+    printf '%s.r%s.g%s' "$pkg" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
   fi
 }
 
