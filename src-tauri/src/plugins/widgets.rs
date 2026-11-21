@@ -233,8 +233,12 @@ fn open(app: &tauri::AppHandle, id: &str, name: &str, width: f64, height: f64) -
         }
         if super::game_hides(&app, &id) {
             super::hold_for_game(&widget);
-        } else if !super::hold_for_hotkey(&widget) && !crate::platform::window::reveal_in_place(&widget) {
-            crate::platform::window::show_on_top_without_focus(&widget);
+        } else if !super::hold_for_hotkey(&widget) {
+            if crate::app::widget_needs_focus_hold(&app, widget.label()) {
+                crate::app::hold_widget_for_focus(&widget);
+            } else if !crate::platform::window::reveal_in_place(&widget) {
+                crate::platform::window::show_on_top_without_focus(&widget);
+            }
         }
         apply_lock(&widget, is_locked(&app, &id));
         return Ok(());
@@ -255,10 +259,12 @@ fn open(app: &tauri::AppHandle, id: &str, name: &str, width: f64, height: f64) -
         serde_json::to_string(&name).unwrap_or_default(),
     );
     let title = format!("{plugin_name} · {name}");
-    crate::app::note_window_title(&title, &label(&id, &name));
+    let label = label(&id, &name);
+    crate::app::note_window_title(&title, &label);
+    let starts_focus_hidden = crate::app::widget_needs_focus_hold(&app, &label);
     let front = crate::platform::window::front_window();
     let widget = crate::platform::window::share_process(
-        tauri::WebviewWindowBuilder::new(&app, label(&id, &name), tauri::WebviewUrl::App("plugin-widget.html".into())),
+        tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::App("plugin-widget.html".into())),
         crate::platform::ProcessGroup::Plugins,
     )
         .initialization_script(script)
@@ -279,6 +285,7 @@ fn open(app: &tauri::AppHandle, id: &str, name: &str, width: f64, height: f64) -
         // as asked either way.
         .resizable(cfg!(target_os = "linux"))
         .focused(false)
+        .visible(!starts_focus_hidden || crate::platform::window::HIDE_AFTER_BUILD)
         // Never takes focus, from the start: clicks and drags still reach it.
         // Focusable, tao turns a GTK window's focus back on after its first
         // draw, and KWin gave a new icon the front at its alert (Hirai,
@@ -311,8 +318,8 @@ fn open(app: &tauri::AppHandle, id: &str, name: &str, width: f64, height: f64) -
     // AION2 closed and the plugin set to hide then: shown when it opens.
     if super::game_hides(&app, &id) {
         super::hold_for_game(&widget);
-    } else {
-        super::hold_for_hotkey(&widget);
+    } else if !super::hold_for_hotkey(&widget) && (starts_focus_hidden || crate::app::widget_needs_focus_hold(&app, widget.label())) {
+        crate::app::hold_widget_for_focus(&widget);
     }
     Ok(())
 }
@@ -570,14 +577,16 @@ pub fn plugin_widgets_locked(app: tauri::AppHandle, window: tauri::WebviewWindow
     Ok(is_locked(&app, &id))
 }
 
-/// What a widget's host page needs to start. Its window is on screen by now,
-/// so this is where a locked widget is made click-through.
+/// What a widget's host page needs to start, including its click-through state.
 #[tauri::command]
 pub fn plugin_widget_hello(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<Value, String> {
     let (id, name) = widget_of(&window)?;
     // Its page has loaded: if that took the front from the game, give it back.
     let before = fronts().lock().unwrap_or_else(|p| p.into_inner()).remove(window.label()).flatten();
     crate::platform::window::give_front_back(&window, before);
+    if !is_closed(window.label()) && crate::app::widget_needs_focus_hold(&app, window.label()) {
+        crate::app::hold_widget_for_focus(&window);
+    }
     let locked = is_locked(&app, &id);
     apply_lock(&window, locked);
     let layout = crate::layout::editing();
