@@ -12,6 +12,12 @@ use crate::app::AppState;
 
 const ID: &str = "a2tools-tray";
 
+/// Whether the tray icon is there: always a way back to the meter (a click
+/// shows it), so a meter the player hid stays hidden (`app::keep_something_on_screen`).
+pub fn present(app: &tauri::AppHandle) -> bool {
+    app.tray_by_id(ID).is_some()
+}
+
 /// Add the tray icon, where the desktop has a tray.
 pub fn spawn(app: &tauri::AppHandle) {
     if !crate::platform::window::tray_supported() {

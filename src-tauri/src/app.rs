@@ -158,7 +158,12 @@ fn set_meter_wanted(app: &tauri::AppHandle, shown: bool) {
 /// `except` (a window about to go) gone: the meter, another plugin window,
 /// or an unlocked widget (double-clicked, it opens its plugin's window).
 pub(crate) fn way_back_without(app: &tauri::AppHandle, except: &str) -> bool {
-    meter_wanted(app)
+    // The tray icon always is one (a click shows the meter). Without this,
+    // a player who turned "Show the meter" off, with locked widgets and the
+    // dock closed, had it turned on again for good at every start and each
+    // time a plugin window closed (2026-11-22).
+    crate::tray::present(app)
+        || meter_wanted(app)
         || app.webview_windows().into_iter().any(|(label, w)| {
             label != except && crate::plugins::is_plugin_window(&label)
                 && w.is_visible().unwrap_or(false) && !platform::window::is_hidden_in_place(&w)
@@ -4024,11 +4029,12 @@ pub fn run() {
                     crate::plugins::fps::forget_plugin(id);
                 }
                 // The meter hidden and its last plugin window closed: nothing
-                // would be left on screen, so the meter comes back.
+                // would be left on screen, so the meter comes back. Not with
+                // the tray icon there: it shows the meter (way_back_without).
                 let app = window.app_handle();
                 let label = window.label().to_string();
                 let others = app.webview_windows().into_keys().any(|l| l != label && crate::plugins::is_plugin_window(&l));
-                if !others && !meter_wanted(app) {
+                if !others && !meter_wanted(app) && !crate::tray::present(app) {
                     set_meter_wanted(app, true);
                 }
             }
