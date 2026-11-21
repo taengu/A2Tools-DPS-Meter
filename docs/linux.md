@@ -492,22 +492,26 @@ That is Hyprland's Lua configuration. If you use `hyprland.conf` instead, set th
 
 ### KDE Plasma 6.8.3: the meter flickers
 
-Since Plasma 6.8.3, KWin can show a window's previous frame for a moment after it changes ([KDE bug 528950](https://bugs.kde.org/show_bug.cgi?id=528950)): the meter flickers as its tooltips open under the mouse, and plugin icons can show old text through new. 2.0.99 does it too; it is KWin, not the meter. KDE has not fixed it yet. These KWin settings may avoid it while keeping native Wayland. Try them **one at a time**, in this order, and tell us which one helped:
+Since Plasma 6.8.3, KWin can show a window's previous frame for a moment after it changes ([KDE bug 528950](https://bugs.kde.org/show_bug.cgi?id=528950)): the meter flickers as its tooltips open under the mouse, and plugin icons can show old text through new. 2.0.99 does it too; it is KWin, not the meter. KDE has not fixed it yet.
 
-1. `KWIN_DRM_DISABLE_TRIPLE_BUFFERING=1` (until 2026-11-22 this guide gave the wrong name, `KWIN_DRM_NO_TRIPLE_BUFFERING`, which KWin ignores: if you tried that one, try this again)
-2. `KWIN_DISABLE_UDMABUF_IMPORT=1` (a player on an AMD RDNA3 GPU found it didn't help)
-3. `KWIN_USE_BUFFER_AGE=0` (the same player found it didn't help)
+**The fix for now:** run the meter through XWayland, which avoids the flicker. Start it with `A2TOOLS_XWAYLAND=1 a2tools-dps-meter` (or add the variable in the KDE menu: right-click A2Tools DPS Meter, Edit Application, environment variables); `GDK_BACKEND=x11` works too. From 2.1.3 its windows open where they were; on 2.1.2 they could open in the top left and take the overlay's clicks. Through XWayland the meter loses some of what native Wayland gives it on KDE, which is why it isn't the default.
 
-To try one, put it in a file KDE reads when your desktop starts, then **log out and back in**:
+**If the flicker stopped after an update,** please tell us your Plasma version (`plasmashell --version`) on [#198](https://github.com/taengu/A2Tools-DPS-Meter/issues/198): a newer Plasma may have fixed it.
+
+**KWin settings that didn't help.** Three KWin settings were candidates for keeping native Wayland. On an AMD (RDNA3) GPU a player found **none of them helps**:
+
+1. `KWIN_DRM_DISABLE_TRIPLE_BUFFERING=1` (until 2026-11-22 this guide gave a wrong name, `KWIN_DRM_NO_TRIPLE_BUFFERING`, which KWin ignores)
+2. `KWIN_DISABLE_UDMABUF_IMPORT=1`
+3. `KWIN_USE_BUFFER_AGE=0`
+
+They may still behave differently on Intel or NVIDIA. To try one, put it in a file KDE reads when your desktop starts, then **log out and back in**:
 
 ```bash
 mkdir -p ~/.config/plasma-workspace/env
 echo 'export KWIN_DRM_DISABLE_TRIPLE_BUFFERING=1' > ~/.config/plasma-workspace/env/a2tools-kwin.sh
 ```
 
-For the next one, run the `echo` line again with it instead (the file then holds only that one), and log out and back in. To undo: `rm ~/.config/plasma-workspace/env/a2tools-kwin.sh`, then log out and back in. These settings apply to your whole desktop, not just the meter: if anything else feels less smooth, undo them.
-
-If none helps, running the meter through XWayland avoids the flicker: start it with `A2TOOLS_XWAYLAND=1 a2tools-dps-meter` (or add the variable in the KDE menu: right-click A2Tools DPS Meter, Edit Application, environment variables). From 2.1.3 its windows open where they were; on 2.1.2 they could open in the top left and take the overlay's clicks. Through XWayland the meter loses what native Wayland gives it on KDE, so it stays a last resort.
+For the next one, run the `echo` line again with it instead (the file then holds only that one), and log out and back in. To undo: `rm ~/.config/plasma-workspace/env/a2tools-kwin.sh`, then log out and back in. These settings apply to your whole desktop, not just the meter: if anything else feels less smooth, undo them. Tell us your GPU with any result.
 
 ### SteamOS: the box won't start
 
