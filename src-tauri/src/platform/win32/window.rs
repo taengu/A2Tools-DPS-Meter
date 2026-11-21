@@ -646,3 +646,25 @@ pub fn covered_by(window: &tauri::WebviewWindow) -> Option<String> {
     }
     None
 }
+
+/// For the debug log's window snapshot (`window_diagnostics`).
+pub fn environment() -> String {
+    "Windows".into()
+}
+
+/// For the debug log's window snapshot: the window as Windows has it, shown
+/// or not, and whether it lets clicks through (WS_EX_TRANSPARENT), stays on
+/// top, is layered or never activates. tao's own idea can be stale (`shown`).
+pub fn diagnostics(window: &tauri::WebviewWindow) -> String {
+    let Some(hwnd) = hwnd_of(window) else { return "no window handle".into() };
+    let ex = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+    let has = |flag: WINDOW_EX_STYLE| ex & flag.0 != 0;
+    format!(
+        "shown {}, click-through {}, topmost {}, layered {}, never activates {}",
+        shown(window),
+        has(WS_EX_TRANSPARENT),
+        has(WS_EX_TOPMOST),
+        has(WS_EX_LAYERED),
+        has(WS_EX_NOACTIVATE)
+    )
+}

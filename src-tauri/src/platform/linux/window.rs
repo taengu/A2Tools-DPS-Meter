@@ -260,12 +260,52 @@ pub fn widget_click_through(window: &tauri::WebviewWindow, ignore: bool, keep: O
 /// Rectangles in CSS px, and the page's scale.
 type Keep = (Vec<(f64, f64, f64, f64)>, f64);
 
-/// The window's input region: everywhere (`ignore` false), the union of
-/// `keep`'s rectangles, or a single pixel (nothing to keep).
+/// The window's input region as the window asks for it (kept, so it is set
+/// again after a show: `reapply_click_through`, `reveal_in_place`).
 fn input_region(window: &tauri::WebviewWindow, ignore: bool, keep: Option<Keep>) -> bool {
-    use gtk::{cairo, prelude::*};
     click_through_asked().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string(), (ignore, keep.clone()));
-    let (ignore, keep) = if is_hidden_in_place(window) { (true, None) } else { (ignore, keep) };
+    apply_input_region(window, ignore, keep)
+}
+
+/// For the debug log: what an input region lets the mouse do.
+fn describe_input(ignore: bool, keep: &Option<Keep>, concealed: bool) -> String {
+    if concealed {
+        return "takes no clicks (concealed)".into();
+    }
+    if !ignore {
+        return "takes clicks everywhere".into();
+    }
+    match keep {
+        None => "takes no clicks (click-through)".into(),
+        Some((rects, scale)) => {
+            let shown: Vec<String> =
+                rects.iter().take(4).map(|(x, y, w, h)| format!("{x:.0},{y:.0} {w:.0}x{h:.0}")).collect();
+            let more = if rects.len() > 4 { format!(" and {} more", rects.len() - 4) } else { String::new() };
+            format!("takes clicks only in {} area(s): {}{more} (CSS px, scale {scale})", rects.len(), shown.join("; "))
+        }
+    }
+}
+
+/// The input region each window was last given, as described in the debug
+/// log: a change is logged, a repeat is not.
+fn input_logged() -> &'static std::sync::Mutex<std::collections::HashMap<String, String>> {
+    static LOGGED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, String>>> = std::sync::OnceLock::new();
+    LOGGED.get_or_init(Default::default)
+}
+
+/// The window's input region: everywhere (`ignore` false), the union of
+/// `keep`'s rectangles, or a single pixel (nothing to keep). A window
+/// `hide_in_place` concealed takes no clicks, whatever is asked.
+fn apply_input_region(window: &tauri::WebviewWindow, ignore: bool, keep: Option<Keep>) -> bool {
+    use gtk::{cairo, prelude::*};
+    let concealed = is_hidden_in_place(window);
+    let described = describe_input(ignore, &keep, concealed);
+    let changed = input_logged().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string(), described.clone())
+        != Some(described.clone());
+    if changed {
+        tracing::debug!(target: "windows", "{}: {described}", window.label());
+    }
+    let (ignore, keep) = if concealed { (true, None) } else { (ignore, keep) };
     let window = window.clone();
     super::dialog::on_gtk_thread(move || {
         let gtk_window = window.gtk_window().ok()?;
@@ -352,6 +392,10 @@ pub fn bring_forward(window: &tauri::WebviewWindow) {
 /// once the window is back.
 pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     use gtk::prelude::*;
+    if is_hidden_in_place(window) {
+        tracing::debug!(target: "windows", "{}: shown while concealed: it stays concealed, taking no clicks", window.label());
+    }
+    tracing::debug!(target: "windows", "{}: shown (on top, without focus)", window.label());
     if let Ok(title) = window.title() {
         super::focus::note_quiet_show(&title);
     }
@@ -369,6 +413,7 @@ pub fn show_on_top_without_focus(window: &tauri::WebviewWindow) {
     {
         // Under XWayland the meter moves its own windows; on native Wayland
         // only Hyprland can (`set_position` does nothing there).
+        tracing::debug!(target: "windows", "{}: back to {x},{y} (Hyprland)", window.label());
         if super::focus::hyprland_native() {
             super::focus::hyprland_move(window, x, y);
         } else {
@@ -411,6 +456,7 @@ fn reapply_click_through(window: &tauri::WebviewWindow) {
 
 /// Hide a window `show_on_top_without_focus` shows (see the Windows one).
 pub fn hide_without_focus(window: &tauri::WebviewWindow) {
+    tracing::debug!(target: "windows", "{}: hidden (unmapped)", window.label());
     let _ = window.hide();
 }
 
@@ -447,10 +493,12 @@ pub fn hide_in_place(window: &tauri::WebviewWindow) {
     if super::focus::hyprland_places_windows() {
         // Before it goes: Hyprland places a window again whenever it is mapped.
         super::focus::save_place(window);
+        tracing::debug!(target: "windows", "{}: hidden for good (Hyprland places it again)", window.label());
         hide_without_focus(window);
         return;
     }
     if super::focus::kwin_places_windows() {
+        tracing::debug!(target: "windows", "{}: hidden for good (KWin places it again)", window.label());
         hide_without_focus(window);
         return;
     }
@@ -475,17 +523,20 @@ pub fn hide_in_place(window: &tauri::WebviewWindow) {
         hide_without_focus(window);
         return;
     };
+    tracing::debug!(target: "windows", "{}: concealed in place (transparent, mapped)", window.label());
     hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string(), skipped_taskbar);
     click_through_except(window, true, None);
     let _ = window.set_skip_taskbar(true);
 }
 
-/// Show a window `hide_in_place` hid, where it is; false if it was not hidden
-/// that way (then it is shown as usual).
-pub fn reveal_in_place(window: &tauri::WebviewWindow) -> bool {
-    let Some(skipped_taskbar) = hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).remove(window.label()) else {
-        return false;
-    };
+/// The window's concealment, if `hide_in_place` concealed it, taken off its
+/// list: whether it stayed out of the taskbar before.
+fn take_concealed(window: &tauri::WebviewWindow) -> Option<bool> {
+    hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).remove(window.label())
+}
+
+/// A concealed window visible again, taking clicks.
+fn unconceal(window: &tauri::WebviewWindow, skipped_taskbar: bool) {
     click_through_except(window, false, None);
     // Back as it was: a widget went into the taskbar and Alt+Tab once shown
     // again, and Alt+Tab then gave it the focus, the game's cursor gone and
@@ -498,6 +549,16 @@ pub fn reveal_in_place(window: &tauri::WebviewWindow) -> bool {
             gtk_window.set_opacity(1.0);
         }
     });
+}
+
+/// Show a window `hide_in_place` hid, where it is; false if it was not hidden
+/// that way (then it is shown as usual).
+pub fn reveal_in_place(window: &tauri::WebviewWindow) -> bool {
+    let Some(skipped_taskbar) = take_concealed(window) else {
+        return false;
+    };
+    tracing::debug!(target: "windows", "{}: revealed in place", window.label());
+    unconceal(window, skipped_taskbar);
     let _ = window.set_always_on_top(true);
     true
 }
@@ -725,4 +786,64 @@ pub fn is_on_screen(window: &tauri::WebviewWindow) -> bool {
 /// Another program's window over most of this one: only asked on Windows.
 pub fn covered_by(_window: &tauri::WebviewWindow) -> Option<String> {
     None
+}
+
+/// For the debug log's window snapshot (`window_diagnostics`): the display
+/// the meter runs on and who places its windows.
+pub fn environment() -> String {
+    let var = |name: &str| std::env::var(name).unwrap_or_else(|_| "-".into());
+    let backend = super::dialog::on_gtk_thread(|| {
+        use gtk::prelude::*;
+        gtk::gdk::Display::default().map(|d| d.type_().name().to_string())
+    })
+    .flatten()
+    .unwrap_or_else(|| "?".into());
+    let kwin = if super::process::is_kde() {
+        std::process::Command::new("kwin_wayland")
+            .arg("--version")
+            .output()
+            .ok()
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| "?".into())
+    } else {
+        "-".into()
+    };
+    format!(
+        "session {}, desktop {}, WAYLAND_DISPLAY {}, DISPLAY {}, GDK_BACKEND {}, display {backend}, KWin {kwin}, \
+         Hyprland {}, KWin places windows {}, meter places its own {}, click-through by input region {}, \
+         WEBKIT_DMABUF_RENDERER_FORCE_SHM {}, WEBKIT_DISABLE_DMABUF_RENDERER {}",
+        var("XDG_SESSION_TYPE"),
+        var("XDG_CURRENT_DESKTOP"),
+        var("WAYLAND_DISPLAY"),
+        var("DISPLAY"),
+        var("GDK_BACKEND"),
+        super::process::is_hyprland(),
+        super::focus::kwin_places_windows(),
+        super::focus::places_own_windows(),
+        click_through_by_region(),
+        var("WEBKIT_DMABUF_RENDERER_FORCE_SHM"),
+        var("WEBKIT_DISABLE_DMABUF_RENDERER"),
+    )
+}
+
+/// For the debug log's window snapshot: what only this platform knows of a
+/// window (concealed, its input region, where KWin keeps it).
+pub fn diagnostics(window: &tauri::WebviewWindow) -> String {
+    let concealed = is_hidden_in_place(window);
+    let asked = click_through_asked().lock().unwrap_or_else(|p| p.into_inner()).get(window.label()).cloned();
+    let asked = match asked {
+        Some((ignore, keep)) => describe_input(ignore, &keep, false),
+        None => "never set (takes clicks everywhere)".into(),
+    };
+    let applied = input_logged().lock().unwrap_or_else(|p| p.into_inner()).get(window.label()).cloned();
+    let kept = if super::focus::kwin_places_windows() || super::focus::hyprland_places_windows() {
+        super::focus::place_of(window).map(|(x, y)| format!("{x},{y}")).unwrap_or_else(|| "none".into())
+    } else {
+        "-".into()
+    };
+    format!(
+        "concealed {concealed}, input asked: {asked}, input applied: {}, kept place {kept}",
+        applied.unwrap_or_else(|| "never".into())
+    )
 }

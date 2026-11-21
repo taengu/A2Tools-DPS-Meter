@@ -441,6 +441,15 @@ Along with them, tell us:
 
 The logs contain character names, yours and those of players near you, so send them only to us: on [Discord](https://discord.gg/Aion2Global) or in a [GitHub issue](https://github.com/taengu/A2Tools-DPS-Meter/issues).
 
+### When the problem is a window
+
+For a meter that takes no clicks, windows in the wrong place, a flicker, or a window behind the game, no packet log is needed:
+
+1. In the meter, open **Settings**. Under **Diagnostics**, tick **Enable debug logging** (from 2.1.3 this also writes down every window's state as it is then).
+2. Make the problem happen, and leave it showing.
+3. While it shows, open **Settings → Advanced → Send Logs to Dev**: the meter writes every window's state once more and sends the log. If the meter takes no clicks at all, send `~/.local/share/com.a2tools.dps-meter/debug.log` yourself instead.
+4. Tell us the report code it gives, what you saw, your desktop (KDE Plasma, GNOME or other) with its version, and whether you start the meter with `GDK_BACKEND` or `A2TOOLS_XWAYLAND` set.
+
 ## Tiling desktops (Hyprland, Sway, i3)
 
 A tiling window manager tiles every new window unless told otherwise, which breaks an overlay: the meter is squeezed beside the game, and the tooltips on its damage bars appear in the wrong place. Give the meter's window (class `a2tools-dps-meter`) a rule that makes it float, keeps it on every workspace, and turns off blur and borders.

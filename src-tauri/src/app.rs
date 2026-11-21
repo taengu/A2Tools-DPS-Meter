@@ -1485,9 +1485,14 @@ fn set_language(app: tauri::AppHandle, state: tauri::State<'_, AppState>, langua
 }
 
 #[tauri::command]
-fn set_debug_logging(state: tauri::State<'_, AppState>, enabled: bool) {
+fn set_debug_logging(app: tauri::AppHandle, state: tauri::State<'_, AppState>, enabled: bool) {
     logging::logger::set_debug_enabled(enabled, &state.app_data_dir);
     state.settings.set("dpsMeter.debugLoggingEnabled", if enabled { "true" } else { "false" });
+    // The windows as they are now, so a log started to catch a window
+    // problem has their state from the start.
+    if enabled {
+        crate::window_diagnostics::log_snapshot(&app, "debug logging turned on");
+    }
 }
 
 /// Settings' "Run as administrator": on restarts the meter elevated (false
@@ -1529,8 +1534,11 @@ fn dev_logs_preview(state: tauri::State<'_, AppState>) -> Vec<serde_json::Value>
 /// logging). Returns the report code the player passes on.
 #[tauri::command]
 async fn send_logs_to_dev(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<share::dev_logs::SendResult, String> {
+    // The windows as they are while the player sends, in the log it sends.
+    crate::window_diagnostics::log_snapshot(&app, "Send Logs to Dev");
     share::dev_logs::send(&state.http, &state.app_data_dir).await
 }
 
@@ -4125,6 +4133,12 @@ pub fn run() {
             // Load logging settings from saved state
             if settings.get("dpsMeter.debugLoggingEnabled").as_deref() == Some("true") {
                 logging::logger::set_debug_enabled(true, &app_data_dir);
+                // The windows once they are up and placed.
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    crate::window_diagnostics::log_snapshot(&handle, "5 s after start");
+                });
             }
             if settings.get("dpsMeter.saveRawPackets").as_deref() == Some("true") {
                 logging::logger::set_packet_log_enabled(true, &app_data_dir);
