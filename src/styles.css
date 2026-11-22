@@ -9783,3 +9783,391 @@ html.a2-offline .historyUploadBtn {
 .detailsPanel .detailsHeader .detailsChatCopyBtn.isCopied { color: var(--metric-hps, #7ee2a8); }
 .header .headerBtn.chatCopyBtn.isCopyFailed,
 .detailsPanel .detailsHeader .detailsChatCopyBtn.isCopyFailed { color: #ff6b6b; }
+
+/* Fight compare (fightCompare.js): two players of a saved fight side by side.
+   While it is open it takes the whole Details body. */
+.detailsPanel {
+  --compare-a: #4fc3f7;
+  --compare-b: #ffb74d;
+}
+.fightCompareBtn {
+  margin-right: 6px;
+  padding: 2px 10px;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  flex: none;
+}
+
+.fightCompareBtn.isActive {
+  background: rgba(79,195,247,.25);
+  border-color: var(--compare-a);
+}
+
+.fightCompare {
+  display: none;
+}
+
+.detailsPanel.fightCompareOpen .detailsBody {
+  display: block;
+  overflow-y: auto;
+}
+
+.detailsPanel.fightCompareOpen .detailsBody>:not(.fightCompare) {
+  display: none;
+}
+
+.detailsPanel.fightCompareOpen .fightCompare {
+  display: block;
+  padding: 12px 14px 18px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.fightCompare h3 {
+  margin: 20px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: .9;
+  letter-spacing: .04em;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.fightCompare h3:first-child {
+  margin-top: 2px;
+}
+
+.fightCompare h3 small {
+  font-weight: 400;
+  opacity: .6;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.fightCompare .num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fightCompare .dim {
+  opacity: .6;
+}
+
+.fightCompare .cA {
+  color: var(--compare-a);
+}
+
+.fightCompare .cB {
+  color: var(--compare-b);
+}
+
+.fightCompare table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.fightCompare th {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: .75;
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+  white-space: nowrap;
+}
+
+.fightCompare td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+
+.fightCompare th.num {
+  text-align: right;
+}
+
+.fightCompare th:first-child,
+.fightCompare td:first-child {
+  text-align: left;
+}
+
+.cmpParty th.nm {
+  text-align: left;
+}
+
+.cmpParty td.nm {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmpParty .pk {
+  display: inline-block;
+  width: 22px;
+  height: 20px;
+  margin-right: 3px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.22);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: .45;
+  padding: 0;
+}
+
+.cmpParty .pk:hover {
+  opacity: .8;
+}
+
+.cmpParty .pk.onA {
+  opacity: 1;
+  background: var(--compare-a);
+  border-color: var(--compare-a);
+  color: #0c1628;
+}
+
+.cmpParty .pk.onB {
+  opacity: 1;
+  background: var(--compare-b);
+  border-color: var(--compare-b);
+  color: #0c1628;
+}
+
+.cmpParty tr.isA td.nm {
+  color: var(--compare-a);
+  font-weight: 700;
+}
+
+.cmpParty tr.isB td.nm {
+  color: var(--compare-b);
+  font-weight: 700;
+}
+
+.cmpShare {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.cmpShare .track {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.08);
+  overflow: hidden;
+}
+
+.cmpShare .fill {
+  height: 100%;
+  border-radius: 4px;
+  background: rgba(255,255,255,.45);
+}
+
+.cmpVs {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.cmpVs .side {
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: rgba(0,0,0,.18);
+  min-width: 0;
+}
+
+.cmpVs .side.a {
+  border-top: 3px solid var(--compare-a);
+}
+
+.cmpVs .side.b {
+  border-top: 3px solid var(--compare-b);
+  text-align: right;
+}
+
+.cmpVs .side b {
+  display: block;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmpVs .side .big {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cmpVs .mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 110px;
+  text-align: center;
+}
+
+.cmpVs .mid .gap {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.cmpVs .mid button {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.25);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.cmpVerdict {
+  margin: 10px 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cmpSummary {
+  margin: 2px 0 0;
+  opacity: .9;
+}
+
+.cmpFactors {
+  display: grid;
+  grid-template-columns: minmax(150px,auto) auto auto minmax(120px,1fr) auto;
+  column-gap: 14px;
+  row-gap: 6px;
+  align-items: center;
+}
+
+.cmpFactors .hd {
+  font-size: 11px;
+  opacity: .7;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+  padding-bottom: 3px;
+}
+
+.cmpFactors .bar {
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255,255,255,.08);
+  overflow: hidden;
+}
+
+.cmpFactors .bar i {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+}
+
+.cmpNotes {
+  margin: 12px 0 0;
+  padding-left: 18px;
+}
+
+.cmpNotes li {
+  margin: 4px 0;
+}
+
+.cmpRates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(140px,1fr));
+  gap: 8px;
+}
+
+.cmpRate {
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,.15);
+}
+
+.cmpRate .lb {
+  font-size: 11px;
+  opacity: .7;
+  text-align: center;
+}
+
+.cmpRate .vals {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.cmpRate .d {
+  font-size: 11px;
+  text-align: center;
+}
+
+.cmpSkills td.sk {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmpSkills .ga {
+  background: rgba(79,195,247,.06);
+}
+
+.cmpSkills .gb {
+  background: rgba(255,183,77,.06);
+}
+
+.cmpSkills td.best {
+  font-weight: 700;
+}
+
+.cmpDmg {
+  position: relative;
+  min-width: 90px;
+}
+
+.cmpDmg i {
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  opacity: .25;
+  border-radius: 3px;
+}
+
+.cmpDmg span {
+  position: relative;
+}
+
+.cmpScroll {
+  overflow-x: auto;
+}
+
+.cmpTwo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width:760px) {
+  .cmpTwo {
+    grid-template-columns: 1fr;
+  }
+}
