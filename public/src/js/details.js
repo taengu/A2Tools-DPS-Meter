@@ -72,6 +72,7 @@ const createDetailsUI = ({
   // when a fight is opened (see open/openHistoryFight).
   let detailsMode = "dmg";
   let historyRecord = null;
+  let fightCompare = null;
   let fightStartMs = 0;
   let fightBossName = "";
   // The instance the fight was in (0 in the open world), for its difficulty.
@@ -3711,6 +3712,7 @@ const createDetailsUI = ({
     if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
     detailsMode = "dmg";
     historyRecord = record;
+    fightCompare?.reset();
     liveBuffs = null;
     openSeq++;
     const seq = openSeq;
@@ -3968,6 +3970,17 @@ const createDetailsUI = ({
       count: stats.length,
     };
   };
+
+  // ── Fight compare (fightCompare.js) ──
+  // Two players of a saved fight side by side, over the whole body; closed
+  // when the window shows another fight (here) or closes (fightCompare.js
+  // watches the panel's "open" class).
+  fightCompare = window.fightCompare?.attach?.({
+    panel: detailsPanel,
+    record: () => historyRecord,
+    isOpen: () => detailsPanel.classList.contains("open"),
+  });
+  fightCompare?.reset();
 
   return { open, close, isOpen, isPinned, render, updateLabels, refresh, updateGridColumns, openHistoryFight, resetDetailsMode, refreshPartyStat, getChatResult };
 };
