@@ -392,7 +392,7 @@ class DpsApp {
       this.roundDps = this.safeGetSetting(this.storageKeys.roundDps) !== "false";
       this.showDpsSuffix = this.safeGetSetting(this.storageKeys.showDpsSuffix) !== "false";
       const savedLimit = parseInt(this.safeGetSetting(this.storageKeys.playerLimit), 10);
-      this.playerLimit = Number.isFinite(savedLimit) && savedLimit >= 1 ? savedLimit : 6;
+      this.playerLimit = Number.isFinite(savedLimit) && savedLimit >= 1 ? savedLimit : 10;
       this.setupSettingsPanel();
       this.refreshSettingsStatus();
       this.i18n?.onChange?.((lang) => {
@@ -568,7 +568,7 @@ class DpsApp {
     this.meterTotalDpsEl = document.querySelector(".meterTotalDps");
     this.meterTotalDmgEl = document.querySelector(".meterTotalDmg");
     const savedLimit = parseInt(this.safeGetSetting(this.storageKeys.playerLimit), 10);
-    this.playerLimit = Number.isFinite(savedLimit) && savedLimit >= 1 ? savedLimit : 6;
+    this.playerLimit = Number.isFinite(savedLimit) && savedLimit >= 1 ? savedLimit : 10;
 
     this.detailsPanel = document.querySelector(".detailsPanel");
     this.detailsClose = document.querySelector(".detailsClose");

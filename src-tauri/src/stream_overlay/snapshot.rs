@@ -72,7 +72,7 @@ impl ViewOptions {
         let limit = get("dpsMeter.playerLimit")
             .and_then(|v| v.trim().parse::<usize>().ok())
             .filter(|&n| n >= 1)
-            .unwrap_or(6);
+            .unwrap_or(10);
         let pin_you = get("dpsMeter.pinMeToTop").as_deref() == Some("true");
         let your_name = get("dpsMeter.streamOverlayName")
             .map(|n| n.trim().chars().filter(|c| !c.is_control()).take(NAME_CHARS).collect::<String>())

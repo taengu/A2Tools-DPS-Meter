@@ -267,7 +267,7 @@ const createMeterUI = ({
   };
 
   const getDisplayRows = (sortedAll) => {
-    const limit = (typeof getPlayerLimit === "function" ? getPlayerLimit() : 6) || 6;
+    const limit = (typeof getPlayerLimit === "function" ? getPlayerLimit() : 10) || 10;
     const topN = sortedAll.slice(0, limit);
     const user = sortedAll.find((x) => x.isUser);
 

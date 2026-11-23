@@ -799,9 +799,10 @@ const createDetailsUI = ({
     detailsPartyListEl.innerHTML = "";
     const allActors = Array.isArray(stats) ? stats : [];
     if (allActors.length === 0) return;
-    // Keep the same eight players, plus the unattributed aggregate when
-    // present. Others must not push a real player out of the list.
-    const actors = [...allActors.filter((actor) => !actor.isOthers).slice(0, 8),
+    // Every player (up to the 24 an upload allows), plus the unattributed
+    // aggregate when present. Others must not push a real player out of the
+    // list. It was eight: a 10-player raid (Sanctuary) lost its bottom two.
+    const actors = [...allActors.filter((actor) => !actor.isOthers).slice(0, 24),
       ...allActors.filter((actor) => actor.isOthers)].sort((a, b) => b.totalDmg - a.totalDmg);
 
     const topDmg = actors.reduce((m, a) => Math.max(m, Number(a.totalDmg) || 0), 1);
