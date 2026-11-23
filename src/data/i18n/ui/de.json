@@ -616,6 +616,12 @@
         "off": "Kein Limit"
       }
     },
+    "historyLimit": {
+      "label": "Gespeicherte Kämpfe im Verlauf",
+      "options": {
+        "unlimited": "Kein Limit"
+      }
+    },
     "showSupporterColors": "Unterstützerfarben anzeigen",
     "showSupporterColorsHint": "Namen von Unterstützern erscheinen golden. Rein kosmetisch — es ändert keine Zahl.",
     "account": {
@@ -683,6 +689,7 @@
       "textureOffset": "Jeder Balken beginnt seine Textur an einer anderen Stelle, damit nicht alle gleich aussehen.",
       "trainingMode": "Im Trainingsmodus: welche Puppen das Detailfenster zeigt – alle zusammen oder nur die, die du am stärksten triffst.",
       "trainTimeLimit": "Im Trainingsmodus zählen Treffer auf Trainingspuppen so lange nach deinem ersten. Danach hält das Meter an, bis du auf Aktualisieren drückst, was die Zeit neu startet.",
+      "historyLimit": "Wie viele Kämpfe der Verlauf behält. Ältere werden gelöscht, wenn neue gespeichert werden, außer Kämpfe mit einer persönlichen Bestleistung. Ein Kampf belegt etwa 70 KB, 5.000 also etwa 350 MB. Ein kleinerer Wert löscht beim nächsten Speichern die ältesten Kämpfe über dem neuen Limit.",
       "allTargetsWindow": "Im Modus „Alle Ziele“ zählt das Meter alle Ziele, die innerhalb dieser Zeit vor dem letzten Treffer getroffen wurden.",
       "updateRate": "Wie oft sich die Zahlen des Meters aktualisieren. Schneller zeigt Treffer früher, braucht aber mehr CPU.",
       "partyPresence": "Gruppenmitglieder, die auch A2Tools nutzen, sehen ein kleines A2 neben deinem Namen und du ihres. Jeder in deiner Gruppe mit A2Tools sieht es und weiß damit, dass du ein Drittanbieter-Meter nutzt. Gesendet werden nur Hashes von Charakternamen und Servern.",

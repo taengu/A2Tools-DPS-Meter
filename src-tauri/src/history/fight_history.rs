@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
@@ -15,7 +16,19 @@ use crate::entity::fight_record::{FightRecord, FightSummary};
 /// roughly 35 MB of history, and it is the first limit this directory has ever
 /// had. Generous on purpose: someone who has been playing for months should not
 /// find their history quietly truncated because a number was chosen tightly.
-const MAX_HISTORY_FIGHTS: usize = 500;
+pub const MAX_HISTORY_FIGHTS: usize = 500;
+
+/// The limits Settings → Advanced offers (0: no limit), and the setting.
+pub const HISTORY_LIMITS: [usize; 5] = [500, 1000, 2000, 5000, 0];
+pub const HISTORY_LIMIT_KEY: &str = "dpsMeter.historyLimit";
+
+/// The limit a stored setting names: one of `HISTORY_LIMITS`, else the default.
+pub fn history_limit(setting: Option<&str>) -> usize {
+    setting
+        .and_then(|s| if s == "unlimited" { Some(0) } else { s.parse().ok() })
+        .filter(|n| HISTORY_LIMITS.contains(n))
+        .unwrap_or(MAX_HISTORY_FIGHTS)
+}
 
 /// Whether `name` is a single file name: no path separator, no "..", no
 /// drive prefix. Fight ids and icon keys come from the webview and become
@@ -90,6 +103,8 @@ pub struct FightHistoryManager {
     /// Personal bests (`personal_bests.json`), kept up as the summaries change.
     bests_path: PathBuf,
     bests: Mutex<super::personal_bests::PersonalBests>,
+    /// How many fights are kept (0: all), from the setting (`set_limit`).
+    limit: AtomicUsize,
 }
 
 impl FightHistoryManager {
@@ -103,7 +118,13 @@ impl FightHistoryManager {
             cache: Mutex::new(None),
             bests: Mutex::new(super::personal_bests::PersonalBests::load(&app_data_dir.join("personal_bests.json"))),
             bests_path: app_data_dir.join("personal_bests.json"),
+            limit: AtomicUsize::new(MAX_HISTORY_FIGHTS),
         }
+    }
+
+    /// How many fights to keep from now on (0: all of them).
+    pub fn set_limit(&self, keep: usize) {
+        self.limit.store(keep, Ordering::Relaxed);
     }
 
     fn stamp(&self) -> DirStamp {
@@ -141,7 +162,11 @@ impl FightHistoryManager {
             .map_err(|e| format!("Write error: {}", e))?;
         self.invalidate();
         info!("Fight saved: {}", record.id);
-        self.prune(MAX_HISTORY_FIGHTS);
+        // Settings → Advanced: 500 by default, up to 5000 or no limit.
+        let keep = self.limit.load(Ordering::Relaxed);
+        if keep > 0 {
+            self.prune(keep);
+        }
         Ok(())
     }
 
@@ -301,6 +326,16 @@ impl FightHistoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_history_limit_setting_names_one_of_the_offered_limits() {
+        assert_eq!(history_limit(None), 500);
+        assert_eq!(history_limit(Some("5000")), 5000);
+        assert_eq!(history_limit(Some("unlimited")), 0);
+        // Anything else is the default: a hand-edited 3 must not delete history.
+        assert_eq!(history_limit(Some("3")), 500);
+        assert_eq!(history_limit(Some("lots")), 500);
+    }
 
     #[test]
     fn ids_that_leave_the_directory_are_refused() {

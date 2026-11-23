@@ -15,6 +15,8 @@ const SETTING_CHOICES = {
   // How long hits on training dummies count after your first (app.rs
   // TRAIN_TIME_LIMIT_KEY); "0" for no limit. Only the refresh starts it again.
   trainTimeLimitMs: { allowed: ["0", "30000", "60000", "120000", "180000", "300000"], fallback: "0" },
+  // How many fights the history keeps (history/fight_history.rs HISTORY_LIMITS).
+  historyLimit: { allowed: ["500", "1000", "2000", "5000", "unlimited"], fallback: "500" },
   // The figure beside each player's name, in the meter and in Details.
   partyStat: { allowed: ["combatPower", "gearScore", "both", "off"], fallback: "combatPower" },
   // When the last fight leaves the screen after the zone changes.
@@ -112,6 +114,7 @@ class DpsApp {
       updateRateMs: "dpsMeter.updateRateMs",
       trainSelectionMode: "dpsMeter.trainSelectionMode",
       trainTimeLimitMs: "dpsMeter.trainTimeLimitMs",
+      historyLimit: "dpsMeter.historyLimit",
       partyStat: "dpsMeter.partyStat",
       clearOnZone: "dpsMeter.clearOnZone",
       barTexture: "dpsMeter.barTexture",
@@ -3029,6 +3032,8 @@ class DpsApp {
     this.trainSelectionModeDropdownMenu = document.querySelector(".trainSelectionModeDropdownMenu");
     this.trainTimeLimitDropdownBtn = document.querySelector(".trainTimeLimitDropdownBtn");
     this.trainTimeLimitDropdownMenu = document.querySelector(".trainTimeLimitDropdownMenu");
+    this.historyLimitDropdownBtn = document.querySelector(".historyLimitDropdownBtn");
+    this.historyLimitDropdownMenu = document.querySelector(".historyLimitDropdownMenu");
     this.meterAnchorDropdownBtn = document.querySelector(".meterAnchorDropdownBtn");
     this.meterAnchorDropdownMenu = document.querySelector(".meterAnchorDropdownMenu");
     this.meterAnchorRow = this.meterAnchorDropdownBtn?.closest?.(".settingsRow") || null;
@@ -3119,6 +3124,7 @@ class DpsApp {
       allTargetsWindowMs: "120000",
       trainSelectionMode: "all",
       trainTimeLimitMs: "0",
+      historyLimit: "500",
       meterAnchor: "top",
       partyStat: "combatPower",
       discordStat: "off",
@@ -4335,6 +4341,10 @@ class DpsApp {
       { value: "0", label: this.i18n?.t("settings.trainTimeLimit.options.off", "No limit") },
       ...allTargetsWindowOptions,
     ];
+    const historyLimitOptions = [
+      ...["500", "1000", "2000", "5000"].map((value) => ({ value, label: Number(value).toLocaleString() })),
+      { value: "unlimited", label: this.i18n?.t("settings.historyLimit.options.unlimited", "No limit") },
+    ];
     const meterAnchorOptions = [
       { value: "top", label: this.i18n?.t("settings.meterAnchor.options.top", "Top") },
       { value: "middle", label: this.i18n?.t("settings.meterAnchor.options.middle", "Centre") },
@@ -4575,6 +4585,18 @@ class DpsApp {
         if (value == null) return;
         this.settingsSelections.trainTimeLimitMs = value;
         this.safeSetSetting(this.storageKeys.trainTimeLimitMs, value);
+      }
+    );
+    // Read by the backend at each save (app.rs apply_history_limit).
+    setupDropdown(
+      this.historyLimitDropdownBtn,
+      this.historyLimitDropdownMenu,
+      historyLimitOptions,
+      pickSettingChoice("historyLimit", this.safeGetSetting(this.storageKeys.historyLimit)),
+      (value) => {
+        if (value == null) return;
+        this.settingsSelections.historyLimit = value;
+        this.safeSetSetting(this.storageKeys.historyLimit, value);
       }
     );
     setupDropdown(

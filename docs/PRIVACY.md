@@ -108,7 +108,8 @@ different things get written to disk, and they are **not** equally sensitive.
 One JSON file per boss fight, saved automatically. It holds damage, skills,
 timings, and per-player summaries.
 
-The meter keeps the **500 most recent fights** and deletes older ones as new
+The meter keeps the **500 most recent fights** by default (Settings → Advanced
+→ Fights kept in history: 500, 1,000, 2,000, 5,000 or no limit) and deletes older ones as new
 ones are saved (`MAX_HISTORY_FIGHTS` in `src-tauri/src/history/fight_history.rs`;
 a fight is about 70 KB). A fight that holds one of your personal bests is never
 deleted, and deleted fights still count in the personal-best totals. To keep

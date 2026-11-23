@@ -627,11 +627,18 @@ async fn get_personal_bests(app: tauri::AppHandle) -> Result<Vec<crate::history:
     }).await
 }
 
+/// The history limit the player chose (Settings → Advanced), for the next prune.
+fn apply_history_limit(state: &AppState) {
+    let setting = state.settings.get(crate::history::fight_history::HISTORY_LIMIT_KEY);
+    state.fight_history.set_limit(crate::history::fight_history::history_limit(setting.as_deref()));
+}
+
 #[tauri::command]
 async fn save_fight(app: tauri::AppHandle, record: FightRecord) -> Result<(), String> {
     crate::blocking::HISTORY.run(move || {
         let state = app.state::<AppState>();
         let _saving = state.fight_save.lock();
+        apply_history_limit(&state);
         state.fight_history.save_fight(&record)
     }).await?
 }
@@ -721,6 +728,7 @@ fn auto_upload(app: tauri::AppHandle, record: FightRecord) {
 /// finished ones when that is on.
 #[cfg_attr(not(feature = "online"), allow(unused_variables))]
 fn save_fight_records(app: &tauri::AppHandle, state: &AppState, records: Vec<FightRecord>, names: &share::SliceNames) {
+    apply_history_limit(state);
     for record in &records {
         let _ = state.fight_history.save_fight(record);
         if !record.is_train {

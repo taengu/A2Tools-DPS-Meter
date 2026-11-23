@@ -616,6 +616,12 @@
         "off": "Aucune limite"
       }
     },
+    "historyLimit": {
+      "label": "Combats gardés dans l'historique",
+      "options": {
+        "unlimited": "Aucune limite"
+      }
+    },
     "showSupporterColors": "Afficher les couleurs des soutiens",
     "showSupporterColorsHint": "Le nom des soutiens s'affiche en doré. Purement esthétique — aucun chiffre n'est modifié.",
     "account": {
@@ -683,6 +689,7 @@
       "textureOffset": "Chaque barre commence sa texture à un endroit différent, pour qu'elles ne se ressemblent pas toutes.",
       "trainingMode": "En mode entraînement, quels mannequins la fenêtre Détails affiche : tous ensemble, ou seulement celui que tu frappes le plus.",
       "trainTimeLimit": "En mode Entraînement, les coups sur les mannequins comptent pendant cette durée après votre premier. Le compteur s'arrête ensuite jusqu'à ce que vous appuyiez sur Actualiser, qui relance le temps.",
+      "historyLimit": "Le nombre de combats gardés dans l'historique. Les plus anciens sont supprimés quand de nouveaux sont enregistrés, sauf ceux qui détiennent un record personnel. Un combat fait environ 70 Ko, donc 5 000 environ 350 Mo. Baisser la limite supprime au prochain enregistrement les combats les plus anciens au-delà.",
       "allTargetsWindow": "En mode Toutes les cibles, le compteur additionne chaque cible touchée dans ce délai avant le dernier coup.",
       "updateRate": "À quelle fréquence les chiffres du compteur se rafraîchissent. Plus rapide affiche les coups plus tôt mais utilise plus de CPU.",
       "partyPresence": "Les membres du groupe qui utilisent aussi A2Tools voient une petite étiquette A2 à côté de votre nom, et vous voyez la leur. Tout membre du groupe utilisant A2Tools peut la voir et saura donc que vous utilisez un meter tiers. Seuls des hachages des noms de personnages et des serveurs sont envoyés.",

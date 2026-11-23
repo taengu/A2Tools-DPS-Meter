@@ -616,6 +616,12 @@
         "off": "Sin límite"
       }
     },
+    "historyLimit": {
+      "label": "Combates guardados en el historial",
+      "options": {
+        "unlimited": "Sin límite"
+      }
+    },
     "showSupporterColors": "Mostrar colores de mecenas",
     "showSupporterColorsHint": "Los nombres de los mecenas se muestran en dorado. Solo estético — no cambia ninguna cifra.",
     "account": {
@@ -683,6 +689,7 @@
       "textureOffset": "Cada barra empieza su textura en un punto distinto, para que no se vean todas iguales.",
       "trainingMode": "En modo entrenamiento, qué muñecos muestra la ventana de detalles: todos juntos o solo el que más golpeas.",
       "trainTimeLimit": "En el modo Entrenamiento, los golpes a los muñecos cuentan durante este tiempo tras el primero. Después el medidor se detiene hasta que pulses Actualizar, que reinicia el tiempo.",
+      "historyLimit": "Cuántos combates guarda el historial. Los más antiguos se borran al guardar nuevos, salvo los que tienen una marca personal. Un combate ocupa unos 70 KB, así que 5000 ocupan unos 350 MB. Bajar el límite borra en el siguiente guardado los combates más antiguos que lo superen.",
       "allTargetsWindow": "En el modo Todos los objetivos, el medidor suma cada objetivo golpeado dentro de este tiempo antes del último golpe.",
       "updateRate": "Cada cuánto se actualizan los números del medidor. Más rápido muestra los golpes antes pero usa más CPU.",
       "partyPresence": "Los miembros del grupo que también usan A2Tools ven una pequeña etiqueta A2 junto a tu nombre, y tú ves la suya. Cualquiera del grupo que use A2Tools puede verla, así que sabrá que usas un medidor de terceros. Solo se envían hashes de nombres de personaje y servidores.",
