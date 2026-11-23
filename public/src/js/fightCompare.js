@@ -305,6 +305,11 @@ const CMP_B = "#ffb74d";
 const cmpEsc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cmpPct = (v, d = 1) => `${v.toFixed(d)}%`;
 const cmpSigned = (v, d = 1, unit = "%") => `${v >= 0 ? "+" : ""}${v.toFixed(d)}${unit}`;
+// A class's name in the UI language (records keep the Korean name).
+const cmpJob = (job) => {
+  const i18n = typeof window !== "undefined" ? window.i18n : null;
+  return cmpEsc(i18n?.getClassName?.(job) || job || "");
+};
 // A skill's name as HTML, a DoT marked as Details marks it.
 const cmpSkillName = (tx, s) => (s.isDot ? tx.dotName({ name: cmpEsc(s.name) }) : cmpEsc(s.name));
 
@@ -348,7 +353,7 @@ const attachCompare = ({ panel, record }) => {
       const cls = id === pickA ? "isA" : id === pickB ? "isB" : "";
       return `<tr class="${cls}">
         <td style="white-space:nowrap"><button type="button" class="pk${id === pickA ? " onA" : ""}" data-pick="A" data-id="${id}">A</button><button type="button" class="pk${id === pickB ? " onB" : ""}" data-pick="B" data-id="${id}">B</button></td>
-        <td class="nm">${cmpEsc(m.name)} <span class="dim">${cmpEsc(m.job)}</span></td>
+        <td class="nm">${cmpEsc(m.name)} <span class="dim">${cmpJob(m.job)}</span></td>
         <td class="num" style="font-weight:700">${cmpCompact(m.dps)}</td>
         <td class="num">${cmpCompact(m.damage)}</td>
         <td><div class="cmpShare"><div class="track"><div class="fill" style="width:${(m.share / top) * 100}%"></div></div><span class="num" style="width:44px">${cmpPct(m.share)}</span></div></td>
@@ -357,7 +362,7 @@ const attachCompare = ({ panel, record }) => {
       </tr>`;
     }).join("");
     return `<h3>${tx.party}<small>${tx.pickHint}</small></h3>
-      <table class="cmpParty"><thead><tr><th></th><th class="nm">${tx.name}</th><th class="num">${tx.dps}</th><th class="num">${tx.damage}</th><th>${tx.share}</th><th class="num">${tx.crit}</th><th class="num">${tx.hits}</th></tr></thead><tbody>${rows}</tbody></table>`;
+      <div class="cmpScroll"><table class="cmpParty"><thead><tr><th></th><th class="nm">${tx.name}</th><th class="num">${tx.dps}</th><th class="num">${tx.damage}</th><th>${tx.share}</th><th class="num">${tx.crit}</th><th class="num">${tx.hits}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   };
 
   const vsHtml = (tx, h) => {
@@ -393,7 +398,7 @@ const attachCompare = ({ panel, record }) => {
       if (con.length) summary.push(tx.counter({ name: cmpEsc(loser.name), list: con.map((f) => label[f.key]).join(", ") }));
     }
 
-    const side = (m, cls) => `<div class="side ${cls}"><b class="c${cls.toUpperCase()}">${cmpEsc(m.name)}</b><span class="dim">${cmpEsc(m.job)}</span>
+    const side = (m, cls) => `<div class="side ${cls}"><b class="c${cls.toUpperCase()}">${cmpEsc(m.name)}</b><span class="dim">${cmpJob(m.job)}</span>
       <div class="big">${cmpCompact(m.dps)} <small class="dim" style="font-size:12px">${tx.dps}</small></div>
       <div class="dim">${cmpCompact(m.damage)} · ${cmpPct(m.share)}</div></div>`;
     let html = `<h3>${tx.vs}</h3><div class="cmpVs">${side(a, "a")}<div class="mid">
@@ -483,7 +488,7 @@ const attachCompare = ({ panel, record }) => {
     const one = (m, list, cls) => {
       const maxDmg = Math.max(1, list[0]?.dmg || 0);
       const rows = list.map((s) => `<tr><td class="sk">${cmpSkillName(tx, s)}</td>${skillCells(s, m, cls, maxDmg, false)}</tr>`).join("");
-      return `<div class="cmpScroll"><table class="cmpSkills"><thead><tr><th colspan="6" class="${cls} ${cls === "ga" ? "cA" : "cB"}">${cmpEsc(m.name)} <span class="dim">${cmpEsc(m.job)}</span></th></tr>
+      return `<div class="cmpScroll"><table class="cmpSkills"><thead><tr><th colspan="6" class="${cls} ${cls === "ga" ? "cA" : "cB"}">${cmpEsc(m.name)} <span class="dim">${cmpJob(m.job)}</span></th></tr>
         <tr><th>${tx.skills}</th>${head(cls)}</tr></thead><tbody>${rows}</tbody></table></div>`;
     };
     return `<h3>${tx.skills}<small>${tx.otherClass}</small></h3><div class="cmpTwo">${one(a, h.skills.a, "ga")}${one(b, h.skills.b, "gb")}</div>`;

@@ -9817,6 +9817,8 @@ html.a2-offline .historyUploadBtn {
   padding: 12px 14px 18px;
   font-size: 13px;
   line-height: 1.4;
+  /* Korean wraps between words, not inside one. */
+  word-break: keep-all;
 }
 
 .fightCompare h3 {
