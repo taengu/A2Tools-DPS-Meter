@@ -61,7 +61,7 @@ function detailsView({ targetCount = 20, panelOpen = true } = {}) {
     activeCompactMode: false, detailsContext: {}, detailsTargets: targets, detailsActors: new Map(),
     selectedTargetId: null, selectedAttackerIds: [7], selectedAttackerLabel: "Actor 7", COMPACT_MAX_SKILLS: 5,
     detailsMode: "dmg", lastMeasuredNameWidth: 0, fightStartMs: 0, fightBossName: "", fightDungeonId: 0, historyRecord: null,
-    buffTimeline: null, staggerPanel: null, liveBuffs: null,
+    buffTimeline: null, staggerPanel: null, fightCompare: null, liveBuffs: null,
     getSelectableTargets: () => targets,
     getTargetById: (id) => targets.find((target) => target.targetId === id),
     getTargetLabel: (target) => `Target ${target.targetId}`,

@@ -3594,6 +3594,8 @@ const createDetailsUI = ({
     }
 
     openedRowId = rowId;
+    // A live fight: no comparison (it needs a saved fight's rows).
+    fightCompare?.reset();
     if (pin) {
       pinnedRowId = rowId;
       onPinnedRowChange?.(pinnedRowId);
@@ -3692,6 +3694,7 @@ const createDetailsUI = ({
     }
     detailsPanel.classList.remove("open");
     historyRecord = null;
+    fightCompare?.reset();
     liveBuffs = null;
     buffTimeline?.clear();
     staggerPanel?.clear();

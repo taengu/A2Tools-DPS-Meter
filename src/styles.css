@@ -5843,6 +5843,7 @@ body.layoutEditing .meter {
 .historyPanel .historyDeleteToggle,
 .detailsPanel .detailsHeader .detailsScreenshotBtn,
 .detailsPanel .detailsHeader .detailsChatCopyBtn,
+.detailsPanel .detailsHeader .fightCompareBtn,
 .detailsPanel .detailsHeader .detailsSettingsBtn,
 .detailsPanel .detailsHeader .detailsRefreshBtn,
 .historyPanel .historyHeader .closeX,
@@ -5870,6 +5871,7 @@ body.layoutEditing .meter {
 .historyPanel .historyDeleteToggle:hover,
 .detailsPanel .detailsHeader .detailsScreenshotBtn:hover,
 .detailsPanel .detailsHeader .detailsChatCopyBtn:hover,
+.detailsPanel .detailsHeader .fightCompareBtn:hover,
 .detailsPanel .detailsHeader .detailsSettingsBtn:hover,
 .detailsPanel .detailsHeader .detailsRefreshBtn:hover,
 .historyPanel .historyHeader .closeX:hover,
@@ -5891,6 +5893,7 @@ body.layoutEditing .meter {
 .historyPanel .historyDeleteToggle svg,
 .detailsPanel .detailsHeader .detailsScreenshotBtn svg,
 .detailsPanel .detailsHeader .detailsChatCopyBtn svg,
+.detailsPanel .detailsHeader .fightCompareBtn svg,
 .detailsPanel .detailsHeader .detailsSettingsBtn svg,
 .detailsPanel .detailsHeader .detailsRefreshBtn svg {
   width: 14px;
@@ -9790,21 +9793,8 @@ html.a2-offline .historyUploadBtn {
   --compare-a: #4fc3f7;
   --compare-b: #ffb74d;
 }
-.fightCompareBtn {
-  margin-right: 6px;
-  padding: 2px 10px;
-  border: 1px solid rgba(255,255,255,.25);
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  white-space: nowrap;
-  flex: none;
-}
-
-.fightCompareBtn.isActive {
+.detailsPanel .detailsHeader .fightCompareBtn.isActive {
+  color: #fff;
   background: rgba(79,195,247,.25);
   border-color: var(--compare-a);
 }

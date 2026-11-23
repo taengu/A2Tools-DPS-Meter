@@ -13,7 +13,10 @@
 //        uptime        time spent hitting (gaps over CMP_IDLE_GAP_MS are idle)
 //        pace          hits per second of that time
 //        damage / hit  the average hit
-//      with the hit-level rates (crit, back, perfect, double, multi-hit),
+//        DoT           all damage over direct damage (only when there are DoTs)
+//      DoT ticks are left out of the first three: a DoT ticks on while its
+//      caster does nothing, which would inflate the pace and the uptime.
+//      Then the hit-level rates (crit, back, perfect, double, multi-hit),
 //      deaths, and (same class) the skills that make most of the gap and why.
 //   3. Skills side by side: one row per skill with both players' damage,
 //      hits, average, crit and back rates (same class), or each player's own
@@ -50,8 +53,11 @@ const cmpActiveMs = (timestamps, durationMs) => {
 };
 
 // record -> { durationMs, totalDamage, members: [member], localActorId }.
-// member: { actorId, name, job, jobId, damage, hits, flags, maxHit, dps,
-// share, activeMs, deaths, deadMs, skills: Map<code, skill> }.
+// member: { actorId, name, job, jobId, damage, hits, directDamage, directHits,
+// flags, maxHit, dps, share, activeMs, deaths, deadMs, skills: Map<key, skill> }.
+// DoT ticks count in damage and hits but not in directDamage / directHits,
+// the hit flags or activeMs: a DoT keeps ticking while its caster does
+// nothing, so it would inflate the pace and keep the uptime alive.
 const buildCompareModel = (record) => {
   const details = record?.details && typeof record.details === "object" ? record.details : {};
   const actors = Array.isArray(record?.actors) ? record.actors : [];
@@ -68,7 +74,7 @@ const buildCompareModel = (record) => {
         name: a.nickname || `#${actorId}`,
         job: a.job || "",
         jobId: cmpNum(a.jobId),
-        damage: 0, hits: 0, flags: cmpZeroFlags(), maxHit: 0,
+        damage: 0, hits: 0, directDamage: 0, directHits: 0, flags: cmpZeroFlags(), maxHit: 0,
         dps: 0, share: 0, activeMs: null, deaths: 0, deadMs: 0,
         skills: new Map(),
       };
@@ -83,23 +89,27 @@ const buildCompareModel = (record) => {
     if (dmg <= 0) continue;
     const m = member(row.actorId);
     const hits = cmpNum(row.time);
+    const isDot = !!row.isDot;
     m.damage += dmg;
     m.hits += hits;
     m.maxHit = Math.max(m.maxHit, cmpNum(row.maxDmg));
-    // A DoT and its direct hit share a name; the code keeps them apart.
-    const key = `${cmpNum(row.code)}`;
+    // One row per skill name, a DoT apart from its direct hit, as Details
+    // groups them: a skill's variant codes (its specialisations) share a name.
+    const name = String(row.name ?? "") || `#${cmpNum(row.code)}`;
+    const key = `${name}::${isDot ? "dot" : "hit"}`;
     let s = m.skills.get(key);
     if (!s) {
-      s = { key, name: row.name || key, isDot: !!row.isDot, dmg: 0, hits: 0, flags: cmpZeroFlags(), maxHit: 0 };
+      s = { key, name, isDot, dmg: 0, hits: 0, flags: cmpZeroFlags(), maxHit: 0 };
       m.skills.set(key, s);
     }
     s.dmg += dmg;
     s.hits += hits;
     s.maxHit = Math.max(s.maxHit, cmpNum(row.maxDmg));
-    for (const f of CMP_FLAGS) {
-      s.flags[f] += cmpNum(row[f]);
-      m.flags[f] += cmpNum(row[f]);
-    }
+    for (const f of CMP_FLAGS) s.flags[f] += cmpNum(row[f]);
+    if (isDot) continue;
+    m.directDamage += dmg;
+    m.directHits += hits;
+    for (const f of CMP_FLAGS) m.flags[f] += cmpNum(row[f]);
     if (Array.isArray(row.hitTimestamps)) {
       const list = stamps.get(row.actorId);
       for (const t of row.hitTimestamps) if (Number.isFinite(Number(t))) list.push(Number(t));
@@ -125,12 +135,15 @@ const buildCompareModel = (record) => {
 };
 
 const cmpRate = (count, hits) => (hits > 0 ? (count / hits) * 100 : 0);
-const cmpAvg = (x) => (x.hits > 0 ? x.damage / x.hits : 0);
+// Damage per direct hit (DoT ticks left out).
+const cmpAvg = (x) => (x.directHits > 0 ? x.directDamage / x.directHits : 0);
 
 // A vs B. gapPct: how far A's damage is above B's (negative: below).
 // factors: the log split of that gap, each { key, a, b, x, effectPct, weight }:
 // effectPct is the gap that factor alone makes, weight its share of the whole
 // (the weights add up to 1; one against the gap's direction is negative).
+// The split, on direct hits only, with DoT damage as its own last factor:
+//   damage = uptime x pace x damage per hit x (all damage / direct damage)
 // rates: hit-level rates side by side. skills: rows to show; drivers: the
 // skills that make most of the gap (same class only).
 const cmpHeadToHead = (model, aId, bId) => {
@@ -140,7 +153,7 @@ const cmpHeadToHead = (model, aId, bId) => {
   const gapPct = b.damage > 0 ? (a.damage / b.damage - 1) * 100 : null;
 
   const factors = [];
-  const ln = (x, y) => (x > 0 && y > 0 ? Math.log(x / y) : null);
+  const ln = (x, y) => (x > 0 && y > 0 && Number.isFinite(x) && Number.isFinite(y) ? Math.log(x / y) : null);
   const timed = a.activeMs > 0 && b.activeMs > 0;
   const push = (key, va, vb, x) => {
     if (x == null) return;
@@ -148,19 +161,24 @@ const cmpHeadToHead = (model, aId, bId) => {
   };
   if (timed) {
     push("uptime", (a.activeMs / model.durationMs) * 100, (b.activeMs / model.durationMs) * 100, ln(a.activeMs, b.activeMs));
-    const pa = a.hits / (a.activeMs / 1000);
-    const pb = b.hits / (b.activeMs / 1000);
+    const pa = a.directHits / (a.activeMs / 1000);
+    const pb = b.directHits / (b.activeMs / 1000);
     push("pace", pa, pb, ln(pa, pb));
   } else {
-    push("hits", a.hits, b.hits, ln(a.hits, b.hits));
+    push("hits", a.directHits, b.directHits, ln(a.directHits, b.directHits));
   }
   push("perHit", cmpAvg(a), cmpAvg(b), ln(cmpAvg(a), cmpAvg(b)));
+  if (a.damage > a.directDamage || b.damage > b.directDamage) {
+    const dotShare = (m) => (m.damage > 0 ? ((m.damage - m.directDamage) / m.damage) * 100 : 0);
+    push("dots", dotShare(a), dotShare(b),
+      ln(a.directDamage > 0 ? a.damage / a.directDamage : 0, b.directDamage > 0 ? b.damage / b.directDamage : 0));
+  }
   const total = ln(a.damage, b.damage);
   for (const f of factors) f.weight = total ? f.x / total : 0;
 
   const rates = [
     ["crit", "crit"], ["back", "back"], ["perfect", "perfect"], ["double", "double"], ["multi", "multiHitCount"],
-  ].map(([key, flag]) => ({ key, a: cmpRate(a.flags[flag], a.hits), b: cmpRate(b.flags[flag], b.hits) }));
+  ].map(([key, flag]) => ({ key, a: cmpRate(a.flags[flag], a.directHits), b: cmpRate(b.flags[flag], b.directHits) }));
 
   const sameClass = a.jobId > 0 && a.jobId === b.jobId;
   let skills;
@@ -170,7 +188,7 @@ const cmpHeadToHead = (model, aId, bId) => {
     skills = [...keys].map((key) => {
       const sa = a.skills.get(key) || null;
       const sb = b.skills.get(key) || null;
-      return { key, name: (sa || sb).name, a: sa, b: sb, diff: (sa?.dmg || 0) - (sb?.dmg || 0) };
+      return { key, name: (sa || sb).name, isDot: (sa || sb).isDot, a: sa, b: sb, diff: (sa?.dmg || 0) - (sb?.dmg || 0) };
     }).sort((x, y) => Math.max(y.a?.dmg || 0, y.b?.dmg || 0) - Math.max(x.a?.dmg || 0, x.b?.dmg || 0));
     // The skills that make the gap, in its direction, with what differs.
     const sign = Math.sign(a.damage - b.damage) || 1;
@@ -211,7 +229,7 @@ const cmpCompact = (v) => {
 // English, for any language without a translation (src/data/i18n/ui/*.json,
 // under details.compare).
 const CMP_EN = {
-  button: "Compare",
+  button: "Compare two players",
   party: "Party",
   vs: "A vs B",
   why: "Why",
@@ -239,45 +257,58 @@ const CMP_EN = {
   pace: "Pace (hits per active second)",
   hitsF: "Hits",
   perHit: "Damage per hit",
-  factorHint: "The DPS gap split into three multiplied factors; bars show each one's share, the right column the gap it alone makes",
+  dots: "DoT share of the damage",
+  factorHint: "The DPS gap as factors that multiply together. Bars are scaled to the largest factor; the right column is the gap that factor alone makes. DoT ticks are left out of uptime, pace and damage per hit.",
   rateTitle: "Hit quality",
   rateHint: "The rates behind damage per hit",
-  drivers: "Skill behind the gap",
-  mainCause: "Mainly",
-  counter: "{name} is ahead on",
+  mainCause: "Mainly: {list}",
+  counter: "{name} is ahead on: {list}",
+  factor: "{factor} ({pct})",
+  driver: "Skill behind the gap: {skill}, {who} {diff}, {why}",
   unused: "{name} never used it",
-  causeHits: "more uses",
-  causeAvg: "harder hits",
+  causeHits: "more uses ({ahead} vs {behind} hits)",
+  causeAvg: "harder hits (average {ahead} vs {behind})",
   deaths: "{name} died {count}x ({sec}s down)",
   otherClass: "Different classes: each player's skills are listed side by side",
   perSec: "/s",
-  times: "hits",
   pt: "pt",
 };
 
-const cmpText = () => {
+// The sentences with {placeholders}: tx.<key>({ placeholder: value }).
+const CMP_TEMPLATES = ["ahead", "mainCause", "counter", "factor", "driver", "unused", "causeHits", "causeAvg", "deaths"];
+
+// The UI text. `esc` is applied to every translated string before use, so
+// the view passes cmpEsc and puts the result into innerHTML; the values
+// filled into a template must then already be HTML (escaped game text).
+const cmpText = (esc = (s) => s) => {
   const i18n = typeof window !== "undefined" ? window.i18n : null;
+  const t = (key, fallback) => {
+    const v = i18n?.t?.(key, fallback);
+    return typeof v === "string" && v ? v : fallback;
+  };
   const tx = {};
-  for (const [k, v] of Object.entries(CMP_EN)) tx[k] = i18n?.t?.(`details.compare.${k}`, v) ?? v;
-  // The templates with {placeholders}, kept before tx.ahead & co. become functions.
-  const templates = { ahead: tx.ahead, unused: tx.unused, deaths: tx.deaths, counter: tx.counter };
-  const fmt = (k, vars) => templates[k].replace(/\{(\w+)\}/g, (_, x) => (vars[x] ?? ""));
-  tx.ahead = (winner, loser, pct) => fmt("ahead", { winner, loser, pct });
-  tx.unused = (name) => fmt("unused", { name });
-  tx.deaths = (name, count, sec) => fmt("deaths", { name, count, sec });
-  tx.counter = (name) => fmt("counter", { name });
+  for (const [k, v] of Object.entries(CMP_EN)) tx[k] = esc(t(`details.compare.${k}`, v));
+  const fill = (template, vars) => template.replace(/\{(\w+)\}/g, (_, x) => String(vars?.[x] ?? ""));
+  for (const k of CMP_TEMPLATES) {
+    const template = tx[k];
+    tx[k] = (vars) => fill(template, vars);
+  }
+  // A DoT row's name, as Details writes it.
+  const dot = esc(t("skills.dot", "{name} - DoT"));
+  tx.dotName = (vars) => fill(dot, vars);
   return tx;
 };
 
 const CMP_A = "#4fc3f7";
 const CMP_B = "#ffb74d";
 
-
 const cmpEsc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cmpPct = (v, d = 1) => `${v.toFixed(d)}%`;
 const cmpSigned = (v, d = 1, unit = "%") => `${v >= 0 ? "+" : ""}${v.toFixed(d)}${unit}`;
+// A skill's name as HTML, a DoT marked as Details marks it.
+const cmpSkillName = (tx, s) => (s.isDot ? tx.dotName({ name: cmpEsc(s.name) }) : cmpEsc(s.name));
 
-const attachCompare = ({ panel, record, isOpen }) => {
+const attachCompare = ({ panel, record }) => {
   if (!panel || panel.dataset.fightCompare) return;
   panel.dataset.fightCompare = "1";
 
@@ -285,10 +316,15 @@ const attachCompare = ({ panel, record, isOpen }) => {
   const body = panel.querySelector(".detailsBody");
   if (!controls || !body) return;
 
+  // An icon button like its neighbours (copy for chat, screenshot), its
+  // name in the title. Hidden until a saved fight is shown.
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "fightCompareBtn";
-  controls.prepend(btn);
+  btn.style.display = "none";
+  btn.innerHTML = '<i data-lucide="git-compare"></i>';
+  (controls.querySelector(".detailsScreenshotWrapper") || controls).prepend(btn);
+  try { window.lucide?.createIcons?.({ root: btn }); } catch { /* the title still names it */ }
   const view = document.createElement("div");
   view.className = "fightCompare";
   body.prepend(view);
@@ -297,6 +333,13 @@ const attachCompare = ({ panel, record, isOpen }) => {
   let pickB = null;
   let pickedFor = null;
   let open = false;
+
+  const setOpen = (on) => {
+    open = on;
+    btn.classList.toggle("isActive", on);
+    panel.classList.toggle("fightCompareOpen", on);
+    if (!on) view.innerHTML = "";
+  };
 
   const partyHtml = (tx, model) => {
     const top = model.members[0]?.share || 1;
@@ -309,7 +352,7 @@ const attachCompare = ({ panel, record, isOpen }) => {
         <td class="num" style="font-weight:700">${cmpCompact(m.dps)}</td>
         <td class="num">${cmpCompact(m.damage)}</td>
         <td><div class="cmpShare"><div class="track"><div class="fill" style="width:${(m.share / top) * 100}%"></div></div><span class="num" style="width:44px">${cmpPct(m.share)}</span></div></td>
-        <td class="num">${cmpPct(cmpRate(m.flags.crit, m.hits))}</td>
+        <td class="num">${cmpPct(cmpRate(m.flags.crit, m.directHits))}</td>
         <td class="num dim">${m.hits.toLocaleString("en-US")}</td>
       </tr>`;
     }).join("");
@@ -324,14 +367,7 @@ const attachCompare = ({ panel, record, isOpen }) => {
     const winner = aAhead ? a : b;
     const loser = aAhead ? b : a;
     const winPct = loser.damage > 0 ? (winner.damage / loser.damage - 1) * 100 : 0;
-    const verdict = winPct < 1 ? tx.even : tx.ahead(cmpEsc(winner.name), cmpEsc(loser.name), cmpPct(winPct));
-    const side = (m, cls) => `<div class="side ${cls}"><b class="c${cls.toUpperCase()}">${cmpEsc(m.name)}</b><span class="dim">${cmpEsc(m.job)}</span>
-      <div class="big">${cmpCompact(m.dps)} <small class="dim" style="font-size:12px">DPS</small></div>
-      <div class="dim">${cmpCompact(m.damage)} · ${cmpPct(m.share)}</div></div>`;
-    let html = `<h3>${tx.vs}</h3><div class="cmpVs">${side(a, "a")}<div class="mid">
-      <div class="gap ${aAhead ? "cA" : "cB"}">${gap == null ? "-" : cmpSigned(gap)}</div>
-      <button type="button" data-swap="1">⇄ ${tx.swap}</button></div>${side(b, "b")}</div>
-      <div class="cmpVerdict">${verdict}</div>`;
+    const verdict = winPct < 1 ? tx.even : tx.ahead({ winner: cmpEsc(winner.name), loser: cmpEsc(loser.name), pct: cmpPct(winPct) });
 
     // Why: the gap's factors.
     const fmt = {
@@ -339,13 +375,39 @@ const attachCompare = ({ panel, record, isOpen }) => {
       pace: (v) => `${v.toFixed(2)}${tx.perSec}`,
       hits: (v) => Math.round(v).toLocaleString("en-US"),
       perHit: (v) => cmpCompact(v),
+      dots: (v) => cmpPct(v),
     };
-    const label = { uptime: tx.uptime, pace: tx.pace, hits: tx.hitsF, perHit: tx.perHit };
+    const label = { uptime: tx.uptime, pace: tx.pace, hits: tx.hitsF, perHit: tx.perHit, dots: tx.dots };
+
+    // The verdict in words: the factors for the leader, biggest first, and
+    // the ones that go the other way.
+    const summary = [];
+    if (winPct >= 1) {
+      const lead = aAhead ? 1 : -1;
+      // From the leader's side: the gap this factor alone gives them.
+      const named = (f) => tx.factor({ factor: label[f.key], pct: cmpSigned((Math.exp(Math.abs(f.x)) - 1) * 100) });
+      const byWeight = (x, y) => Math.abs(y.x) - Math.abs(x.x);
+      const pro = h.factors.filter((f) => f.x * lead > 0).sort(byWeight);
+      const con = h.factors.filter((f) => f.x * lead < 0).sort(byWeight);
+      if (pro.length) summary.push(tx.mainCause({ list: pro.map(named).join(", ") }));
+      if (con.length) summary.push(tx.counter({ name: cmpEsc(loser.name), list: con.map((f) => label[f.key]).join(", ") }));
+    }
+
+    const side = (m, cls) => `<div class="side ${cls}"><b class="c${cls.toUpperCase()}">${cmpEsc(m.name)}</b><span class="dim">${cmpEsc(m.job)}</span>
+      <div class="big">${cmpCompact(m.dps)} <small class="dim" style="font-size:12px">${tx.dps}</small></div>
+      <div class="dim">${cmpCompact(m.damage)} · ${cmpPct(m.share)}</div></div>`;
+    let html = `<h3>${tx.vs}</h3><div class="cmpVs">${side(a, "a")}<div class="mid">
+      <div class="gap ${aAhead ? "cA" : "cB"}">${gap == null ? "-" : cmpSigned(gap)}</div>
+      <button type="button" data-swap="1">${tx.swap}</button></div>${side(b, "b")}</div>
+      <div class="cmpVerdict">${verdict}</div>`;
+    if (summary.length) html += `<div class="cmpSummary">${summary.map((l) => `<div>${l}</div>`).join("")}</div>`;
+
     const maxW = Math.max(...h.factors.map((f) => Math.abs(f.x)), 1e-9);
     html += `<h3>${tx.why}<small>${tx.factorHint}</small></h3><div class="cmpFactors">
       <div class="hd"></div><div class="hd num cA">${cmpEsc(a.name)}</div><div class="hd num cB">${cmpEsc(b.name)}</div><div class="hd"></div><div class="hd num">${tx.diff}</div>`;
     for (const f of h.factors) {
       const favorsA = f.x >= 0;
+      // Scaled to the largest factor.
       const w = (Math.abs(f.x) / maxW) * 100;
       html += `<div>${label[f.key]}</div>
         <div class="num${favorsA ? " cA" : ""}" style="${favorsA ? "font-weight:700" : ""}">${fmt[f.key](f.a)}</div>
@@ -355,32 +417,25 @@ const attachCompare = ({ panel, record, isOpen }) => {
     }
     html += "</div>";
 
-    // The verdict in words: the factors for the leader, biggest first, and
-    // the ones that go the other way.
-    if (winPct >= 1) {
-      const lead = aAhead ? 1 : -1;
-      // From the leader's side: the gap this factor alone gives them.
-      const named = (f) => `${label[f.key]}（${cmpSigned((Math.exp(Math.abs(f.x)) - 1) * 100)}）`;
-      const pro = h.factors.filter((f) => f.x * lead > 0).sort((x, y) => Math.abs(y.x) - Math.abs(x.x));
-      const con = h.factors.filter((f) => f.x * lead < 0).sort((x, y) => Math.abs(y.x) - Math.abs(x.x));
-      let line = `${tx.mainCause}: ${pro.map(named).join("、")}`;
-      if (con.length) line += `。${tx.counter(cmpEsc(loser.name))}: ${con.map((f) => label[f.key]).join("、")}`;
-      html = html.replace(`<div class="cmpVerdict">${verdict}</div>`, `<div class="cmpVerdict">${verdict}</div><div class="cmpSummary">${line}</div>`);
-    }
-
     // Notes: deaths, and the skills that make the gap.
     const notes = [];
     for (const m of [a, b]) {
-      if (m.deaths > 0) notes.push(tx.deaths(cmpEsc(m.name), m.deaths, Math.round(m.deadMs / 1000)));
+      if (m.deaths > 0) notes.push(tx.deaths({ name: cmpEsc(m.name), count: m.deaths, sec: Math.round(m.deadMs / 1000) }));
     }
     for (const d of h.drivers) {
       const who = d.aheadIsA ? a : b;
       const other = d.aheadIsA ? b : a;
+      const cls = d.aheadIsA ? "cA" : "cB";
       let why;
-      if (d.cause === "unused") why = tx.unused(cmpEsc(other.name));
-      else if (d.cause === "hits") why = `${tx.causeHits}（${d.ahead.hits} / ${d.behind.hits} ${tx.times}）`;
-      else why = `${tx.causeAvg}（${tx.avg} ${cmpCompact(d.ahead.dmg / d.ahead.hits)} / ${cmpCompact(d.behind.dmg / d.behind.hits)}）`;
-      notes.push(`${tx.drivers}: <b>${cmpEsc(d.name)}</b> — <span class="${d.aheadIsA ? "cA" : "cB"}">${cmpEsc(who.name)} +${cmpCompact(Math.abs(d.diff))}</span>、${why}`);
+      if (d.cause === "unused") why = tx.unused({ name: cmpEsc(other.name) });
+      else if (d.cause === "hits") why = tx.causeHits({ ahead: d.ahead.hits, behind: d.behind.hits });
+      else why = tx.causeAvg({ ahead: cmpCompact(d.ahead.dmg / d.ahead.hits), behind: cmpCompact(d.behind.dmg / d.behind.hits) });
+      notes.push(tx.driver({
+        skill: `<b>${cmpSkillName(tx, d)}</b>`,
+        who: `<span class="${cls}">${cmpEsc(who.name)}</span>`,
+        diff: `<span class="${cls}">+${cmpCompact(Math.abs(d.diff))}</span>`,
+        why,
+      }));
     }
     if (notes.length) html += `<ul class="cmpNotes">${notes.map((n) => `<li>${n}</li>`).join("")}</ul>`;
 
@@ -418,7 +473,7 @@ const attachCompare = ({ panel, record, isOpen }) => {
         const da = s.a?.dmg || 0;
         const db = s.b?.dmg || 0;
         const diffCls = s.diff === 0 ? "dim" : s.diff > 0 ? "cA" : "cB";
-        return `<tr><td class="sk">${cmpEsc(s.name)}</td>${skillCells(s.a, a, "ga", maxDmg, da > db)}${skillCells(s.b, b, "gb", maxDmg, db > da)}
+        return `<tr><td class="sk">${cmpSkillName(tx, s)}</td>${skillCells(s.a, a, "ga", maxDmg, da > db)}${skillCells(s.b, b, "gb", maxDmg, db > da)}
           <td class="num ${diffCls}">${s.diff === 0 ? "-" : (s.diff > 0 ? "+" : "-") + cmpCompact(Math.abs(s.diff))}</td></tr>`;
       }).join("");
       return `<h3>${tx.skills}</h3><div class="cmpScroll"><table class="cmpSkills"><thead>
@@ -427,7 +482,7 @@ const attachCompare = ({ panel, record, isOpen }) => {
     }
     const one = (m, list, cls) => {
       const maxDmg = Math.max(1, list[0]?.dmg || 0);
-      const rows = list.map((s) => `<tr><td class="sk">${cmpEsc(s.name)}</td>${skillCells(s, m, cls, maxDmg, false)}</tr>`).join("");
+      const rows = list.map((s) => `<tr><td class="sk">${cmpSkillName(tx, s)}</td>${skillCells(s, m, cls, maxDmg, false)}</tr>`).join("");
       return `<div class="cmpScroll"><table class="cmpSkills"><thead><tr><th colspan="6" class="${cls} ${cls === "ga" ? "cA" : "cB"}">${cmpEsc(m.name)} <span class="dim">${cmpEsc(m.job)}</span></th></tr>
         <tr><th>${tx.skills}</th>${head(cls)}</tr></thead><tbody>${rows}</tbody></table></div>`;
     };
@@ -435,12 +490,16 @@ const attachCompare = ({ panel, record, isOpen }) => {
   };
 
   const render = () => {
-    const tx = cmpText();
-    btn.textContent = tx.button;
+    const title = cmpText().button;
+    btn.title = title;
+    btn.setAttribute("aria-label", title);
     const rec = record();
-    // Only a saved fight has the whole party's rows; hide for a live one.
+    // Only a saved fight has the whole party's rows: no button without one,
+    // and no comparison left open over a live fight's Details.
     btn.style.display = rec ? "" : "none";
+    if (!rec && open) setOpen(false);
     if (!rec || !open) return;
+    const tx = cmpText(cmpEsc);
     const model = buildCompareModel(rec);
     if (!model.members.length) {
       view.innerHTML = `<div class="dim">${tx.noData}</div>`;
@@ -483,17 +542,14 @@ const attachCompare = ({ panel, record, isOpen }) => {
   });
 
   btn.addEventListener("click", () => {
-    open = !open;
-    btn.classList.toggle("isActive", open);
-    panel.classList.toggle("fightCompareOpen", open);
+    setOpen(!!record() && !open);
     render();
   });
 
-  // The window shows another fight, or closes: the comparison closes with it.
+  // Details closes, opens a live fight or shows another saved one (details.js
+  // calls this each time): the comparison closes with it.
   const reset = () => {
-    open = false;
-    btn.classList.remove("isActive");
-    panel.classList.remove("fightCompareOpen");
+    setOpen(false);
     render();
   };
   // The Details window closed: so does the comparison.
@@ -502,11 +558,11 @@ const attachCompare = ({ panel, record, isOpen }) => {
       if (open && !panel.classList.contains("open")) reset();
     }).observe(panel, { attributes: true, attributeFilter: ["class"] });
   }
-  return { refresh: render, reset, isOpen };
+  return { refresh: render, reset, isOpen: () => open };
 };
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { buildCompareModel, cmpHeadToHead, cmpCompact, cmpActiveMs, cmpText };
+  module.exports = { buildCompareModel, cmpHeadToHead, cmpCompact, cmpActiveMs, cmpText, attachCompare };
 }
 if (typeof window !== "undefined") {
   window.fightCompare = { attach: attachCompare };
