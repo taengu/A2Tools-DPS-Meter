@@ -10020,6 +10020,16 @@ html.a2-offline .historyUploadBtn {
   font-weight: 700;
 }
 
+/* Whose lead the figure is: the leader's name under it. */
+.cmpVs .mid .gapWho {
+  margin-top: -6px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
 .cmpVs .mid button {
   font: inherit;
   font-size: 11px;

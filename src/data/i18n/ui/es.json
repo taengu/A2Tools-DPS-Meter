@@ -294,7 +294,7 @@
       "hitsF": "Golpes",
       "perHit": "Daño por golpe",
       "dots": "Parte del daño de DoT",
-      "factorHint": "La diferencia de DPS como factores que se multiplican. Las barras van a escala del factor mayor; la columna derecha es la diferencia que ese factor causa por sí solo. Los ticks de DoT no cuentan en el tiempo activo, el ritmo ni el daño por golpe.",
+      "factorHint": "La diferencia de DPS como factores que se multiplican, vista desde quien va por delante. Las barras van a escala del factor mayor; Dif. es cuánto ese factor por sí solo lo pone por delante (+) o por detrás (-). Los ticks de DoT no cuentan en el tiempo activo, el ritmo ni el daño por golpe.",
       "rateTitle": "Calidad de los golpes",
       "rateHint": "Las tasas detrás del daño por golpe",
       "mainCause": "Sobre todo: {list}",

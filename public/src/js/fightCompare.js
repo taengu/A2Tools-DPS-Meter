@@ -139,9 +139,14 @@ const cmpRate = (count, hits) => (hits > 0 ? (count / hits) * 100 : 0);
 const cmpAvg = (x) => (x.directHits > 0 ? x.directDamage / x.directHits : 0);
 
 // A vs B. gapPct: how far A's damage is above B's (negative: below).
-// factors: the log split of that gap, each { key, a, b, x, effectPct, weight }:
-// effectPct is the gap that factor alone makes, weight its share of the whole
-// (the weights add up to 1; one against the gap's direction is negative).
+// The view reads it all from one side, the leader's (A on a tie): leaderIsA,
+// leadGapPct (how far the leader is ahead, >= 0).
+// factors: the log split of that gap, each { key, a, b, x, effectPct,
+// leadX, leadPct, weight }: x is the factor's log ratio A over B, effectPct
+// the gap it alone makes for A; leadX and leadPct the same for the leader
+// (positive where the leader is ahead, negative where behind; the leadX add
+// up to the log of the whole lead). weight is its share of the whole (the
+// weights add up to 1; one against the gap's direction is negative).
 // The split, on direct hits only, with DoT damage as its own last factor:
 //   damage = uptime x pace x damage per hit x (all damage / direct damage)
 // rates: hit-level rates side by side. skills: rows to show; drivers: the
@@ -151,13 +156,19 @@ const cmpHeadToHead = (model, aId, bId) => {
   const b = model.members.find((m) => m.actorId === bId);
   if (!a || !b || a === b) return null;
   const gapPct = b.damage > 0 ? (a.damage / b.damage - 1) * 100 : null;
+  const leaderIsA = a.damage >= b.damage;
+  const lead = leaderIsA ? 1 : -1;
+  const leader = leaderIsA ? a : b;
+  const other = leaderIsA ? b : a;
+  const leadGapPct = other.damage > 0 ? (leader.damage / other.damage - 1) * 100 : null;
 
   const factors = [];
   const ln = (x, y) => (x > 0 && y > 0 && Number.isFinite(x) && Number.isFinite(y) ? Math.log(x / y) : null);
   const timed = a.activeMs > 0 && b.activeMs > 0;
   const push = (key, va, vb, x) => {
     if (x == null) return;
-    factors.push({ key, a: va, b: vb, x, effectPct: (Math.exp(x) - 1) * 100 });
+    const leadX = x * lead;
+    factors.push({ key, a: va, b: vb, x, effectPct: (Math.exp(x) - 1) * 100, leadX, leadPct: (Math.exp(leadX) - 1) * 100 });
   };
   if (timed) {
     push("uptime", (a.activeMs / model.durationMs) * 100, (b.activeMs / model.durationMs) * 100, ln(a.activeMs, b.activeMs));
@@ -211,7 +222,7 @@ const cmpHeadToHead = (model, aId, bId) => {
     const ranked = (m) => [...m.skills.values()].sort((x, y) => y.dmg - x.dmg);
     skills = { a: ranked(a), b: ranked(b) };
   }
-  return { a, b, gapPct, factors, rates, sameClass, skills, drivers };
+  return { a, b, gapPct, leaderIsA, leadGapPct, factors, rates, sameClass, skills, drivers };
 };
 
 // ── The view ──
@@ -258,7 +269,7 @@ const CMP_EN = {
   hitsF: "Hits",
   perHit: "Damage per hit",
   dots: "DoT share of the damage",
-  factorHint: "The DPS gap as factors that multiply together. Bars are scaled to the largest factor; the right column is the gap that factor alone makes. DoT ticks are left out of uptime, pace and damage per hit.",
+  factorHint: "The DPS gap as factors that multiply together, seen from the leader. Bars are scaled to the largest factor; Diff is how far that factor alone puts the leader ahead (+) or behind (-). DoT ticks are left out of uptime, pace and damage per hit.",
   rateTitle: "Hit quality",
   rateHint: "The rates behind damage per hit",
   mainCause: "Mainly: {list}",
@@ -304,7 +315,12 @@ const CMP_B = "#ffb74d";
 
 const cmpEsc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cmpPct = (v, d = 1) => `${v.toFixed(d)}%`;
-const cmpSigned = (v, d = 1, unit = "%") => `${v >= 0 ? "+" : ""}${v.toFixed(d)}${unit}`;
+// +1.2% / -1.2%; a value that rounds to zero has no sign (not "-0.0").
+const cmpSigned = (v, d = 1, unit = "%") => {
+  const text = Math.abs(v).toFixed(d);
+  if (Number(text) === 0) return `${text}${unit}`;
+  return `${v > 0 ? "+" : "-"}${text}${unit}`;
+};
 // A class's name in the UI language (records keep the Korean name).
 const cmpJob = (job) => {
   const i18n = typeof window !== "undefined" ? window.i18n : null;
@@ -367,11 +383,13 @@ const attachCompare = ({ panel, record }) => {
 
   const vsHtml = (tx, h) => {
     const { a, b } = h;
-    const gap = h.gapPct;
-    const aAhead = a.damage >= b.damage;
+    // One viewpoint throughout: the leader's, measured against the other.
+    const aAhead = h.leaderIsA;
     const winner = aAhead ? a : b;
     const loser = aAhead ? b : a;
-    const winPct = loser.damage > 0 ? (winner.damage / loser.damage - 1) * 100 : 0;
+    const winPct = h.leadGapPct ?? 0;
+    const leadCls = aAhead ? "cA" : "cB";
+    const otherCls = aAhead ? "cB" : "cA";
     const verdict = winPct < 1 ? tx.even : tx.ahead({ winner: cmpEsc(winner.name), loser: cmpEsc(loser.name), pct: cmpPct(winPct) });
 
     // Why: the gap's factors.
@@ -388,21 +406,22 @@ const attachCompare = ({ panel, record }) => {
     // the ones that go the other way.
     const summary = [];
     if (winPct >= 1) {
-      const lead = aAhead ? 1 : -1;
-      // From the leader's side: the gap this factor alone gives them.
-      const named = (f) => tx.factor({ factor: label[f.key], pct: cmpSigned((Math.exp(Math.abs(f.x)) - 1) * 100) });
-      const byWeight = (x, y) => Math.abs(y.x) - Math.abs(x.x);
-      const pro = h.factors.filter((f) => f.x * lead > 0).sort(byWeight);
-      const con = h.factors.filter((f) => f.x * lead < 0).sort(byWeight);
+      // The same figures as the Diff column: what the factor alone does to
+      // the leader's lead.
+      const named = (f) => tx.factor({ factor: label[f.key], pct: cmpSigned(f.leadPct) });
+      const byWeight = (x, y) => Math.abs(y.leadX) - Math.abs(x.leadX);
+      const pro = h.factors.filter((f) => f.leadX > 0).sort(byWeight);
+      const con = h.factors.filter((f) => f.leadX < 0).sort(byWeight);
       if (pro.length) summary.push(tx.mainCause({ list: pro.map(named).join(", ") }));
-      if (con.length) summary.push(tx.counter({ name: cmpEsc(loser.name), list: con.map((f) => label[f.key]).join(", ") }));
+      if (con.length) summary.push(tx.counter({ name: cmpEsc(loser.name), list: con.map(named).join(", ") }));
     }
 
     const side = (m, cls) => `<div class="side ${cls}"><b class="c${cls.toUpperCase()}">${cmpEsc(m.name)}</b><span class="dim">${cmpJob(m.job)}</span>
       <div class="big">${cmpCompact(m.dps)} <small class="dim" style="font-size:12px">${tx.dps}</small></div>
       <div class="dim">${cmpCompact(m.damage)} · ${cmpPct(m.share)}</div></div>`;
     let html = `<h3>${tx.vs}</h3><div class="cmpVs">${side(a, "a")}<div class="mid">
-      <div class="gap ${aAhead ? "cA" : "cB"}">${gap == null ? "-" : cmpSigned(gap)}</div>
+      <div class="gap ${leadCls}">${h.leadGapPct == null ? "-" : cmpSigned(h.leadGapPct)}</div>
+      <div class="gapWho ${leadCls}">${cmpEsc(winner.name)}</div>
       <button type="button" data-swap="1">${tx.swap}</button></div>${side(b, "b")}</div>
       <div class="cmpVerdict">${verdict}</div>`;
     if (summary.length) html += `<div class="cmpSummary">${summary.map((l) => `<div>${l}</div>`).join("")}</div>`;
@@ -418,7 +437,7 @@ const attachCompare = ({ panel, record }) => {
         <div class="num${favorsA ? " cA" : ""}" style="${favorsA ? "font-weight:700" : ""}">${fmt[f.key](f.a)}</div>
         <div class="num${!favorsA ? " cB" : ""}" style="${!favorsA ? "font-weight:700" : ""}">${fmt[f.key](f.b)}</div>
         <div class="bar"><i style="width:${w}%;background:${favorsA ? CMP_A : CMP_B}"></i></div>
-        <div class="num ${favorsA ? "cA" : "cB"}">${cmpSigned(f.effectPct)}</div>`;
+        <div class="num ${f.leadX >= 0 ? leadCls : otherCls}">${cmpSigned(f.leadPct)}</div>`;
     }
     html += "</div>";
 
@@ -449,9 +468,11 @@ const attachCompare = ({ panel, record }) => {
     for (const r of h.rates) {
       if (r.a === 0 && r.b === 0) continue;
       const d = r.a - r.b;
+      // The leader's rate less the other's.
+      const dl = aAhead ? d : -d;
       html += `<div class="cmpRate"><div class="lb">${tx[r.key]}</div><div class="vals">
         <span class="cA">${cmpPct(r.a)}</span><span class="cB">${cmpPct(r.b)}</span></div>
-        <div class="d ${Math.abs(d) < 0.5 ? "dim" : d > 0 ? "cA" : "cB"}">${cmpSigned(d, 1, tx.pt)}</div></div>`;
+        <div class="d ${Math.abs(d) < 0.5 ? "dim" : d > 0 ? "cA" : "cB"}">${cmpSigned(dl, 1, tx.pt)}</div></div>`;
     }
     html += `<div class="cmpRate"><div class="lb">${tx.maxHit}</div><div class="vals">
       <span class="cA">${cmpCompact(a.maxHit)}</span><span class="cB">${cmpCompact(b.maxHit)}</span></div><div class="d dim">&nbsp;</div></div></div>`;
@@ -477,9 +498,11 @@ const attachCompare = ({ panel, record }) => {
       const rows = h.skills.map((s) => {
         const da = s.a?.dmg || 0;
         const db = s.b?.dmg || 0;
+        // The leader's damage less the other's, as everywhere else.
+        const lead = h.leaderIsA ? s.diff : -s.diff;
         const diffCls = s.diff === 0 ? "dim" : s.diff > 0 ? "cA" : "cB";
         return `<tr><td class="sk">${cmpSkillName(tx, s)}</td>${skillCells(s.a, a, "ga", maxDmg, da > db)}${skillCells(s.b, b, "gb", maxDmg, db > da)}
-          <td class="num ${diffCls}">${s.diff === 0 ? "-" : (s.diff > 0 ? "+" : "-") + cmpCompact(Math.abs(s.diff))}</td></tr>`;
+          <td class="num ${diffCls}">${lead === 0 ? "-" : (lead > 0 ? "+" : "-") + cmpCompact(Math.abs(lead))}</td></tr>`;
       }).join("");
       return `<h3>${tx.skills}</h3><div class="cmpScroll"><table class="cmpSkills"><thead>
         <tr><th></th><th colspan="5" class="ga cA" style="text-align:center">${cmpEsc(a.name)}</th><th colspan="5" class="gb cB" style="text-align:center">${cmpEsc(b.name)}</th><th></th></tr>

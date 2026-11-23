@@ -294,7 +294,7 @@
       "hitsF": "Treffer",
       "perHit": "Schaden pro Treffer",
       "dots": "DoT-Anteil am Schaden",
-      "factorHint": "Der DPS-Abstand als Faktoren, die sich multiplizieren. Die Balken sind am größten Faktor gemessen; die rechte Spalte ist der Abstand, den der Faktor allein ausmacht. DoT-Ticks zählen nicht zu Aktivzeit, Tempo und Schaden pro Treffer.",
+      "factorHint": "Der DPS-Abstand als Faktoren, die sich multiplizieren, aus Sicht des Führenden. Die Balken sind am größten Faktor gemessen; Diff. ist, wie weit dieser Faktor allein den Führenden vorn (+) oder zurück (-) bringt. DoT-Ticks zählen nicht zu Aktivzeit, Tempo und Schaden pro Treffer.",
       "rateTitle": "Trefferqualität",
       "rateHint": "Die Raten hinter dem Schaden pro Treffer",
       "mainCause": "Vor allem: {list}",

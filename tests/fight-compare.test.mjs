@@ -328,3 +328,75 @@ test("translated strings are escaped before they reach innerHTML", () => {
   assert.ok(v.view.innerHTML.includes("&lt;img src=x onerror=alert(1)&gt;"));
   assert.ok(v.view.innerHTML.includes("&lt;i&gt;A&lt;b&gt;&lt;/i&gt;"));
 });
+
+test("one viewpoint: the leader, measured against the other, whichever is A", () => {
+  const actors = [{ actorId: 1, nickname: "A", jobId: 11 }, { actorId: 2, nickname: "B", jobId: 11 }];
+  // B leads: more uptime and pace, but A hits harder.
+  const m = buildCompareModel(fight([
+    row(1, 10, 1500, 5, { hitTimestamps: times(5, 0, 1000) }),
+    row(2, 10, 2400, 12, { hitTimestamps: times(12, 0, 800) }),
+  ], actors));
+  for (const [aId, bId] of [[1, 2], [2, 1]]) {
+    const h = cmpHeadToHead(m, aId, bId);
+    assert.equal(h.leaderIsA, aId === 2);
+    assert.equal(Math.round(h.leadGapPct * 10) / 10, 60); // 2400 over 1500
+    const by = Object.fromEntries(h.factors.map((f) => [f.key, f]));
+    // Positive where the leader is ahead, negative where behind, from either side.
+    assert.ok(by.uptime.leadPct > 0);
+    assert.ok(by.pace.leadPct > 0);
+    assert.ok(by.perHit.leadPct < 0);
+    assert.equal(Math.round(by.perHit.leadPct), -33); // 200 vs 300 per hit
+    // Exact: the leader's factors make the whole lead.
+    const product = h.factors.reduce((n, f) => n * (1 + f.leadPct / 100), 1);
+    assert.ok(Math.abs(product - 1.6) < 1e-9);
+  }
+});
+
+test("the header, the Diff column and the sentence agree on the leader's figures", () => {
+  const v = attachView();
+  // B (actor 2) leads, picked as B: the figures are B's lead, all positive.
+  v.setRecord({
+    ...fight([
+      row(1, 10, 1500, 5, { hitTimestamps: times(5, 0, 1000) }),
+      row(2, 10, 2400, 12, { hitTimestamps: times(12, 0, 800) }),
+    ], [{ actorId: 1, nickname: "Ann", jobId: 11 }, { actorId: 2, nickname: "Bo", jobId: 11 }]),
+    localActorId: 1,
+  });
+  v.api.reset();
+  v.btn.click();
+  const html = v.view.innerHTML;
+  assert.match(html, /<div class="gap cB">\+60\.0%<\/div>/);
+  assert.match(html, /<div class="gapWho cB">Bo<\/div>/);
+  assert.match(html, /Bo out-damages Ann by 60\.0%/);
+  assert.match(html, /Mainly: [^<]*Pace \(hits per active second\) \(\+/);
+  assert.match(html, /Ann is ahead on: Damage per hit \(-33\.3%\)/);
+  assert.match(html, /<div class="num cA">-33\.3%<\/div>/);
+  assert.doesNotMatch(html, /class="gap[^"]*">-/);
+});
+
+test("the skill table's Diff is the leader's damage less the other's", () => {
+  const v = attachView();
+  v.setRecord({
+    ...fight([row(1, 10, 1000, 5), row(1, 11, 900, 3), row(2, 10, 3000, 10), row(2, 11, 300, 3)],
+      [{ actorId: 1, nickname: "Ann", jobId: 11 }, { actorId: 2, nickname: "Bo", jobId: 11 }]),
+    localActorId: 1,
+  });
+  v.api.reset();
+  v.btn.click();
+  // Bo (B) leads: +2.0k on S10 where Bo is ahead, -600 on S11 where Ann is.
+  assert.match(v.view.innerHTML, /<td class="num cB">\+2\.0k<\/td>/);
+  assert.match(v.view.innerHTML, /<td class="num cA">-600<\/td>/);
+});
+
+test("the hit-quality differences are the leader's rate less the other's", () => {
+  const v = attachView();
+  // Bo (B) leads with a 20% crit rate against Ann's 60%: -40.0pt for Bo.
+  v.setRecord({
+    ...fight([row(1, 10, 1000, 5, { crit: 3 }), row(2, 10, 3000, 10, { crit: 2 })],
+      [{ actorId: 1, nickname: "Ann", jobId: 11 }, { actorId: 2, nickname: "Bo", jobId: 11 }]),
+    localActorId: 1,
+  });
+  v.api.reset();
+  v.btn.click();
+  assert.match(v.view.innerHTML, /<div class="d cA">-40\.0pt<\/div>/);
+});

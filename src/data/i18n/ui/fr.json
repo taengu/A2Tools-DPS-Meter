@@ -294,7 +294,7 @@
       "hitsF": "Coups",
       "perHit": "Dégâts par coup",
       "dots": "Part des DoT dans les dégâts",
-      "factorHint": "L'écart de DPS en facteurs qui se multiplient. Les barres sont à l'échelle du plus grand facteur ; la colonne de droite est l'écart que ce facteur fait à lui seul. Les ticks de DoT ne comptent pas dans le temps actif, le rythme et les dégâts par coup.",
+      "factorHint": "L'écart de DPS en facteurs qui se multiplient, vu du joueur en tête. Les barres sont à l'échelle du plus grand facteur ; Écart indique de combien ce facteur à lui seul met le joueur en tête devant (+) ou derrière (-). Les ticks de DoT ne comptent pas dans le temps actif, le rythme et les dégâts par coup.",
       "rateTitle": "Qualité des coups",
       "rateHint": "Les taux derrière les dégâts par coup",
       "mainCause": "Surtout : {list}",

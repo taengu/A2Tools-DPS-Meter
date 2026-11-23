@@ -294,7 +294,7 @@
       "hitsF": "Hits",
       "perHit": "Damage per hit",
       "dots": "DoT share of the damage",
-      "factorHint": "The DPS gap as factors that multiply together. Bars are scaled to the largest factor; the right column is the gap that factor alone makes. DoT ticks are left out of uptime, pace and damage per hit.",
+      "factorHint": "The DPS gap as factors that multiply together, seen from the leader. Bars are scaled to the largest factor; Diff is how far that factor alone puts the leader ahead (+) or behind (-). DoT ticks are left out of uptime, pace and damage per hit.",
       "rateTitle": "Hit quality",
       "rateHint": "The rates behind damage per hit",
       "mainCause": "Mainly: {list}",
