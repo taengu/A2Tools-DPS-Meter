@@ -18,14 +18,26 @@
     }
   };
 
+  // Whether the window shows anything, told to the meter on change: an empty
+  // pin lets clicks and drags through to the windows under it (#204).
+  let toldShown = null;
+  const tellShown = (shown) => {
+    if (shown === toldShown) return;
+    toldShown = shown;
+    invoke?.("fp_pin_shown", { shown }).catch(() => {});
+  };
+
   const render = () => {
     const t = smooth(window.fpTime(fp, maxOf(fp)));
     if (!t) {
       pin.classList.remove("isShown");
       // Nothing to show, but the layout being edited: a stand-in to place.
-      if (document.body.classList.contains("layoutEditing") && !timeEl.textContent) timeEl.textContent = "FP";
+      const editing = document.body.classList.contains("layoutEditing");
+      if (editing && !timeEl.textContent) timeEl.textContent = "FP";
+      tellShown(editing);
       return;
     }
+    tellShown(true);
     const text = window.fpTimeText(t.ms);
     if (timeEl.textContent !== text) timeEl.textContent = text;
     pin.classList.toggle("isDraining", t.draining);

@@ -30,10 +30,27 @@ fn saved_place(app: &tauri::AppHandle) -> Option<(i32, i32)> {
     Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
 }
 
-/// Clicks through to the game while the meter is locked.
+/// Whether the pin's page shows anything (`fp_pin_shown`). With no flight
+/// power to show it is an empty, invisible window, which took clicks and
+/// drags meant for the windows under it while the meter was unlocked (#204).
+static SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Clicks through to the game while the meter is locked, or while the pin
+/// shows nothing.
 pub fn apply_lock(app: &tauri::AppHandle) {
     if let Some(pin) = app.get_webview_window(LABEL) {
-        let _ = pin.set_ignore_cursor_events(locked(app));
+        let empty = !SHOWN.load(std::sync::atomic::Ordering::Relaxed);
+        let _ = pin.set_ignore_cursor_events(locked(app) || empty);
+    }
+}
+
+/// The pin's page says whether it shows anything (its time, or the stand-in
+/// while the layout is edited).
+#[tauri::command]
+pub fn fp_pin_shown(app: tauri::AppHandle, window: tauri::WebviewWindow, shown: bool) {
+    if window.label() == LABEL {
+        SHOWN.store(shown, std::sync::atomic::Ordering::Relaxed);
+        apply_lock(&app);
     }
 }
 

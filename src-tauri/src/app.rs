@@ -4984,6 +4984,7 @@ pub fn run() {
             crate::plugins::widgets::plugin_widget_drag,
             crate::fp_pin::fp_pin_show,
             crate::fp_pin::fp_pin_drag,
+            crate::fp_pin::fp_pin_shown,
             crate::layout::layout_edit_start,
             crate::layout::layout_edit_stop,
             crate::layout::layout_options,
