@@ -113,7 +113,7 @@ test("clicking Others does not select a fake actor or reset the player's selecti
   assert.equal(redraws, 0);
 });
 
-test("Others renders beside eight real players without a local highlight, icon or invented peak", () => {
+test("Others renders beside up to 24 real players without a local highlight, icon or invented peak", () => {
   const node = () => ({ ...element(), dataset: {},
     style: { setProperty() {} }, classList: { toggle() {} } });
   const list = node();
@@ -127,9 +127,12 @@ test("Others renders beside eight real players without a local highlight, icon o
     formatDamageCompact: (n) => String(n) });
   vm.runInContext(section("  const renderPartyBars =", "  // One click listener"), context);
   const stats = [{ isOthers: true, totalDmg: 100, contributionPct: 50 },
-    ...Array.from({ length: 9 }, (_, i) => ({ actorId: i + 1, totalDmg: 9 - i, contributionPct: 1 }))];
+    ...Array.from({ length: 25 }, (_, i) => ({ actorId: i + 1, totalDmg: 25 - i, contributionPct: 1 }))];
   vm.runInContext("renderPartyBars", context)(stats, 10_000);
-  assert.equal(list.children.length, 10, "All, eight players and the aggregate");
+  assert.equal(list.children.length, 26, "All, 24 players and the aggregate");
+  // Others takes no real player's place: the top 24 all stay, the 25th goes.
+  const shown = list.children.map((bar) => Number(bar.dataset.actorId)).filter((id) => id > 0).sort((a, b) => a - b);
+  assert.deepEqual(shown, Array.from({ length: 24 }, (_, i) => i + 1));
   const others = list.children.find((bar) => bar.dataset.others);
   assert.ok(others);
   assert.ok(!others.className.includes("isUser"), "unknown local identity is not Others");
