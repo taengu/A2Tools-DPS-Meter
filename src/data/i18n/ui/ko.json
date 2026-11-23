@@ -259,6 +259,15 @@
     "hpsChart": "초당 치유량",
     "sectionChart": "차트",
     "showSections": "표시할 영역",
+    "zoom": {
+      "label": "확대/축소",
+      "in": "확대",
+      "out": "축소",
+      "fit": "전체",
+      "fitTitle": "전투 전체 보기",
+      "hint": "Ctrl + 마우스 휠로 포인터 위치를 확대/축소하고, 레인을 드래그해 이동합니다.",
+      "position": "전투에서 보이는 구간"
+    },
     "hoverTooltip": {
       "loading": "불러오는 중...",
       "empty": "이 전투의 스킬 데이터가 없습니다",

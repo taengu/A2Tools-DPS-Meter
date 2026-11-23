@@ -8555,11 +8555,93 @@ html.a2-offline .historyUploadBtn {
   transform: translateX(-50%);
   white-space: nowrap;
 }
-.detailsPanel .fightTimelineAxisLane span:first-child {
+.detailsPanel .fightTimelineAxisLane span.isStart {
   transform: none;
 }
 .detailsPanel .fightTimelineAxisLane span.isEnd {
   transform: translateX(-100%);
+}
+
+/* The timeline's zoom (details.js): out, the level, in and Fit in the bar;
+   zoomed, a scrollbar under the axis, over the lanes' column, and the lanes
+   take a drag. The scrollbar keeps its room at Fit, so nothing moves when
+   it shows. */
+.detailsPanel .fightTimelineBar .ftlZoom {
+  margin-left: auto;
+  align-items: center;
+}
+.detailsPanel .fightTimelineBar .ftlZoom + .ftlSectionToggles {
+  margin-left: 0;
+}
+.detailsPanel .ftlZoom .buffChip:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.detailsPanel .ftlZoom .buffChip:disabled:hover {
+  color: rgba(255, 255, 255, 0.55);
+}
+.detailsPanel .ftlZoomBtn {
+  min-width: 2.1em;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+}
+.detailsPanel .ftlZoomLevel {
+  min-width: 2.8em;
+  text-align: center;
+  font-family: var(--hud-tech);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  color: var(--hud-sub);
+}
+.detailsPanel .fightTimelineZoomBar {
+  flex: none;
+  display: grid;
+  grid-template-columns: var(--ftl-gutter) minmax(0, 1fr) calc(var(--ftl-right) + var(--ftl-sb, 0px));
+  align-items: center;
+  height: 12px;
+  visibility: hidden;
+}
+.detailsPanel .fightTimeline.isZoomed .fightTimelineZoomBar {
+  visibility: visible;
+}
+.detailsPanel .ftlZoomTrack {
+  grid-column: 2;
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  touch-action: none;
+}
+.detailsPanel .ftlZoomTrack:focus-visible {
+  outline: 1px solid var(--isUser-fill);
+  outline-offset: 2px;
+}
+.detailsPanel .ftlZoomThumb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 14px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.32);
+  cursor: grab;
+}
+.detailsPanel .ftlZoomTrack:hover .ftlZoomThumb,
+.detailsPanel .fightTimelineZoomBar.isDragging .ftlZoomThumb {
+  background: rgba(255, 255, 255, 0.55);
+}
+.detailsPanel .fightTimelineZoomBar.isDragging .ftlZoomThumb {
+  cursor: grabbing;
+}
+.detailsPanel .fightTimeline.isZoomed .fightTimelineScroll {
+  cursor: grab;
+  user-select: none;
+}
+.detailsPanel .fightTimeline.isPanning .fightTimelineScroll,
+.detailsPanel .fightTimeline.isPanning .fightTimelineScroll * {
+  cursor: grabbing;
 }
 
 /* Fight replay (fightReplay.js): under the axis, the controls in the gutter

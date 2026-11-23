@@ -279,7 +279,8 @@ if (typeof module !== "undefined" && module.exports) {
       bar.classList.add("isTop");
       header.after(bar);
     } else {
-      const axis = timeline.querySelector(".fightTimelineAxis");
+      // Under the axis, and the zoom's scrollbar where there is one.
+      const axis = timeline.querySelector(".fightTimelineZoomBar") || timeline.querySelector(".fightTimelineAxis");
       if (axis?.nextSibling) timeline.insertBefore(bar, axis.nextSibling);
       else timeline.appendChild(bar);
     }
@@ -322,6 +323,15 @@ if (typeof module !== "undefined" && module.exports) {
     let figureCostMs = 0;
 
     const durationMs = () => Number(hooks.durationMs?.()) || model?.durationMs || 0;
+    // The part of the fight the timeline shows (its zoom; all of it at Fit).
+    const viewNow = (dur) => {
+      const v = hooks.view?.();
+      return v && v.to > v.from ? v : { from: 0, to: dur };
+    };
+    // Zoomed in, the view moves to keep the moment in it.
+    const follow = () => {
+      if (active) hooks.follow?.(at);
+    };
 
     const syncPlayButton = () => {
       bar.classList.toggle("isPlaying", playing);
@@ -362,7 +372,12 @@ if (typeof module !== "undefined" && module.exports) {
       const dur = durationMs();
       if (!geometry || dur <= 0) return;
       const width = geometry.right - geometry.left;
-      const x = geometry.left + Math.min(1, at / dur) * width;
+      // Where the moment falls in the view; out of it, the line goes and the
+      // shade covers all (before the view) or nothing (after it).
+      const view = viewNow(dur);
+      const share = (at - view.from) / (view.to - view.from);
+      const inView = share >= 0 && share <= 1;
+      const x = geometry.left + Math.max(0, Math.min(1, share)) * width;
       if (shadeFor !== geometry) {
         // Placed once per layout; each frame only moves it.
         shadeFor = geometry;
@@ -375,7 +390,7 @@ if (typeof module !== "undefined" && module.exports) {
         head.style.height = `${geometry.height}px`;
       }
       if (shade.hidden) shade.hidden = false;
-      if (head.hidden) head.hidden = false;
+      if (head.hidden === inView) head.hidden = !inView;
       if (shadeFill.style.transition !== "none") shadeFill.style.transition = "none";
       if (head.style.transition !== "none") head.style.transition = "none";
       if (withShade) shadeFill.style.transform = `translateX(${(x - geometry.left).toFixed(1)}px)`;
@@ -516,6 +531,7 @@ if (typeof module !== "undefined" && module.exports) {
         exit();
         return;
       }
+      follow();
       stepMovers(true);
       hooks.advancePartyBars?.();
       requestFigures(now);
@@ -601,6 +617,7 @@ if (typeof module !== "undefined" && module.exports) {
     const seek = (ms) => {
       if (!active && !enter()) return;
       at = Math.max(0, Math.min(durationMs(), Number(ms) || 0));
+      follow();
       if (playing) {
         // Arrow keys while playing: carry on from the new moment.
         playFrom = at;
@@ -684,6 +701,7 @@ if (typeof module !== "undefined" && module.exports) {
       }
       if (!active && !enter()) return;
       at = Math.max(0, Math.min(durationMs(), Number(scrub.value) || 0));
+      follow();
       if (!dragFrame) dragFrame = requestAnimationFrame(dragPaint);
       clearTimeout(settleTimer);
       // Held still for a while: the figures, exactly.
@@ -796,6 +814,8 @@ if (typeof module !== "undefined" && module.exports) {
 
     syncPlayButton();
     syncAvailability();
+    // details.js draws the moment again when the timeline's view moves.
+    return { repaint: () => paintTimeline() };
   };
 
   window.fightReplay = { attach };

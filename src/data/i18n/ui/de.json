@@ -259,6 +259,15 @@
     "hpsChart": "Heilung pro Sekunde",
     "sectionChart": "Diagramm",
     "showSections": "Angezeigte Bereiche",
+    "zoom": {
+      "label": "Zoom",
+      "in": "Vergrößern",
+      "out": "Verkleinern",
+      "fit": "Alles",
+      "fitTitle": "Den ganzen Kampf zeigen",
+      "hint": "Strg + Mausrad zoomt um den Mauszeiger; Spuren ziehen, um zu verschieben.",
+      "position": "Sichtbarer Teil des Kampfes"
+    },
     "hoverTooltip": {
       "loading": "Wird geladen...",
       "empty": "Keine Fertigkeitsdaten für diesen Kampf",

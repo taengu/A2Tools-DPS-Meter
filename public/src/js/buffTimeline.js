@@ -117,6 +117,124 @@ const buffAxisTicks = (durationMs, maxTicks = 8) => {
   return ticks;
 };
 
+// ── The fight timeline's zoom ──
+// details.js keeps one view of the fight, { from, to } in ms, for the chart,
+// the buffs, the stagger, the casts, the axis, the cursor and the replay, so
+// they all line up. These are its maths (no DOM; Node loads this file to test
+// them). Fit is the whole fight; zoomed in, no less than FTL_MIN_SPAN_MS
+// fills the lanes (all of a fight shorter than that).
+const FTL_MIN_SPAN_MS = 10000;
+
+// The view kept inside the fight and no narrower than the least span.
+const ftlClampView = (view, durationMs, minSpanMs = FTL_MIN_SPAN_MS) => {
+  const duration = Number(durationMs) || 0;
+  if (duration <= 0) return { from: 0, to: 0 };
+  const minSpan = Math.min(duration, Math.max(1, Number(minSpanMs) || 0));
+  const from = Number(view?.from);
+  const to = Number(view?.to);
+  const start = Number.isFinite(from) ? from : 0;
+  const end = Number.isFinite(to) ? to : duration;
+  const span = Math.max(minSpan, Math.min(duration, end - start));
+  const left = Math.max(0, Math.min(duration - span, start));
+  return { from: left, to: left + span };
+};
+
+// The view shows the whole fight (within a hair: a live fight grows).
+const ftlIsFit = (view, durationMs) => {
+  const duration = Number(durationMs) || 0;
+  if (duration <= 0 || !view) return true;
+  return view.from <= 0 && view.to >= duration * 0.999;
+};
+
+// How many times closer than Fit the view is: 1 at Fit.
+const ftlZoomLevel = (view, durationMs) => {
+  const duration = Number(durationMs) || 0;
+  const span = view ? view.to - view.from : duration;
+  return duration > 0 && span > 0 ? duration / span : 1;
+};
+
+// The most a fight can be zoomed: its least span filling the lanes.
+const ftlMaxZoom = (durationMs, minSpanMs = FTL_MIN_SPAN_MS) => {
+  const duration = Number(durationMs) || 0;
+  return duration > 0 ? Math.max(1, duration / Math.min(duration, minSpanMs)) : 1;
+};
+
+// Zoomed by `factor` (above 1 closer, below 1 further) about the moment
+// `atMs`, which stays where it is in the lanes; about the middle without one.
+const ftlZoomView = (view, factor, atMs, durationMs, minSpanMs = FTL_MIN_SPAN_MS) => {
+  const v = ftlClampView(view, durationMs, minSpanMs);
+  const span = v.to - v.from;
+  const f = Number(factor);
+  if (!(span > 0) || !(f > 0)) return v;
+  const at = Number.isFinite(Number(atMs)) && atMs !== null
+    ? Math.max(v.from, Math.min(v.to, Number(atMs)))
+    : v.from + span / 2;
+  const share = (at - v.from) / span;
+  const next = span / f;
+  return ftlClampView({ from: at - share * next, to: at - share * next + next }, durationMs, minSpanMs);
+};
+
+// Moved by `deltaMs` (later is positive), its span kept, stopping at the ends.
+const ftlPanView = (view, deltaMs, durationMs, minSpanMs = FTL_MIN_SPAN_MS) => {
+  const v = ftlClampView(view, durationMs, minSpanMs);
+  const d = Number(deltaMs) || 0;
+  return ftlClampView({ from: v.from + d, to: v.to + d }, durationMs, minSpanMs);
+};
+
+// The view that shows the moment `tMs`: the same one while it is in it;
+// else moved so it sits a tenth in from the left (a replay playing on then
+// has the rest of the view ahead of it).
+const ftlFollowView = (view, tMs, durationMs, minSpanMs = FTL_MIN_SPAN_MS) => {
+  const v = ftlClampView(view, durationMs, minSpanMs);
+  const t = Number(tMs) || 0;
+  if (t >= v.from && t <= v.to) return v;
+  const span = v.to - v.from;
+  return ftlClampView({ from: t - span * 0.1, to: t + span * 0.9 }, durationMs, minSpanMs);
+};
+
+// A round step giving at most `maxTicks` labels over `spanMs`: a second
+// zoomed right in, ten minutes over the longest fights.
+const FTL_TICK_STEPS_S = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200];
+const ftlTickStepMs = (spanMs, maxTicks = 10) => {
+  const span = Number(spanMs) || 0;
+  const most = Math.max(1, Number(maxTicks) || 1);
+  const steps = FTL_TICK_STEPS_S.map((s) => s * 1000);
+  return steps.find((s) => span / s <= most) || steps[steps.length - 1];
+};
+
+// The axis's ticks for the view: each step's multiple in it, at `pct` of the
+// lanes; with the fight's end in view, the end too (labelled, and a tick
+// crowding it left out). The chart and the casts draw their grid on these.
+const ftlViewTicks = (view, durationMs, maxTicks = 10) => {
+  const duration = Number(durationMs) || 0;
+  const from = Number(view?.from) || 0;
+  const to = Number(view?.to) || 0;
+  const span = to - from;
+  if (duration <= 0 || !(span > 0)) return [];
+  const step = ftlTickStepMs(span, maxTicks);
+  const times = [];
+  for (let ms = Math.ceil(from / step - 1e-9) * step; ms <= to + 1e-6; ms += step) times.push(ms);
+  const endShown = to >= duration - 0.5;
+  if (endShown) {
+    while (times.length && duration - times[times.length - 1] < step * 0.4) times.pop();
+    times.push(duration);
+  }
+  const round = (v) => Math.round(v * 1000) / 1000;
+  return times.map((ms) => ({
+    ms,
+    pct: round(((ms - from) / span) * 100),
+    isEnd: endShown && ms === duration,
+  }));
+};
+
+// A lane mark's left and width, in percent of the fight, as CSS that
+// follows the zoom: the timeline sets --ftl-from (where the view starts, in
+// percent of the fight) and --ftl-zoom; without them, plain percent. Bars
+// are laid out again by the browser, not stretched, and panning sets two
+// properties rather than drawing every lane again.
+const ftlLeftCss = (pct) => `calc((${Number(pct) || 0} - var(--ftl-from, 0)) * var(--ftl-zoom, 1) * 1%)`;
+const ftlWidthCss = (pct) => `calc(${Number(pct) || 0} * var(--ftl-zoom, 1) * 1%)`;
+
 // Merge the pieces of several tracks into one: where any is on, the merged
 // one is, with the most stacks of those on; a piece's end code is kept only
 // where nothing continues past it (0, "runs on", elsewhere).
@@ -493,8 +611,8 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
     bars.forEach((bar, barIndex) => {
       const b = document.createElement("div");
       b.className = "buffBar";
-      b.style.left = `${bar.left}%`;
-      b.style.width = `${bar.width}%`;
+      b.style.left = ftlLeftCss(bar.left);
+      b.style.width = ftlWidthCss(bar.width);
       b.style.background = color;
       // More stacks, more solid.
       b.style.opacity = String(maxStacks > 1 ? 0.45 + 0.55 * (bar.stacks / maxStacks) : 0.85);
@@ -698,3 +816,17 @@ const createBuffTimeline = ({ root, describeActor = () => null }) => {
 };
 
 window.createBuffTimeline = createBuffTimeline;
+window.ftlZoom = {
+  FTL_MIN_SPAN_MS,
+  clampView: ftlClampView,
+  isFit: ftlIsFit,
+  zoomLevel: ftlZoomLevel,
+  maxZoom: ftlMaxZoom,
+  zoomView: ftlZoomView,
+  panView: ftlPanView,
+  followView: ftlFollowView,
+  tickStepMs: ftlTickStepMs,
+  viewTicks: ftlViewTicks,
+  leftCss: ftlLeftCss,
+  widthCss: ftlWidthCss,
+};

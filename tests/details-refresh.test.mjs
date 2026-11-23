@@ -74,7 +74,7 @@ function detailsView({ targetCount = 20, panelOpen = true } = {}) {
     targetMatchesSelectedAttackers: () => true,
     loadDetailsContext: () => { contextReads++; },
     syncSelectedAttackersFromLabel() {}, syncSortButtons() {}, syncModeButtons() {}, updateHeaderText() {}, updateGridColumns() {},
-    restoreLayout() {},
+    restoreLayout() {}, resetFtlZoom() {},
     render: (details, row) => {
       rendered.push({ details, row });
       context.lastDetails = details;

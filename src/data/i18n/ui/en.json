@@ -264,6 +264,15 @@
     "hpsChart": "Healing per second",
     "sectionChart": "Chart",
     "showSections": "Show sections",
+    "zoom": {
+      "label": "Zoom",
+      "in": "Zoom in",
+      "out": "Zoom out",
+      "fit": "Fit",
+      "fitTitle": "Show the whole fight",
+      "hint": "Ctrl + mouse wheel zooms around the pointer; drag the lanes to move.",
+      "position": "Visible part of the fight"
+    },
     "compare": {
       "button": "Compare two players",
       "party": "Party",

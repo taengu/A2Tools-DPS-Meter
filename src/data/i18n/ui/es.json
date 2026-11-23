@@ -259,6 +259,15 @@
     "hpsChart": "Curación por segundo",
     "sectionChart": "Gráfico",
     "showSections": "Secciones visibles",
+    "zoom": {
+      "label": "Zoom",
+      "in": "Acercar",
+      "out": "Alejar",
+      "fit": "Todo",
+      "fitTitle": "Mostrar todo el combate",
+      "hint": "Ctrl + rueda del ratón amplía alrededor del puntero; arrastra las pistas para moverte.",
+      "position": "Parte visible del combate"
+    },
     "hoverTooltip": {
       "loading": "Cargando...",
       "empty": "No hay datos de habilidades de este combate",

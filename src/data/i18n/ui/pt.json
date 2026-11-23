@@ -259,6 +259,15 @@
     "hpsChart": "Cura por segundo",
     "sectionChart": "Gráfico",
     "showSections": "Seções visíveis",
+    "zoom": {
+      "label": "Zoom",
+      "in": "Aproximar",
+      "out": "Afastar",
+      "fit": "Tudo",
+      "fitTitle": "Mostrar a luta inteira",
+      "hint": "Ctrl + roda do mouse aproxima em torno do ponteiro; arraste as faixas para mover.",
+      "position": "Parte visível da luta"
+    },
     "hoverTooltip": {
       "loading": "Carregando...",
       "empty": "Sem dados de habilidades desta luta",

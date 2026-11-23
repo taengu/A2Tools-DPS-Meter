@@ -81,6 +81,12 @@ const staggerPct = (ms, durationMs) => {
   return Math.round(Math.max(0, Math.min(100, (Number(ms) / d) * 100)) * 1000) / 1000;
 };
 
+// A mark's left and width on the lane, following the fight timeline's zoom
+// (--ftl-from and --ftl-zoom, set by details.js; buffTimeline.js's
+// ftlLeftCss). Plain percent where they are not set.
+const staggerLeftCss = (pct) => `calc((${Number(pct) || 0} - var(--ftl-from, 0)) * var(--ftl-zoom, 1) * 1%)`;
+const staggerWidthCss = (pct) => `calc(${Number(pct) || 0} * var(--ftl-zoom, 1) * 1%)`;
+
 // m:ss.t from the fight's start.
 const formatStaggerTime = (ms) => {
   const v = Math.max(0, Number(ms) || 0);
@@ -173,7 +179,7 @@ const createStaggerPanel = ({ root, describeActor = () => null }) => {
     for (const h of hits) {
       const m = document.createElement("div");
       m.className = `staggerTick${h.ambiguous ? " isAmbiguous" : ""}`;
-      m.style.left = `${staggerPct(h.t, data.durationMs)}%`;
+      m.style.left = staggerLeftCss(staggerPct(h.t, data.durationMs));
       if (color) m.style.background = color;
       m._hit = h;
       m._actor = actor;
@@ -200,13 +206,13 @@ const createStaggerPanel = ({ root, describeActor = () => null }) => {
     const bar = cell(`staggerSpan ${tone}`);
     const from = staggerPct(w.start, data.durationMs);
     const to = staggerPct(w.end, data.durationMs);
-    bar.style.left = `${from}%`;
-    bar.style.width = `${Math.max(0.4, to - from)}%`;
+    bar.style.left = staggerLeftCss(from);
+    bar.style.width = staggerWidthCss(Math.max(0.4, to - from));
     bar._window = w;
     lane.appendChild(bar);
     if (endKey === "break") {
       const mark = cell("staggerBreakMark");
-      mark.style.left = `${to}%`;
+      mark.style.left = staggerLeftCss(to);
       lane.appendChild(mark);
     }
     head.appendChild(lane);

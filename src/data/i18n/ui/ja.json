@@ -259,6 +259,15 @@
     "hpsChart": "秒間回復量",
     "sectionChart": "グラフ",
     "showSections": "表示する項目",
+    "zoom": {
+      "label": "ズーム",
+      "in": "拡大",
+      "out": "縮小",
+      "fit": "全体",
+      "fitTitle": "戦闘全体を表示",
+      "hint": "Ctrl + マウスホイールでポインター位置を拡大・縮小、レーンをドラッグして移動します。",
+      "position": "戦闘の表示範囲"
+    },
     "hoverTooltip": {
       "loading": "読み込み中...",
       "empty": "この戦闘のスキルデータはありません",

@@ -259,6 +259,15 @@
     "hpsChart": "每秒治療",
     "sectionChart": "圖表",
     "showSections": "顯示的部分",
+    "zoom": {
+      "label": "縮放",
+      "in": "放大",
+      "out": "縮小",
+      "fit": "全部",
+      "fitTitle": "顯示整場戰鬥",
+      "hint": "Ctrl + 滑鼠滾輪以指標為中心縮放；拖曳軌道可移動。",
+      "position": "戰鬥的可見範圍"
+    },
     "hoverTooltip": {
       "loading": "載入中...",
       "empty": "此戰鬥沒有技能資料",

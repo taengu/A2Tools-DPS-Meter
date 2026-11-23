@@ -259,6 +259,15 @@
     "hpsChart": "Soins par seconde",
     "sectionChart": "Graphique",
     "showSections": "Sections affichées",
+    "zoom": {
+      "label": "Zoom",
+      "in": "Zoom avant",
+      "out": "Zoom arrière",
+      "fit": "Tout",
+      "fitTitle": "Afficher tout le combat",
+      "hint": "Ctrl + molette zoome autour du pointeur ; faites glisser les pistes pour vous déplacer.",
+      "position": "Partie visible du combat"
+    },
     "hoverTooltip": {
       "loading": "Chargement...",
       "empty": "Aucune donnée de compétence pour ce combat",

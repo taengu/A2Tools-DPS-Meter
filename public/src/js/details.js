@@ -1756,9 +1756,17 @@ const createDetailsUI = ({
       text,
     };
   };
-  // One grid step for the chart, the casts and the axis, so their lines meet.
-  const ftlStepSec = (durationSec) =>
-    durationSec > 600 ? 120 : durationSec > 300 ? 60 : durationSec > 120 ? 30 : durationSec > 40 ? 10 : 5;
+  // The first of ascending times at or after `t`.
+  const ftlFirstFrom = (ts, t) => {
+    let lo = 0;
+    let hi = ts.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (ts[mid] < t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
   const ftlTime = (sec) => {
     const whole = Math.max(0, Math.round(sec));
     return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
@@ -1766,22 +1774,53 @@ const createDetailsUI = ({
   // The fight's length on the axis: what the chart drew, and what buffs and
   // the cursor are laid out against.
   let ftlDurationMs = 0;
+
+  // ── Zoom ──
+  // One view of the fight for every lane: the chart and the casts draw it,
+  // the buffs and stagger follow it by two style properties (--ftl-from,
+  // --ftl-zoom; buffTimeline.js), the axis, the cursor and the replay read
+  // it. null is Fit: the whole fight, which a live fight's view grows with.
+  // The maths are buffTimeline.js's (window.ftlZoom).
+  const zoomMath = window.ftlZoom;
+  let ftlView = null; // { from, to } in ms, or null (Fit)
+  let ftlZoomKey = null; // the fight the view was set in
+  const ftlViewNow = () => (ftlView && zoomMath
+    ? zoomMath.clampView(ftlView, ftlDurationMs)
+    : { from: 0, to: ftlDurationMs });
+  // The lanes' width now: the chart, the casts and the axis take their
+  // ticks' step from it, so they agree on it.
+  const ftlLaneWidth = () => {
+    const m = ftlMetrics();
+    return Math.max(0, (fightTimelineScroll?.clientWidth || 0) - m.gutter - m.right);
+  };
+  const ftlMaxTicks = () => Math.max(3, Math.floor((ftlLaneWidth() || 640) / 64));
+  // The view for a fight `durationMs` long, as the chart and the casts draw
+  // it: Fit for another fight than the view was set in, or a live one that
+  // started again (its time ran back).
+  const ftlViewFor = (durationMs) => {
+    const d = Number(durationMs) || 0;
+    if (ftlView && (ftlKeyNow() !== ftlZoomKey || d + 2000 < ftlDurationMs)) ftlView = null;
+    return ftlView && zoomMath ? zoomMath.clampView(ftlView, d) : { from: 0, to: d };
+  };
+  // The ticks of the axis, and the grid lines of the chart and the casts.
+  const ftlTicksFor = (view, durationMs) => (zoomMath ? zoomMath.viewTicks(view, durationMs, ftlMaxTicks()) : []);
+
   const renderFightAxis = (durationMs) => {
-    ftlDurationMs = Number(durationMs) || 0;
+    const next = Number(durationMs) || 0;
+    const view = ftlViewFor(next);
+    ftlDurationMs = next;
     syncFtlScrollbar?.();
+    syncFtlZoom();
     if (!fightTimelineAxisLane) return;
     fightTimelineAxisLane.replaceChildren();
     if (ftlDurationMs <= 0) return;
-    const durationSec = ftlDurationMs / 1000;
-    const step = ftlStepSec(durationSec);
-    const ticks = [];
-    for (let sec = 0; sec < durationSec - step * 0.4; sec += step) ticks.push(sec);
-    ticks.push(durationSec);
-    ticks.forEach((sec, i) => {
+    ftlTicksFor(view, ftlDurationMs).forEach((tick) => {
       const span = document.createElement("span");
-      span.style.left = `${(sec / durationSec) * 100}%`;
-      if (i === ticks.length - 1) span.classList.add("isEnd");
-      span.textContent = ftlTime(sec);
+      span.style.left = `${tick.pct}%`;
+      // The labels at the lanes' ends stay inside them.
+      if (tick.isEnd || tick.pct > 97) span.classList.add("isEnd");
+      else if (tick.pct < 3) span.classList.add("isStart");
+      span.textContent = ftlTime(tick.ms / 1000);
       fightTimelineAxisLane.appendChild(span);
     });
   };
@@ -1810,15 +1849,24 @@ const createDetailsUI = ({
     if (ftlCursor) ftlCursor.hidden = true;
     if (ftlAxisTag) ftlAxisTag.hidden = true;
   };
-  fightTimelineScroll?.addEventListener("mousemove", (event) => {
-    if (!ftlCursor || ftlDurationMs <= 0) return hideFtlCursor();
+  // The fight's moment under a point on the screen, in the view; null off
+  // the lanes.
+  const ftlTimeAtClientX = (clientX) => {
+    if (!fightTimelineScroll || ftlDurationMs <= 0) return null;
     const m = ftlMetrics();
-    const rect = fightTimelineScroll.getBoundingClientRect();
     const laneLeft = m.gutter;
     const laneRight = fightTimelineScroll.clientWidth - m.right;
-    const x = event.clientX - rect.left;
-    if (x < laneLeft || x > laneRight || laneRight <= laneLeft) return hideFtlCursor();
-    const sec = ((x - laneLeft) / (laneRight - laneLeft)) * (ftlDurationMs / 1000);
+    const x = clientX - fightTimelineScroll.getBoundingClientRect().left;
+    if (x < laneLeft || x > laneRight || laneRight <= laneLeft) return null;
+    const view = ftlViewNow();
+    return { x, ms: view.from + ((x - laneLeft) / (laneRight - laneLeft)) * (view.to - view.from) };
+  };
+  fightTimelineScroll?.addEventListener("mousemove", (event) => {
+    if (!ftlCursor || ftlDurationMs <= 0) return hideFtlCursor();
+    const at = ftlTimeAtClientX(event.clientX);
+    if (!at) return hideFtlCursor();
+    const { x } = at;
+    const sec = at.ms / 1000;
     ftlCursor.hidden = false;
     ftlCursor.style.left = `${Math.round(x)}px`;
     ftlCursor.style.height = `${fightTimelineScroll.scrollHeight}px`;
@@ -1829,6 +1877,204 @@ const createDetailsUI = ({
     }
   });
   fightTimelineScroll?.addEventListener("mouseleave", hideFtlCursor);
+
+  // The zoom's controls: − / + / Fit in the bar, Ctrl + wheel over the
+  // timeline (about the pointer), and, zoomed, a drag along the lanes or the
+  // scrollbar under the axis to move. A plain wheel still scrolls.
+  const ftlZoomGroup = fightTimeline?.querySelector?.(".ftlZoom");
+  const ftlZoomLevelEl = ftlZoomGroup?.querySelector?.(".ftlZoomLevel");
+  const ftlZoomBar = fightTimeline?.querySelector?.(".fightTimelineZoomBar");
+  const ftlZoomTrack = ftlZoomBar?.querySelector?.(".ftlZoomTrack");
+  const ftlZoomThumb = ftlZoomBar?.querySelector?.(".ftlZoomThumb");
+  let ftlReplay = null; // fightReplay.js's handle: its moment drawn again on a move
+  let ftlRedrawFrame = 0;
+  // The fight a view belongs to: a saved fight's record, or the live
+  // target. Another one shows at Fit (the players picked keep the view, to
+  // compare their casts at the same moment).
+  const ftlKeyNow = () => historyRecord || `live:${selectedTargetId ?? "all"}`;
+
+  // The style properties the buffs and stagger follow, the buttons, the
+  // level and the scrollbar, from the view.
+  const syncFtlZoom = () => {
+    ftlViewFor(ftlDurationMs);
+    const d = ftlDurationMs;
+    const view = ftlViewNow();
+    const fit = !ftlView || !zoomMath || zoomMath.isFit(view, d);
+    const level = fit ? 1 : zoomMath.zoomLevel(view, d);
+    const fromPct = !fit && d > 0 ? (view.from / d) * 100 : 0;
+    const spanPct = !fit && d > 0 ? ((view.to - view.from) / d) * 100 : 100;
+    fightTimeline?.style?.setProperty("--ftl-from", String(Math.round(fromPct * 10000) / 10000));
+    fightTimeline?.style?.setProperty("--ftl-zoom", String(Math.round(level * 10000) / 10000));
+    fightTimeline?.classList?.toggle?.("isZoomed", !fit);
+    const max = zoomMath ? zoomMath.maxZoom(d) : 1;
+    ftlZoomGroup?.querySelectorAll?.("[data-ftl-zoom]")?.forEach((btn) => {
+      btn.disabled = d <= 0 || (btn.dataset.ftlZoom === "in" ? level >= max * 0.999 : fit);
+    });
+    if (ftlZoomLevelEl) {
+      const text = `${level < 10 ? Math.round(level * 10) / 10 : Math.round(level)}×`;
+      if (ftlZoomLevelEl.textContent !== text) ftlZoomLevelEl.textContent = text;
+    }
+    if (ftlZoomThumb) {
+      ftlZoomThumb.style.left = `${fromPct}%`;
+      ftlZoomThumb.style.width = `${spanPct}%`;
+    }
+    if (ftlZoomTrack) {
+      ftlZoomTrack.setAttribute("aria-valuenow", String(Math.round(view.from / 1000)));
+      ftlZoomTrack.setAttribute("aria-valuemax", String(Math.max(0, Math.round((d - (view.to - view.from)) / 1000))));
+      ftlZoomTrack.setAttribute("aria-valuetext", `${ftlTime(view.from / 1000)} – ${ftlTime(view.to / 1000)}`);
+      ftlZoomTrack.tabIndex = fit ? -1 : 0;
+    }
+  };
+
+  // A new view: kept, then drawn on the next frame (the chart and casts
+  // again, the rest by their properties), so a wheel or a drag draws once a
+  // frame at most.
+  const setFtlView = (next) => {
+    if (!zoomMath || ftlDurationMs <= 0) return;
+    const v = next ? zoomMath.clampView(next, ftlDurationMs) : null;
+    ftlView = v && !zoomMath.isFit(v, ftlDurationMs) ? v : null;
+    ftlZoomKey = ftlKeyNow();
+    if (ftlRedrawFrame) return;
+    ftlRedrawFrame = requestAnimationFrame(() => {
+      ftlRedrawFrame = 0;
+      syncFtlZoom();
+      if (lastDetails) {
+        renderDpsChart(lastDetails);
+        renderTimeline(lastDetails);
+      }
+      renderFightAxis(ftlDurationMs);
+      hideFtlCursor();
+      ftlReplay?.repaint?.();
+    });
+  };
+  // Back to Fit at once: a new fight, another one, the window closed.
+  const resetFtlZoom = () => {
+    ftlView = null;
+    ftlZoomKey = null;
+    syncFtlZoom();
+  };
+  const zoomFtlBy = (factor, atMs = null) => {
+    if (!zoomMath || ftlDurationMs <= 0) return;
+    setFtlView(zoomMath.zoomView(ftlViewNow(), factor, atMs, ftlDurationMs));
+  };
+  const panFtlByPx = (px) => {
+    const lane = ftlLaneWidth();
+    if (!ftlView || !zoomMath || lane <= 0) return;
+    const view = ftlViewNow();
+    setFtlView(zoomMath.panView(view, (px / lane) * (view.to - view.from), ftlDurationMs));
+  };
+
+  ftlZoomGroup?.addEventListener("click", (event) => {
+    const btn = event.target.closest?.("[data-ftl-zoom]");
+    if (!btn || btn.disabled) return;
+    if (btn.dataset.ftlZoom === "in") zoomFtlBy(2);
+    else if (btn.dataset.ftlZoom === "out") zoomFtlBy(0.5);
+    else setFtlView(null);
+  });
+
+  // Ctrl + wheel zooms about the moment under the pointer (a touchpad's
+  // pinch arrives the same way); zoomed, a sideways wheel (Shift + wheel, a
+  // touchpad's swipe) moves the view. Anything else scrolls as before.
+  fightTimeline?.addEventListener("wheel", (event) => {
+    if (ftlDurationMs <= 0 || !zoomMath) return;
+    if (event.target.closest?.(".fightTimelineBar")) return;
+    const unit = event.deltaMode === 1 ? 33 : event.deltaMode === 2 ? 400 : 1;
+    if (event.ctrlKey) {
+      event.preventDefault();
+      const dy = Math.max(-300, Math.min(300, event.deltaY * unit));
+      zoomFtlBy(Math.exp(-dy * 0.0025), ftlTimeAtClientX(event.clientX)?.ms ?? null);
+      return;
+    }
+    if (!ftlView) return;
+    const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+    if (!sideways && !event.shiftKey) return;
+    event.preventDefault();
+    panFtlByPx((sideways ? event.deltaX : event.deltaY) * unit);
+  }, { passive: false });
+
+  // Zoomed, a drag along the lanes moves the view. A click stays a click: it
+  // becomes a drag only past a few pixels, and the click a drag ends in is
+  // swallowed.
+  let ftlPan = null;
+  fightTimelineScroll?.addEventListener("pointerdown", (event) => {
+    if (!ftlView || event.button !== 0) return;
+    if (event.target.closest?.("button, input, select, a, [role='button']")) return;
+    if (!ftlTimeAtClientX(event.clientX)) return;
+    ftlPan = { id: event.pointerId, x: event.clientX, view: ftlViewNow(), moved: false };
+  });
+  fightTimelineScroll?.addEventListener("pointermove", (event) => {
+    if (!ftlPan || event.pointerId !== ftlPan.id) return;
+    const dx = event.clientX - ftlPan.x;
+    if (!ftlPan.moved) {
+      if (Math.abs(dx) < 4) return;
+      ftlPan.moved = true;
+      try { fightTimelineScroll.setPointerCapture(event.pointerId); } catch { /* moves still arrive over it */ }
+      fightTimeline.classList.add("isPanning");
+    }
+    const lane = ftlLaneWidth();
+    if (lane <= 0) return;
+    const span = ftlPan.view.to - ftlPan.view.from;
+    setFtlView(zoomMath.panView(ftlPan.view, (-dx / lane) * span, ftlDurationMs));
+  });
+  const swallowClick = (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+  };
+  const endFtlPan = (event) => {
+    if (!ftlPan || event.pointerId !== ftlPan.id) return;
+    const moved = ftlPan.moved;
+    ftlPan = null;
+    fightTimeline?.classList?.remove?.("isPanning");
+    if (!moved) return;
+    window.addEventListener("click", swallowClick, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener("click", swallowClick, { capture: true }), 0);
+  };
+  fightTimelineScroll?.addEventListener("pointerup", endFtlPan);
+  fightTimelineScroll?.addEventListener("pointercancel", endFtlPan);
+
+  // The scrollbar: the thumb is the view, over the whole fight. Drag it, or
+  // press the track to bring the view there; arrows, Page keys, Home / End.
+  ftlZoomTrack?.addEventListener("pointerdown", (event) => {
+    if (!ftlView || event.button !== 0 || ftlDurationMs <= 0) return;
+    event.preventDefault();
+    const rect = ftlZoomTrack.getBoundingClientRect();
+    if (!(rect.width > 0)) return;
+    const msAt = (clientX) => ((clientX - rect.left) / rect.width) * ftlDurationMs;
+    const view = ftlViewNow();
+    const span = view.to - view.from;
+    const grab = event.target === ftlZoomThumb ? msAt(event.clientX) - view.from : span / 2;
+    const moveTo = (clientX) => {
+      const from = msAt(clientX) - grab;
+      setFtlView({ from, to: from + span });
+    };
+    if (event.target !== ftlZoomThumb) moveTo(event.clientX);
+    try { ftlZoomTrack.setPointerCapture(event.pointerId); } catch { /* the drag still follows */ }
+    ftlZoomBar.classList.add("isDragging");
+    const move = (e) => moveTo(e.clientX);
+    const up = () => {
+      ftlZoomTrack.removeEventListener("pointermove", move);
+      ftlZoomTrack.removeEventListener("pointerup", up);
+      ftlZoomTrack.removeEventListener("pointercancel", up);
+      ftlZoomBar.classList.remove("isDragging");
+    };
+    ftlZoomTrack.addEventListener("pointermove", move);
+    ftlZoomTrack.addEventListener("pointerup", up);
+    ftlZoomTrack.addEventListener("pointercancel", up);
+  });
+  ftlZoomTrack?.addEventListener("keydown", (event) => {
+    if (!ftlView || !zoomMath) return;
+    const view = ftlViewNow();
+    const span = view.to - view.from;
+    const by = { ArrowLeft: -0.1, ArrowRight: 0.1, PageUp: -1, PageDown: 1 }[event.key];
+    if (by !== undefined) {
+      event.preventDefault();
+      setFtlView(zoomMath.panView(view, by * span, ftlDurationMs));
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      const from = event.key === "Home" ? 0 : ftlDurationMs - span;
+      setFtlView({ from, to: from + span });
+    }
+  });
 
   // The split between the top (party, stats, skills) and the timeline: drag
   // the bar between them; kept as the top's share of the height.
@@ -2262,10 +2508,17 @@ const createDetailsUI = ({
       }))
       .sort((a, b) => b.totalDmg - a.totalDmg);
 
-    // Determine rolling window: ~10% of fight, clamped 5s–15s
-    const windowMs = Math.max(5000, Math.min(15000, battleTimeMs * 0.1));
+    // The part of the fight in view (the timeline's zoom; all of it at Fit).
+    const view = ftlViewFor(battleTimeMs);
+    const viewSpan = Math.max(1, view.to - view.from);
+    const zoomed = view.from > 0 || view.to < battleTimeMs;
 
-    // Sample DPS at N evenly-spaced time points
+    // Determine rolling window: ~10% of fight, clamped 5s–15s; zoomed, ~10%
+    // of the view (down to 2 s), so a rotation's bursts show.
+    const fitWindowMs = Math.max(5000, Math.min(15000, battleTimeMs * 0.1));
+    const windowMs = zoomed ? Math.min(fitWindowMs, Math.max(2000, viewSpan * 0.1)) : fitWindowMs;
+
+    // Sample DPS at N evenly-spaced time points over the view
     const SAMPLES = 100;
     const sampleDps = (hits, t) => {
       const lo = t - windowMs;
@@ -2305,13 +2558,15 @@ const createDetailsUI = ({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, chartWidth, CHART_HEIGHT);
 
-    const xAt = (t) => PAD_LEFT + (t / battleTimeMs) * (chartWidth - PAD_LEFT - PAD_RIGHT);
+    const plotWidth = chartWidth - PAD_LEFT - PAD_RIGHT;
+    const xAt = (t) => PAD_LEFT + ((t - view.from) / viewSpan) * plotWidth;
+    const sampleAt = (i) => view.from + (i / SAMPLES) * viewSpan;
 
     // Compute DPS samples for all actors
     const allSamples = actorList.map((actor) => {
       const pts = [];
       for (let i = 0; i <= SAMPLES; i++) {
-        const t = (i / SAMPLES) * battleTimeMs;
+        const t = sampleAt(i);
         pts.push(sampleDps(actor.hits, t));
       }
       return { actor, pts };
@@ -2319,9 +2574,8 @@ const createDetailsUI = ({
 
     const globalMax = allSamples.reduce((mx, { pts }) => Math.max(mx, ...pts), 0) || 1;
 
-    // Determine time grid interval
-    const durationSec = battleTimeMs / 1000;
-    const gridIntervalSec = ftlStepSec(durationSec);
+    // The time grid: the shared axis's ticks.
+    const gridTicks = ftlTicksFor(view, battleTimeMs);
 
     // Draw grid lines (horizontal)
     const gridCount = 4;
@@ -2336,8 +2590,9 @@ const createDetailsUI = ({
     }
 
     // Draw vertical grid lines
-    for (let sec = gridIntervalSec; sec < durationSec; sec += gridIntervalSec) {
-      const x = Math.round(xAt(sec * 1000)) + 0.5;
+    for (const tick of gridTicks) {
+      if (tick.isEnd || tick.pct <= 0 || tick.pct >= 100) continue;
+      const x = Math.round(xAt(tick.ms)) + 0.5;
       ctx.beginPath();
       ctx.moveTo(x, PAD_TOP);
       ctx.lineTo(x, PAD_TOP + plotHeight);
@@ -2371,6 +2626,15 @@ const createDetailsUI = ({
       }
     }
 
+    // The lines and marks stay over the plot: zoomed in, the rest of the
+    // fight runs off its sides. At Fit a little over, as before (a death's
+    // cross at the very start).
+    ctx.save();
+    ctx.beginPath();
+    const bleed = zoomed ? 0 : 6;
+    ctx.rect(PAD_LEFT - bleed, 0, plotWidth + bleed * 2, CHART_HEIGHT);
+    ctx.clip();
+
     // ── Boss cumulative damage (grey, dashed) ──
     const totalBossDmg = allHits.reduce((s, h) => s + h.dmg, 0) || 1;
     if (allHits.length > 0 && !healMode) {
@@ -2381,7 +2645,7 @@ const createDetailsUI = ({
       let cumDmg = 0;
       let hitIdx = 0;
       for (let i = 0; i <= SAMPLES; i++) {
-        const t = (i / SAMPLES) * battleTimeMs;
+        const t = sampleAt(i);
         while (hitIdx < allHits.length && allHits[hitIdx].ts <= t) {
           cumDmg += allHits[hitIdx].dmg;
           hitIdx++;
@@ -2417,7 +2681,7 @@ const createDetailsUI = ({
       const trace = () => {
         ctx.beginPath();
         pts.forEach((dps, i) => {
-          const x = xAt((i / SAMPLES) * battleTimeMs);
+          const x = xAt(sampleAt(i));
           const y = PAD_TOP + (1 - dps / globalMax) * plotHeight;
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
@@ -2504,6 +2768,7 @@ const createDetailsUI = ({
     const deathMarks = [];
     for (const death of deaths) {
       const x = xAt(Math.min(Number(death.tsMs), battleTimeMs));
+      if (x < PAD_LEFT - 6 || x > chartWidth - PAD_RIGHT + 6) continue;
       const color = actorColor(Number(death.actorId));
       const who = detailsActors.get(Number(death.actorId))?.nickname || `#${death.actorId}`;
       // How long they were down, once they're back up.
@@ -2539,6 +2804,7 @@ const createDetailsUI = ({
       ctx.stroke();
       ctx.restore();
     }
+    ctx.restore();
 
     // Pointing at a cross names who died (see the listener below).
     dpsChartCanvas.deathMarks = deathMarks;
@@ -2596,17 +2862,10 @@ const createDetailsUI = ({
     dpsChartXAxis.innerHTML = "";
     dpsChartXAxis.style.paddingLeft = PAD_LEFT + "px";
     dpsChartXAxis.style.paddingRight = PAD_RIGHT + "px";
-    // Build tick list aligned to grid intervals, always ending at durationSec
-    const ticks = [];
-    for (let sec = 0; sec < durationSec; sec += gridIntervalSec) {
-      ticks.push(Math.round(sec));
-    }
-    ticks.push(Math.round(durationSec));
-    for (const sec of ticks) {
-      const minutes = Math.floor(sec / 60);
-      const seconds = sec % 60;
+    // The view's ticks (hidden in the fight timeline, which has its own axis).
+    for (const tick of gridTicks) {
       const span = document.createElement("span");
-      span.textContent = `${minutes}:${String(seconds).padStart(2, "0")}`;
+      span.textContent = ftlTime(tick.ms / 1000);
       dpsChartXAxis.appendChild(span);
     }
     renderFightAxis(battleTimeMs);
@@ -2677,7 +2936,9 @@ const createDetailsUI = ({
     const LABEL_ICON = Math.max(18, Math.round(metrics.text * 1.35));
     const LEFT_MARGIN = metrics.gutter;
     const RIGHT_MARGIN = metrics.right;
-    const durationSec = battleTimeMs / 1000;
+    // The part of the fight in view (the timeline's zoom; all of it at Fit).
+    const view = ftlViewFor(battleTimeMs);
+    const viewSpan = Math.max(1, view.to - view.from);
     const chartWidth = Math.max(LEFT_MARGIN + RIGHT_MARGIN + 100, timelineViewport.clientWidth);
     const laneWidth = chartWidth - LEFT_MARGIN - RIGHT_MARGIN;
     const chartHeight = lanes.length * LANE_HEIGHT;
@@ -2699,12 +2960,14 @@ const createDetailsUI = ({
       ctx.fillRect(0, y, chartWidth, LANE_HEIGHT);
     });
 
-    // Draw vertical grid lines, on the shared axis's steps
-    const gridIntervalSec = ftlStepSec(durationSec);
+    // Draw vertical grid lines, on the shared axis's ticks
+    const xAt = (ts) => LEFT_MARGIN + ((ts - view.from) / viewSpan) * laneWidth;
+    const gridTicks = ftlTicksFor(view, battleTimeMs);
     ctx.strokeStyle = "rgba(255,255,255,0.08)";
     ctx.lineWidth = 1;
-    for (let sec = gridIntervalSec; sec < durationSec; sec += gridIntervalSec) {
-      const x = Math.round(LEFT_MARGIN + (sec / durationSec) * laneWidth) + 0.5;
+    for (const tick of gridTicks) {
+      if (tick.isEnd || tick.pct <= 0 || tick.pct >= 100) continue;
+      const x = Math.round(xAt(tick.ms)) + 0.5;
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, chartHeight);
@@ -2744,8 +3007,18 @@ const createDetailsUI = ({
       }
       ctx.fillText(label, 12 + LABEL_ICON + 8, labelY);
 
-      lane.timestamps.forEach((ts) => {
-        const x = LEFT_MARGIN + (ts / battleTimeMs) * laneWidth;
+      // The casts in view, over the lane (half an icon past its ends, as at
+      // Fit: a cast at the very start or end shows whole).
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(LEFT_MARGIN - ICON_SIZE / 2, laneIdx * LANE_HEIGHT, laneWidth + ICON_SIZE, LANE_HEIGHT);
+      ctx.clip();
+      const reach = (ICON_SIZE / Math.max(1, laneWidth)) * viewSpan;
+      const first = ftlFirstFrom(lane.timestamps, view.from - reach);
+      for (let k = first; k < lane.timestamps.length; k++) {
+        const ts = lane.timestamps[k];
+        if (ts > view.to + reach) break;
+        const x = xAt(ts);
         const iconX = x - ICON_SIZE / 2;
         const iconY = y;
 
@@ -2767,7 +3040,8 @@ const createDetailsUI = ({
           ctx.fill();
           ctx.globalAlpha = 1.0;
         }
-      });
+      }
+      ctx.restore();
     });
 
     // Icons that weren't ready will trigger scheduleTimelineRedraw via onload
@@ -2793,15 +3067,12 @@ const createDetailsUI = ({
       timelineLegend.appendChild(item);
     });
 
-    // Render X axis labels
+    // Render X axis labels: the view's ticks (hidden in the fight timeline,
+    // which has its own axis)
     timelineXAxis.innerHTML = "";
-    const tickCount = Math.min(12, Math.ceil(durationSec / gridIntervalSec) + 1);
-    for (let i = 0; i <= tickCount; i++) {
-      const sec = Math.round((i / tickCount) * durationSec);
-      const minutes = Math.floor(sec / 60);
-      const seconds = sec % 60;
+    for (const tick of gridTicks) {
       const span = document.createElement("span");
-      span.textContent = `${minutes}:${String(seconds).padStart(2, "0")}`;
+      span.textContent = ftlTime(tick.ms / 1000);
       timelineXAxis.appendChild(span);
     }
   };
@@ -3638,6 +3909,8 @@ const createDetailsUI = ({
     fightMobCode = Number(firstTarget?.mobCode) || 0;
     updateHeaderText();
     restoreLayout();
+    // Another fight (or the same one opened again) starts at Fit.
+    resetFtlZoom();
     detailsPanel.classList.add("open");
     detailsPanel.style.removeProperty("width");
     updateGridColumns();
@@ -3698,6 +3971,7 @@ const createDetailsUI = ({
     liveBuffs = null;
     buffTimeline?.clear();
     staggerPanel?.clear();
+    resetFtlZoom();
     window._historyDetailsOverride = null;
     fightStartMs = 0;
     fightBossName = "";
@@ -3771,6 +4045,8 @@ const createDetailsUI = ({
     fightMobCode = Number(record.mobCode) || 0;
     updateHeaderText();
     restoreLayout();
+    // Another fight (or the same one opened again) starts at Fit.
+    resetFtlZoom();
     detailsPanel.classList.add("open");
     detailsPanel.style.removeProperty("width");
     updateGridColumns();
@@ -3909,7 +4185,7 @@ const createDetailsUI = ({
   // the timeline, a sort or a reload still draw that; the replay draws over
   // them again. renderFigures(null) draws the whole fight's figures.
   let replaySkillsAt = 0;
-  window.fightReplay?.attach?.({
+  ftlReplay = window.fightReplay?.attach?.({
     advancePartyBars,
     root: detailsPanel,
     timeline: fightTimeline,
@@ -3919,6 +4195,15 @@ const createDetailsUI = ({
     isOpen: () => detailsPanel.classList.contains("open"),
     metrics: () => ftlMetrics(),
     durationMs: () => ftlDurationMs,
+    // The timeline's zoom: the part of the fight in view, and moving it to
+    // show the moment when that leaves it.
+    view: () => ftlViewNow(),
+    follow: (ms) => {
+      if (!ftlView || !zoomMath) return;
+      const view = ftlViewNow();
+      if (ms >= view.from && ms <= view.to) return;
+      setFtlView(zoomMath.followView(view, ms, ftlDurationMs));
+    },
     selection: () => ({ attackerIds: selectedAttackerIds, targetId: selectedTargetId }),
     targets: () => detailsTargets,
     getDetails,

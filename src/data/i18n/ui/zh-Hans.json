@@ -259,6 +259,15 @@
     "hpsChart": "每秒治疗",
     "sectionChart": "图表",
     "showSections": "显示的部分",
+    "zoom": {
+      "label": "缩放",
+      "in": "放大",
+      "out": "缩小",
+      "fit": "全部",
+      "fitTitle": "显示整场战斗",
+      "hint": "Ctrl + 鼠标滚轮以指针为中心缩放；拖动轨道可移动。",
+      "position": "战斗的可见范围"
+    },
     "hoverTooltip": {
       "loading": "加载中...",
       "empty": "此战斗没有技能数据",
