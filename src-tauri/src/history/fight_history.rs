@@ -51,6 +51,13 @@ fn windows_reserved(name: &str) -> bool {
             && stem.as_bytes()[3].is_ascii_digit())
 }
 
+/// The file of the fight `id` in `dir`, or None for an id that isn't a plain
+/// file name. The prune takes ids from inside the history files, not from
+/// their names, so a file holding "id": "..\x" must not reach outside.
+fn fight_file(dir: &std::path::Path, id: &str) -> Option<PathBuf> {
+    is_plain_name(id).then(|| dir.join(format!("{id}.json")))
+}
+
 fn check_id(id: &str) -> Result<(), String> {
     if is_plain_name(id) {
         Ok(())
@@ -202,7 +209,10 @@ impl FightHistoryManager {
         fights.retain(|f| !spared.contains(&f.id));
         fights.sort_by_key(|f| f.start_time_ms);
         for f in fights.into_iter().take(over) {
-            let path = self.history_dir.join(format!("{}.json", f.id));
+            let Some(path) = fight_file(&self.history_dir, &f.id) else {
+                tracing::warn!("Not pruning a fight with an invalid id: {:?}", f.id);
+                continue;
+            };
             match std::fs::remove_file(&path) {
                 Ok(()) => {
                     info!("Pruned old fight {}", path.display());
@@ -352,6 +362,12 @@ mod tests {
         assert!(history.delete_fight("../keep").is_err());
         assert!(dir.join("keep.json").exists());
         assert!(history.load_fight("../keep").is_err());
+        // The prune's ids come from inside the files: one naming a path
+        // outside the folder is never turned into a file to delete.
+        for bad in [r"..\keep", "../keep", "a/b", ""] {
+            assert!(fight_file(&dir, bad).is_none(), "{bad:?}");
+        }
+        assert_eq!(fight_file(&dir, "auto_1_2"), Some(dir.join("auto_1_2.json")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
