@@ -124,9 +124,10 @@ mod tests {
     #[test]
     fn the_published_list_is_read() {
         let feed = parse(include_str!("../../feeds/pairings.json")).expect("feeds/pairings.json");
-        // Kaisinel: Triniel for both. Vaizel: Siel in the Abyss, Zemurru for the rift.
-        assert_eq!(feed.servers["1304"], Opponents { abyss: Some(2303), rift: Some(2303) });
-        assert_eq!(feed.servers["1303"], Opponents { abyss: Some(1301), rift: Some(2315) });
+        // 25 November: Kaisinel has Zikel in the Abyss and Lumiel in the rift;
+        // Triniel has Lumiel (both Asmodian) in the Abyss and Siel in the rift.
+        assert_eq!(feed.servers["1304"], Opponents { abyss: Some(2302), rift: Some(2304) });
+        assert_eq!(feed.servers["2303"], Opponents { abyss: Some(2304), rift: Some(1301) });
         // Every pairing goes both ways.
         for (server, o) in &feed.servers {
             for (kind, other) in [("abyss", o.abyss), ("rift", o.rift)] {
