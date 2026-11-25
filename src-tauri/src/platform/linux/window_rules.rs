@@ -6,7 +6,7 @@
 use std::process::Command;
 
 use crate::platform::kwin_rules::{
-    general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, order_only_entries, parse_version,
+    config_value, general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, order_only_entries, parse_version,
     plugin_windows_rule_entries, reads_order_only, rule_entries, GROUP, ICONS_GROUP, NO_FOCUS_GROUP, PLUGIN_WINDOWS_GROUP,
 };
 
@@ -20,7 +20,7 @@ fn read(reader: &str, group: &str, key: &str) -> String {
     Command::new(reader)
         .args(["--file", "kwinrulesrc", "--group", group, "--key", key])
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .map(|o| config_value(&String::from_utf8_lossy(&o.stdout)).to_string())
         .unwrap_or_default()
 }
 

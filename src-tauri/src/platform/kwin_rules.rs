@@ -143,6 +143,16 @@ pub fn plugin_windows_rule_entries() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// A value as kreadconfig prints it, without the line end it adds. Only
+/// that: the icons' and plugin windows' titles start with a space (" · ",
+/// " \(plugin\)$"), and trimming it made both rules look changed at every
+/// start, so the meter wrote them again and had KWin reload every rule, twice,
+/// while the game ran fullscreen (Hirai, 2026-11-25).
+pub fn config_value(printed: &str) -> &str {
+    let value = printed.strip_suffix('\n').unwrap_or(printed);
+    value.strip_suffix('\r').unwrap_or(value)
+}
+
 /// The `[General]` entries that list the rules, with the meter's added.
 ///
 /// KWin loads the rules named in `rules` (with `count`), and deletes every
@@ -327,6 +337,20 @@ mod tests {
         assert_eq!(order_only_entries(ICONS_GROUP, "steam, mine"), format!("steam,mine,{ICONS_GROUP}"));
         let listed = format!("steam,{ICONS_GROUP}");
         assert_eq!(order_only_entries(ICONS_GROUP, &listed), listed);
+    }
+
+    #[test]
+    fn a_value_read_back_keeps_its_spaces() {
+        // As kreadconfig6 prints the two titles with spaces at their ends:
+        // only the line end goes, so the rules match and aren't rewritten.
+        assert_eq!(config_value(" · \n"), " · ");
+        let plugin = r" \(plugin\)$";
+        assert_eq!(config_value(&format!("{plugin}\n")), plugin);
+        assert_eq!(config_value("overlay\r\n"), "overlay");
+        assert_eq!(config_value(""), "");
+        for (_, value) in icons_rule_entries().into_iter().chain(plugin_windows_rule_entries()) {
+            assert_eq!(config_value(&format!("{value}\n")), value);
+        }
     }
 
     #[test]
