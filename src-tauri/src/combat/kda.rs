@@ -34,6 +34,32 @@ const MAX_GAIN: u64 = 20_000;
 /// the second (from the artifact ids, not seen loaded).
 const ABYSS_MAPS: [i32; 2] = [20, 22];
 
+/// Whether a player of `killer` (server) killing one of `victim` (server, if
+/// known) is your side winning, for a player of `own`. `pairing` is the
+/// game's Abyss pairing (server, side), when it was sent.
+///
+/// The pairing decides when it names your server: the Abyss can pair two
+/// servers of one faction (2026-11-25, Asmodian 2303 against 2304, where a
+/// 2303 player's assist went uncounted because both looked like one side).
+/// Without it: a killer of your own server who killed someone not of it, or
+/// one of your faction (a server's first digit) who killed someone not of it.
+pub fn killer_on_your_side(own: u16, killer: u16, victim: Option<u16>, pairing: Option<&[(u16, u8)]>) -> bool {
+    if own == 0 {
+        return false;
+    }
+    let side_in = |pairs: &[(u16, u8)], server: u16| pairs.iter().find(|&&(s, _)| s == server).map(|&(_, side)| side);
+    if let Some(pairs) = pairing {
+        if let Some(mine) = side_in(pairs, own) {
+            return side_in(pairs, killer) == Some(mine) && victim.and_then(|v| side_in(pairs, v)) != Some(mine);
+        }
+    }
+    if killer == own && victim != Some(own) {
+        return true;
+    }
+    let faction = |s: u16| (s != 0).then_some(s / 1000);
+    faction(killer) == faction(own) && victim.and_then(faction) != faction(own)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -192,6 +218,40 @@ impl Kda {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 2026-11-25, a 2303 player's log: Asmodian 2303 against Asmodian 2304
+    /// in the Abyss. A 2303 killer of a 2304 player is your side, a 2304
+    /// killer is not, with the game's pairing or without it.
+    #[test]
+    fn a_pairing_within_one_faction_has_two_sides() {
+        let pairs: &[(u16, u8)] = &[(2304, 1), (2303, 2)];
+        for pairing in [Some(pairs), None] {
+            assert!(killer_on_your_side(2303, 2303, Some(2304), pairing), "{pairing:?}");
+            assert!(killer_on_your_side(2303, 2303, None, pairing), "{pairing:?}");
+            assert!(!killer_on_your_side(2303, 2304, Some(2303), pairing), "{pairing:?}");
+            assert!(!killer_on_your_side(2303, 2303, Some(2303), pairing), "{pairing:?}");
+        }
+        // The pairing knows a 2304 killer is not yours even when the
+        // victim's server is unknown; the faction guess can't.
+        assert!(!killer_on_your_side(2303, 2304, None, Some(pairs)));
+    }
+
+    /// Elyos against Asmodians, as before: your faction's killer of one of
+    /// theirs, and the pairing's other server on your side.
+    #[test]
+    fn factions_and_a_cross_faction_pairing() {
+        assert!(killer_on_your_side(1304, 1301, Some(2303), None));
+        assert!(!killer_on_your_side(1304, 2303, Some(1304), None));
+        assert!(!killer_on_your_side(1304, 2303, Some(1301), None));
+        let pairs: &[(u16, u8)] = &[(1304, 1), (2303, 2)];
+        assert!(killer_on_your_side(1304, 1304, Some(2303), Some(pairs)));
+        assert!(!killer_on_your_side(1304, 2303, Some(1304), Some(pairs)));
+        // A pairing that leaves your server out (another character's) is
+        // no help: the server and faction rules decide.
+        let other: &[(u16, u8)] = &[(2304, 1), (2302, 2)];
+        assert!(killer_on_your_side(1304, 1304, Some(2304), Some(other)));
+        assert!(!killer_on_your_side(0, 1304, Some(2304), None));
+    }
 
     fn died(kda: &mut Kda, victim: i32, by_me: bool, at: i64) -> Option<Kind> {
         kda.player_died(victim, by_me, true, at, Victim::default())

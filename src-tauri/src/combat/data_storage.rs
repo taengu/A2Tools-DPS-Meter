@@ -2433,9 +2433,9 @@ impl DataStorage {
     /// The record that names who killed `victim` (`killer`, of server
     /// `killer_server`) came at `at`. Counted when the victim is a player and
     /// the record names you (a kill), or names someone on your side and you
-    /// hit the victim just before (an assist). Your side: your party, or your
-    /// faction (a server's first digit, 1 Elyos, 2 Asmodian) fighting a
-    /// player not of it. Your "hits" take in buffs on players near you, and
+    /// hit the victim just before (an assist). Your side: your party, or as
+    /// `kda::killer_on_your_side` has it (the game's Abyss pairing, else your
+    /// server or faction). Your "hits" take in buffs on players near you, and
     /// an ally an enemy killed was counted as your assist.
     pub fn note_player_killed(&self, victim: i32, killer: i32, killer_server: u16, at_ms: i64) -> Option<KdaKind> {
         let own_server = self.own_server();
@@ -2460,10 +2460,9 @@ impl DataStorage {
                 .server_id
                 .or_else(|| name.as_deref().and_then(|n| inner.player_servers.get(n.trim()).copied()))
                 .filter(|&s| s != 0);
-            let faction = |s: u16| (s != 0).then_some(s / 1000);
-            let mine = faction(own_server);
+            let pairing = crate::capture::matchup::latest().map(|m| m.servers);
             let ally_killer = in_party(&inner, killer)
-                || (mine.is_some() && faction(killer_server) == mine && server.and_then(faction) != mine);
+                || crate::combat::kda::killer_on_your_side(own_server, killer_server, server, pairing.as_deref());
             let who = crate::combat::kda::Victim {
                 name,
                 server_id: server,
@@ -4321,6 +4320,29 @@ mod tests {
         let (_, events) = storage.kda_since(0).unwrap();
         let victim = events[0].victim.clone().unwrap();
         assert_eq!((victim.name.as_deref(), victim.server_id, victim.legion.as_deref()), (Some("Mocha"), Some(2303), Some("Dusk")));
+    }
+
+    /// 2026-11-25, a 2303 player's log: the Abyss pairs Asmodian 2303 with
+    /// Asmodian 2304. A 2303 player killed one of 2304 the player had just
+    /// hit, and it was no assist, because both servers looked like one side.
+    #[test]
+    fn an_assist_counts_when_the_abyss_pairs_one_faction() {
+        let storage = DataStorage::new();
+        storage.set_local_player_id(Some(5005));
+        storage.note_self_server(2303);
+        storage.append_nickname_authoritative(2545, "Foe");
+        storage.note_player_server("Foe", 2304);
+        storage.note_player_profile(2545, death_recap::Profile::default());
+        storage.append_nickname_authoritative(3223, "Friend");
+        storage.note_player_server("Friend", 2303);
+        storage.note_player_profile(3223, death_recap::Profile::default());
+        {
+            let mut kda = storage.kda.lock();
+            kda.note_my_hit(2545, 1_000);
+            kda.note_my_hit(3223, 1_000);
+        }
+        assert_eq!(storage.note_player_killed(3223, 1371, 2304, 2_000), None);
+        assert_eq!(storage.note_player_killed(2545, 1623, 2303, 2_000), Some(KdaKind::Assist));
     }
 
     fn who(s: &DataStorage) -> (Option<i64>, Option<String>, bool) {
