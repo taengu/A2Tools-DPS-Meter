@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows installer
+  (.github/workflows/windows-release.yml). The copy SignPath uses is the one
+  pasted into the project's artifact configuration on signpath.io; this file
+  is kept in step with it so changes are reviewed here first.
+
+  The workflow uploads the MSI with actions/upload-artifact, which zips it,
+  so the root is a zip-file. Inside, the MSI is deep-signed in one pass: the
+  meter's program inside it first, then the MSI is rebuilt and signed itself.
+  The MSI holds no other program file (WebView2 is not bundled:
+  tauri.conf.json webviewInstallMode "skip").
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <msi-file path="A2Tools-DPS-Meter_*_x64_en-US.msi">
+      <pe-file path="**/a2tools-dps-meter.exe">
+        <authenticode-sign />
+      </pe-file>
+      <authenticode-sign />
+    </msi-file>
+  </zip-file>
+</artifact-configuration>
