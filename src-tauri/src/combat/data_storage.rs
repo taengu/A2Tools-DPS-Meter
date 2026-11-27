@@ -3866,15 +3866,7 @@ fn forget_entity(inner: &mut Inner, id: i32) {
             target.actors.entry(owner).or_insert_with(ActorCombatData::new).absorb(data);
         }
     }
-    if let Some(heals) = inner.heal_storage.remove(&id) {
-        let mine = inner.heal_storage.entry(owner).or_default();
-        for (key, h) in heals {
-            let e = mine.entry(key).or_default();
-            e.total_heal += h.total_heal;
-            e.tick_count += h.tick_count;
-            e.ticks.extend(h.ticks);
-        }
-    }
+    move_heals(inner, id, owner);
     let held: Vec<(i32, i32)> = inner.held_dot_ticks.keys().filter(|k| k.1 == id).copied().collect();
     for key in held {
         let mut ticks = inner.held_dot_ticks.remove(&key).unwrap_or_default();
@@ -4139,6 +4131,15 @@ fn append_nickname_inner_with_force(inner: &mut Inner, uid: i32, nickname: &str,
                 }
             }
         }
+        // Their healing goes the same way. Left on the old id, which has no
+        // name any more, it made a row of its own: a Cleric back in the lobby
+        // after a run saw "#10230" under her own row, heals only, and the
+        // Chanter and a Ranger the same at the next run (2026-11-27).
+        if same_character {
+            move_heals(inner, old_id, uid);
+        } else {
+            inner.heal_storage.remove(&old_id);
+        }
     }
 
     inner.nickname_storage.insert(uid, nickname.to_string());
@@ -4158,6 +4159,19 @@ fn append_nickname_inner_with_force(inner: &mut Inner, uid: i32, nickname: &str,
     if let Some(ref local_name) = inner.local_character_name {
         if local_name.trim() == nickname.trim() {
             inner.local_player_id = Some(uid as i64);
+        }
+    }
+}
+
+/// `from`'s healing, as `to`'s.
+fn move_heals(inner: &mut Inner, from: i32, to: i32) {
+    if let Some(heals) = inner.heal_storage.remove(&from) {
+        let mine = inner.heal_storage.entry(to).or_default();
+        for (key, h) in heals {
+            let e = mine.entry(key).or_default();
+            e.total_heal += h.total_heal;
+            e.tick_count += h.tick_count;
+            e.ticks.extend(h.ticks);
         }
     }
 }
@@ -5435,6 +5449,20 @@ mod tests {
         assert_eq!(s.current_dungeon_id(), 610073);
         s.note_map_load(610073);
         assert_eq!(s.current_dungeon_id(), 610073, "a teleport inside keeps it");
+    }
+
+    /// A character the game names again as a new entity (back in the lobby
+    /// after a run, 2026-11-27) takes their healing with them, as their
+    /// damage: left on the old id it was a row of its own, "#10230".
+    #[test]
+    fn healing_follows_a_character_to_their_new_entity() {
+        let s = DataStorage::new();
+        s.append_nickname_authoritative(10230, "Naicha");
+        s.append_heal(10230, 17010000, 5_000, false, 1_000);
+        s.append_nickname_authoritative(8620, "Naicha");
+        let heals = s.get_heal_totals_in_window(0, 10_000);
+        assert_eq!(heals.get(&8620), Some(&5_000));
+        assert_eq!(heals.get(&10230), None);
     }
 
     /// A "no longer in a party" record with no party to clear (no roster,
