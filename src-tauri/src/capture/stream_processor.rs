@@ -306,6 +306,7 @@ impl StreamProcessor {
         let parsed_hp = self.parse_hp_mp_update_packet(packet);
         self.parse_party_scope_packet(packet);
         self.parse_party_left_packet(packet);
+        self.parse_party_join_packet(packet);
         self.parse_odyle_energy_packet(packet);
         self.parse_daily_duty_packet(packet);
         self.parse_shop_and_craft_packet(packet);
@@ -406,6 +407,20 @@ impl StreamProcessor {
         let id = read_varint(packet, offset + 2);
         if id.length > 0 {
             self.data_storage.note_party_scope(id.value);
+        }
+    }
+
+    // ===== PARTY JOIN (0B 97) =====
+
+    /// `<len> 0B 97 <mask u8> <slot u8> <dbid u64> <name len> <name> ...`:
+    /// someone joined your party, their record as a roster has it. The
+    /// roster that follows usually names them too, but not always: after
+    /// EOxx was kicked from slot 5, BeeG and then Luxvile joined into it and
+    /// the rosters after each still had slot 5 empty, so neither ever showed
+    /// on the meter (2026-11-27, a lobby party).
+    fn parse_party_join_packet(&self, packet: &[u8]) {
+        if let Some((name, member)) = party_join(packet) {
+            self.data_storage.note_party_join(name, member);
         }
     }
 
@@ -3021,8 +3036,6 @@ fn should_use_repeated_hit_damage(switch_value: i32, encoded_damage: i32, multi_
 /// streams, so the header checks double as the false-positive filter).
 /// See `StreamProcessor::scan_party_roster` for the layout.
 fn parse_party_roster_at(data: &[u8], at: usize) -> Option<Roster> {
-    use crate::combat::data_storage::PartyMember;
-
     let party_key = parse_u32_le(data.get(at..at + 4)?, 0);
     let mut o = at.checked_add(4)?; // party_key u32
     let name_len = *data.get(o)? as usize;
@@ -3061,7 +3074,6 @@ fn parse_party_roster_at(data: &[u8], at: usize) -> Option<Roster> {
         o += 2; // presence_mask, slot
         let dbid = u64::from_le_bytes(data.get(o..o + 8)?.try_into().ok()?);
         o += 8;
-        let server_id = (dbid >> 48) as u16;
         let nick_len = *data.get(o)? as usize;
         o += 1;
         // An empty name is a vacant slot. Vacant slots can sit between members
@@ -3079,84 +3091,12 @@ fn parse_party_roster_at(data: &[u8], at: usize) -> Option<Roster> {
                 }
             }
         }
-        if nick_len > 40 || o + nick_len > data.len() {
-            break;
-        }
-        // Letters and digits only, as every other name the parser keeps:
-        // the roster's field was taken as it came (security audit M8).
-        let nickname: String = match std::str::from_utf8(&data[o..o + nick_len]) {
-            Ok(s) => s.chars().filter(|c| c.is_alphanumeric()).collect(),
-            Err(_) => break,
-        };
-        if nickname.is_empty() {
-            break;
-        }
-        let name_field = o..o + nick_len;
-        o += nick_len;
-        if o + 12 > data.len() {
-            break;
-        }
-        let job = crate::entity::job_class::JobClass::from_roster_class(parse_u32_le(data, o));
-        o += 4;
-        let level = parse_u32_le(data, o) as i32;
-        o += 4;
-        if !(1..=200).contains(&level) {
-            break;
-        }
-        let gear_score = parse_u32_le(data, o) as i32;
-        o += 4;
-        if !(0..=1_000_000).contains(&gear_score) {
-            break;
-        }
-
-        // The stretch between the gear score and combat power is not fixed
-        // width — the same roster can carry an extra byte for one member and not
-        // another, and a party-state change widens every record's tail. Anchor
-        // on the member's world id instead: it is repeated here as a u16 and we
-        // already know its value from the top half of `dbid`. Combat power then
-        // sits a fixed distance past it.
-        // A member on another world than their own has that world here
-        // instead, a byte further on: Aylinn, of 2308, as `07 fe 08` (2302)
-        // where the others had `00 09` (2026-10-17). Not finding it lost her
-        // and every member after her. Any world then, with a combat power
-        // where it would be, and the tag byte before it: always 1-4 (71 448
-        // members of one player's saved rosters, 2026-10-23). Without the tag,
-        // a world whose low byte is small read one byte early, the byte before
-        // it as its low byte: Ardilcan of Beritra on such a world showed
-        // 23 371 012 (his 91 293, shifted a byte, and the tag 4). Read there, the
-        // tag is the second u16's high byte, `10` or the world's own.
-        let Some(anchor) = find_u16(data, o, o + 10, server_id).or_else(|| {
-            (o..o + 10).find(|&i| {
-                let world = data.get(i..i + 2).map(|b| u16::from_le_bytes([b[0], b[1]]));
-                let tag = data.get(i + 4);
-                let power = data.get(i + 5..i + 13).map(|b| u64::from_le_bytes(b.try_into().unwrap()));
-                world.is_some_and(|w| (1000..=2999).contains(&w))
-                    && tag.is_some_and(|t| (1..=4).contains(t))
-                    && power.is_some_and(|p| (1..=100_000_000).contains(&p))
-            })
-        }) else {
+        let Some((nickname, member, name_field, next)) = roster_member_at(data, o, nick_len, slot, dbid) else {
             break;
         };
-        o = anchor + 2 + 2 + 1; // world id, a second u16, one tag byte
-        let combat_power = u64::from_le_bytes(data.get(o..o + 8)?.try_into().ok()?);
-        o += 8;
-        if combat_power > 100_000_000 {
-            break;
-        }
-
+        o = next;
         name_fields.push(name_field);
-        members.push((
-            nickname,
-            PartyMember {
-                slot,
-                level,
-                gear_score,
-                combat_power: combat_power as i64,
-                server_id,
-                dbid,
-                job,
-            },
-        ));
+        members.push((nickname, member));
 
         if i32::from(slot) >= count {
             complete = true;
@@ -3177,6 +3117,121 @@ fn parse_party_roster_at(data: &[u8], at: usize) -> Option<Roster> {
         return None;
     }
     Some(Roster { party_key, members, complete, dungeon_id, name_fields })
+}
+
+/// The member a `0B 97` join notice names, if `packet` is one.
+fn party_join(packet: &[u8]) -> Option<(String, crate::combat::data_storage::PartyMember)> {
+    let length_info = read_varint(packet, 0);
+    let at = usize::try_from(length_info.length).ok().filter(|&n| n > 0)?;
+    if packet.get(at..at + 2)? != [0x0B, 0x97] {
+        return None;
+    }
+    let o = at + 2;
+    let slot = *packet.get(o + 1)?;
+    if !(1..=12).contains(&slot) {
+        return None;
+    }
+    let dbid = u64::from_le_bytes(packet.get(o + 2..o + 10)?.try_into().ok()?);
+    if !(1000..=2999).contains(&(dbid >> 48)) {
+        return None;
+    }
+    let nick_len = *packet.get(o + 10)? as usize;
+    if nick_len == 0 {
+        return None;
+    }
+    let (name, member, _, _) = roster_member_at(packet, o + 11, nick_len, slot, dbid)?;
+    Some((name, member))
+}
+
+/// One member record of a `02 97` roster or a `0B 97` join notice, from its
+/// name on (`o` is the first byte of the name, `nick_len` long): the member,
+/// its name field, and where the record's combat power ends.
+fn roster_member_at(
+    data: &[u8],
+    mut o: usize,
+    nick_len: usize,
+    slot: u8,
+    dbid: u64,
+) -> Option<(String, crate::combat::data_storage::PartyMember, std::ops::Range<usize>, usize)> {
+    let server_id = (dbid >> 48) as u16;
+    if nick_len > 40 || o + nick_len > data.len() {
+        return None;
+    }
+    // Letters and digits only, as every other name the parser keeps:
+    // the roster's field was taken as it came (security audit M8).
+    let nickname: String = match std::str::from_utf8(&data[o..o + nick_len]) {
+        Ok(s) => s.chars().filter(|c| c.is_alphanumeric()).collect(),
+        Err(_) => return None,
+    };
+    if nickname.is_empty() {
+        return None;
+    }
+    let name_field = o..o + nick_len;
+    o += nick_len;
+    if o + 12 > data.len() {
+        return None;
+    }
+    let job = crate::entity::job_class::JobClass::from_roster_class(parse_u32_le(data, o));
+    o += 4;
+    let level = parse_u32_le(data, o) as i32;
+    o += 4;
+    if !(1..=200).contains(&level) {
+        return None;
+    }
+    let gear_score = parse_u32_le(data, o) as i32;
+    o += 4;
+    if !(0..=1_000_000).contains(&gear_score) {
+        return None;
+    }
+
+    // The stretch between the gear score and combat power is not fixed
+    // width — the same roster can carry an extra byte for one member and not
+    // another, and a party-state change widens every record's tail. Anchor
+    // on the member's world id instead: it is repeated here as a u16 and we
+    // already know its value from the top half of `dbid`. Combat power then
+    // sits a fixed distance past it.
+    // A member on another world than their own has that world here
+    // instead, a byte further on: Aylinn, of 2308, as `07 fe 08` (2302)
+    // where the others had `00 09` (2026-10-17). Not finding it lost her
+    // and every member after her. Any world then, with a combat power
+    // where it would be, and the tag byte before it: always 1-4 (71 448
+    // members of one player's saved rosters, 2026-10-23). Without the tag,
+    // a world whose low byte is small read one byte early, the byte before
+    // it as its low byte: Ardilcan of Beritra on such a world showed
+    // 23 371 012 (his 91 293, shifted a byte, and the tag 4). Read there, the
+    // tag is the second u16's high byte, `10` or the world's own.
+    let Some(anchor) = find_u16(data, o, o + 10, server_id).or_else(|| {
+        (o..o + 10).find(|&i| {
+            let world = data.get(i..i + 2).map(|b| u16::from_le_bytes([b[0], b[1]]));
+            let tag = data.get(i + 4);
+            let power = data.get(i + 5..i + 13).map(|b| u64::from_le_bytes(b.try_into().unwrap()));
+            world.is_some_and(|w| (1000..=2999).contains(&w))
+                && tag.is_some_and(|t| (1..=4).contains(t))
+                && power.is_some_and(|p| (1..=100_000_000).contains(&p))
+        })
+    }) else {
+        return None;
+    };
+    o = anchor + 2 + 2 + 1; // world id, a second u16, one tag byte
+    let combat_power = u64::from_le_bytes(data.get(o..o + 8)?.try_into().ok()?);
+    o += 8;
+    if combat_power > 100_000_000 {
+        return None;
+    }
+    Some((
+        nickname,
+        crate::combat::data_storage::PartyMember {
+            slot,
+            level,
+            gear_score,
+            combat_power: combat_power as i64,
+            server_id,
+            dbid,
+            job,
+        },
+        name_field,
+        o,
+    ))
 }
 
 /// Find a little-endian `u16` equal to `wanted` in `data[from..to]`.
@@ -5210,6 +5265,55 @@ mod tests {
         p.parse_perfect_packet(&[0x08, 0x1d, 0x97, 0x00, 0x00]);
         assert_eq!(storage.party_generation(), generation);
         assert!(!storage.take_combat_reset_requested());
+    }
+
+    /// A lobby party, 2026-11-27: EOxx kicked from slot 5, then BeeG and
+    /// Luxvile joined into it (`0b 97`) while every roster after kept slot 5
+    /// empty. Each shows from their join notice, the next joiner into the
+    /// slot replaces them, and a roster that changes drops them.
+    #[test]
+    fn a_member_the_roster_leaves_out_shows_from_their_join() {
+        use crate::combat::data_storage::PartyMember;
+        let hex = |s: &str| (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect::<Vec<u8>>();
+        let luxvile = hex("350B970C05472C040000002105074C757876696C65210000002D0000008F0600000121052105038056010000000000000102");
+        let (name, member) = party_join(&luxvile).expect("a join notice");
+        assert_eq!(name, "Luxvile");
+        assert_eq!((member.slot, member.server_id, member.level, member.gear_score, member.combat_power), (5, 1313, 45, 1679, 87_680));
+
+        let (storage, mut p) = processor();
+        storage.set_local_character_name(Some("Naicha".into()));
+        let m = |slot| PartyMember { slot, ..Default::default() };
+        let roster = || vec![("SYBS".into(), m(1)), ("Naicha".into(), m(2)), ("Candy0".into(), m(3)), ("Schrank".into(), m(4))];
+        storage.set_party_roster(roster(), true);
+        storage.note_party_join("BeeG".into(), m(5));
+        // The roster after it, slot 5 empty: BeeG stays.
+        storage.set_party_roster(roster(), true);
+        assert!(storage.get_party_members().contains_key("BeeG"));
+        // Luxvile into slot 5: BeeG has gone.
+        p.parse_perfect_packet(&luxvile);
+        let names = storage.get_party_members();
+        assert!(names.contains_key("Luxvile") && !names.contains_key("BeeG"));
+        storage.set_party_roster(roster(), true);
+        assert!(storage.get_party_members().contains_key("Luxvile"));
+        // Schrank leaves: the roster changed, and Luxvile, never in one, goes.
+        storage.set_party_roster(roster().into_iter().take(3).collect(), true);
+        assert_eq!(storage.get_party_members().len(), 3);
+        // A roster naming a joiner keeps them as any other member.
+        storage.note_party_join("Pluffy".into(), m(4));
+        let mut with_pluffy = roster().into_iter().take(3).collect::<Vec<_>>();
+        with_pluffy.push(("Pluffy".into(), m(4)));
+        storage.set_party_roster(with_pluffy, true);
+        storage.set_party_roster(roster().into_iter().take(2).chain([("Pluffy".into(), m(4))]).collect(), true);
+        assert!(storage.get_party_members().contains_key("Pluffy"));
+    }
+
+    /// A join notice while not in a party is not taken.
+    #[test]
+    fn a_join_notice_outside_a_party_is_left_alone() {
+        use crate::combat::data_storage::PartyMember;
+        let (storage, _) = processor();
+        storage.note_party_join("Stranger".into(), PartyMember { slot: 2, ..Default::default() });
+        assert!(storage.get_party_members().is_empty());
     }
 
     /// Leaving a raid others are still in (2026-10-14, 03:18:39): the roster

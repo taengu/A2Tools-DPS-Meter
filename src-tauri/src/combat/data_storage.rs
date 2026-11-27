@@ -636,6 +636,9 @@ struct Inner {
     /// or combat power (Vakron, 2026-10-17: three of five, who left at the
     /// end of the run). See `fight_roster`.
     former_party_members: HashMap<String, PartyMember>,
+    /// Members known only from a join notice (`0B 97`), not yet named by a
+    /// roster. See `note_party_join`.
+    joined_only: HashSet<String>,
     /// When the last roster arrived, and whether its members who have not
     /// fought should still get rows. See `party_placeholders_wanted`.
     party_roster_at_ms: i64,
@@ -888,6 +891,7 @@ impl DataStorage {
                 low_id_entities: HashSet::new(),
                 party_members: HashMap::new(),
                 former_party_members: HashMap::new(),
+                joined_only: HashSet::new(),
                 party_roster_at_ms: 0,
                 own_party_key: None,
                 self_in_roster: false,
@@ -2930,13 +2934,37 @@ impl DataStorage {
             return;
         }
 
+        // Members known only from a join notice: the game's roster can leave
+        // them out (a slot freed by a kick, see `note_party_join`). Kept
+        // while the roster is the same party as before and their slot still
+        // empty in it; a roster that changes says the party moved on, and
+        // the game sends nothing when such a member is kicked.
+        let carried: Vec<(String, PartyMember)> = if complete {
+            let before: HashSet<&String> =
+                inner.party_members.keys().filter(|n| !inner.joined_only.contains(*n)).collect();
+            let now: HashSet<&String> = members.iter().map(|(n, _)| n).collect();
+            if before == now {
+                inner
+                    .joined_only
+                    .iter()
+                    .filter(|n| !now.contains(n))
+                    .filter_map(|n| inner.party_members.get(n).map(|m| (n.clone(), m.clone())))
+                    .filter(|(_, m)| !members.iter().any(|(_, x)| x.slot == m.slot))
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+        let kept = |name: &String| members.iter().any(|(n, _)| n == name) || carried.iter().any(|(n, _)| n == name);
         let joined = members.iter().any(|(name, _)| !inner.party_members.contains_key(name));
-        let left = complete && inner.party_members.keys().any(|name| !members.iter().any(|(n, _)| n == name));
+        let left = complete && inner.party_members.keys().any(|name| !kept(name));
         if joined || left {
             inner.party_generation += 1;
         }
         if complete {
-            let gone: Vec<String> = inner.party_members.keys().filter(|n| !members.iter().any(|(m, _)| m == *n)).cloned().collect();
+            let gone: Vec<String> = inner.party_members.keys().filter(|n| !kept(n)).cloned().collect();
             for name in gone {
                 if let Some(member) = inner.party_members.remove(&name) {
                     inner.former_party_members.insert(name, member);
@@ -2944,9 +2972,49 @@ impl DataStorage {
             }
             inner.party_members.clear();
         }
-        for (name, member) in members {
+        for (name, _) in &members {
+            inner.joined_only.remove(name);
+        }
+        if complete {
+            inner.joined_only.retain(|n| carried.iter().any(|(c, _)| c == n));
+        }
+        for (name, member) in members.into_iter().chain(carried) {
             inner.party_members.insert(name, member);
         }
+        bind_roster_names_by_class(&mut inner);
+    }
+
+    /// Someone joined your party (`0B 97`), with their roster record. The
+    /// roster that follows normally names them, but after a kick it can
+    /// leave the freed slot empty while the game's party has the newcomer in
+    /// it: BeeG and Luxvile in a lobby party (2026-11-27) never showed. Taken
+    /// only while you are in a party; whoever had their slot has gone.
+    pub fn note_party_join(&self, name: String, member: PartyMember) {
+        let mut inner = self.inner.write();
+        if inner.party_members.is_empty() || !inner.self_in_roster {
+            return;
+        }
+        let replaced: Vec<String> = inner
+            .party_members
+            .iter()
+            .filter(|(n, m)| m.slot == member.slot && **n != name)
+            .map(|(n, _)| n.clone())
+            .collect();
+        for n in replaced {
+            inner.joined_only.remove(&n);
+            if let Some(m) = inner.party_members.remove(&n) {
+                inner.former_party_members.insert(n, m);
+            }
+        }
+        tracing::info!("Party join: {name} in slot {}", member.slot);
+        if !inner.party_members.contains_key(&name) {
+            inner.joined_only.insert(name.clone());
+        }
+        inner.party_members.insert(name, member);
+        inner.party_generation += 1;
+        inner.names_generation += 1;
+        inner.party_roster_at_ms = now_ms();
+        inner.party_placeholders_hidden = false;
         bind_roster_names_by_class(&mut inner);
     }
 
@@ -2960,6 +3028,7 @@ impl DataStorage {
         let mut inner = self.inner.write();
         let members = std::mem::take(&mut inner.party_members);
         inner.former_party_members.extend(members);
+        inner.joined_only.clear();
         inner.party_generation += 1;
         inner.party_ended_at_ms = now_ms();
         inner.own_party_key = None;
