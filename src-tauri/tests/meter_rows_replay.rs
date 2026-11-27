@@ -13,7 +13,7 @@
 //! - A2_METER_ROWS_RESET_AT: `HH:MM:SS,...` times to press the reset button
 //!   (A2_METER_ROWS_RESET_KIND=old for the reset that cleared every name).
 //! - A2_METER_ROWS_ACTORS, A2_METER_ROWS_NAMES=id,..., A2_METER_ROWS_LOCALJOB:
-//!   extra dumps.
+//!   extra dumps. A2_METER_ROWS_DUMP_AT=HH:MM:SS,...: the rows on screen then.
 //! - A2_METER_ROWS_OWN_BOSS: captures (as A2_METER_ROWS_CAPTURES) for
 //!   `boss_mode_shows_only_our_bosses`, which asserts that Boss mode never put
 //!   up an open-world boss that neither you, your summons nor your party hit.
@@ -139,6 +139,7 @@ fn replay(paths: &[&Path], mode: &str, verbose: bool) -> Summary {
     let mut named_at: HashMap<i32, (i64, String)> = HashMap::new();
     let mut summary = Summary::default();
     let mut id_rows_seen: HashMap<i32, (i64, i64)> = HashMap::new();
+    let mut dumped: HashSet<String> = HashSet::new();
 
     // What the reset button / hotkey does (app.rs `reset_combat`), at these
     // capture times (HH:MM:SS, local).
@@ -206,6 +207,17 @@ fn replay(paths: &[&Path], mode: &str, verbose: bool) -> Summary {
             let combat = storage.get_combat_snapshot_light();
             let summons = storage.get_summon_data();
             let key_target = dps.target_id;
+            if let Ok(at) = std::env::var("A2_METER_ROWS_DUMP_AT") {
+                let now = hms(p.captured_at_ms);
+                if at.split(',').any(|t| t == now) && dumped.insert(now.clone()) {
+                    let mut rows: Vec<_> = dps.map.iter().collect();
+                    rows.sort_by(|a, b| b.1.amount.partial_cmp(&a.1.amount).unwrap_or(std::cmp::Ordering::Equal));
+                    println!("{now} rows (target {} {:?}):", dps.target_id, dps.target_name);
+                    for (id, d) in rows {
+                        println!("    {id:>9} {:<16} {:<10} {:>12.0}", d.nickname, d.job, d.amount);
+                    }
+                }
+            }
             let first_dmg = combat.get(&key_target).map(|t| t.first_damage_time).unwrap_or(0);
             let st = fights.entry((key_target, first_dmg)).or_insert_with(|| FightStats {
                 target: key_target,
